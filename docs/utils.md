@@ -1,10 +1,13 @@
 # 基础工具命名空间
 
-`src/utils/` 中的公开类型、函数和常量统一使用 `mcr::utils` 命名空间。
-各模块保持现有导入名，`import mcr;` 仍导出全部工具接口。
+`src/utils/` 集中放置基础类型、错误处理和通用工具。通用工具使用 `mcr::utils`；
+`types.cppm`、`error.cppm` 中的公共接口继续使用 `mcr`。
+各模块保持现有导入名，`import mcr;` 仍导出全部接口。
 
 | 模块导入名 | 主要接口 |
 | --- | --- |
+| `mcr.types` | `mcr::Url`、`mcr::UserAgent`、`mcr::Header`、`mcr::StringHolder<T>` 及 curl 兼容类型 |
+| `mcr.error` | `mcr::ErrorCode`、`mcr::Error`、`mcr::Result<T>` 及错误转换函数 |
 | `mcr.secure_string` | `mcr::utils::SecureAllocator<T>`、`mcr::utils::SecureString` |
 | `mcr.singleton` | `mcr::utils::Singleton<T>` |
 | `mcr.threadpool` | `mcr::utils::ThreadPool` 和 `DEFAULT_THREAD_POOL_*` 常量 |

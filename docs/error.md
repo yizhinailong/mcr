@@ -4,6 +4,7 @@ Import the library entry module `mcr` to use `mcr::ErrorCode`, `mcr::Error`, and
 `mcr::Result<T>` (`std::expected<T, mcr::Error>`). `Result<void>` represents an
 operation with no return value. The entry module re-exports `mcr.error`, which
 can also be imported directly.
+The module is implemented in `src/utils/error.cppm`; its public interfaces remain in `mcr`.
 
 `mcr::check_curl_error(curl_code, message)` returns a successful `Result<void>`
 for `CURLE_OK` and `std::unexpected<mcr::Error>` for every other curl status.

@@ -1,6 +1,7 @@
 # Common request types
 
 Import `mcr` or `mcr.types` to use the types in namespace `mcr`.
+The module is implemented in `src/utils/types.cppm`; its import name and public namespace are unchanged.
 
 ```cpp
 import std;
