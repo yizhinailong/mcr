@@ -2,7 +2,7 @@
 
 ## Project Purpose & Reference
 
-`request-mcpp` is an HTTP client library project implemented with [cpr](https://github.com/yizhinailong/cpr) as its reference. Consult cpr's APIs, implementation, and tests when developing request methods, options, sessions, responses, and error handling. Adapt designs to C++23 modules and `mcpp`, and document intentional API or behavior differences in pull requests.
+`mcr` is an HTTP client library project implemented with the official upstream [cpr](https://github.com/libcpr/cpr) library as its reference. Consult the official repository's APIs, implementation, and tests when developing request methods, options, sessions, responses, and error handling. Adapt designs to C++23 modules and `mcpp`, and document intentional API or behavior differences in pull requests.
 
 ## Project Structure & Module Organization
 

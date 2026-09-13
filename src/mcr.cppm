@@ -1,6 +1,6 @@
 /**
  * @file mcr.cppm
- * @brief Library entry module re-exporting the public request-mcpp interfaces.
+ * @brief Library entry module re-exporting the public mcr interfaces.
  */
 export module mcr;
 
