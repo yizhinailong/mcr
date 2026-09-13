@@ -1,10 +1,10 @@
 # Range and MultiRange
 
-Import `mcr` or `mcr.range` to use both range types.
+Import `mcr` or `mcr.http` to use both range types.
 
 ```cpp
 import std;
-import mcr.range;
+import mcr.http;
 
 mcr::options::Range range{ 2, 3 };
 std::println("{}", range.Str()); // 2-3

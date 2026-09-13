@@ -1,9 +1,9 @@
 /**
  * @file test_redirect.cpp
- * @brief Verify redirect defaults, overloads, and flag semantics through the library entry module.
+ * @brief Verify redirect defaults, overloads, and flag semantics through the HTTP options module.
  */
 import std;
-import mcr;
+import mcr.http;
 
 using Flags = mcr::options::PostRedirectFlags;
 

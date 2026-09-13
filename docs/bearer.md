@@ -1,12 +1,12 @@
 # Bearer
 
-Import `mcr` or `mcr.bearer` to use `mcr::options::Bearer`, following cpr's
+Import `mcr` or `mcr.auth` to use `mcr::options::Bearer`, following cpr's
 `include/cpr/bearer.h`. The module re-exports `mcr.secure_string` for derived
 classes that use its protected token storage.
 
 ```cpp
 import std;
-import mcr.bearer;
+import mcr.auth;
 
 mcr::options::Bearer token{ "the_token" };
 mcr::options::Bearer from_view = std::string_view{ "another_token" };

@@ -1,10 +1,10 @@
 # Proxies
 
-Import `mcr` or `mcr.proxies` to use `mcr::options::Proxies`.
+Import `mcr` or `mcr.proxy` to use `mcr::options::Proxies`.
 
 ```cpp
 import std;
-import mcr.proxies;
+import mcr.proxy;
 
 mcr::options::Proxies proxies{
     { "http", "http://proxy.test:8080" },

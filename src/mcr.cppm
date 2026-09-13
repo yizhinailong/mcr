@@ -4,12 +4,10 @@
  */
 export module mcr;
 
-export import mcr.accept_encoding;
 export import mcr.api;
 export import mcr.async;
 export import mcr.async_wrapper;
 export import mcr.auth;
-export import mcr.bearer;
 export import mcr.body;
 export import mcr.body_view;
 export import mcr.buffer;
@@ -22,17 +20,14 @@ export import mcr.curlholder;
 export import mcr.curlmultiholder;
 export import mcr.error;
 export import mcr.file;
-export import mcr.http_version;
+export import mcr.http;
 export import mcr.interface;
 export import mcr.interceptor;
 export import mcr.multipart;
 export import mcr.multiperform;
 export import mcr.parameters;
 export import mcr.payload;
-export import mcr.proxies;
-export import mcr.proxy_auth;
-export import mcr.range;
-export import mcr.redirect;
+export import mcr.proxy;
 export import mcr.response;
 export import mcr.secure_string;
 export import mcr.session;

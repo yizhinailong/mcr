@@ -5,7 +5,7 @@
 #include <curl/curlver.h>
 
 import std;
-import mcr;
+import mcr.http;
 
 using Code = mcr::options::HttpVersionCode;
 

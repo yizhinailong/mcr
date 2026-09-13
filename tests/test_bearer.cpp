@@ -5,7 +5,7 @@
 #include <curl/curlver.h>
 
 import std;
-import mcr;
+import mcr.auth;
 
 #if LIBCURL_VERSION_NUM >= 0x073D00
 static_assert(!std::is_default_constructible_v<mcr::options::Bearer>);

@@ -3,7 +3,7 @@
  * @brief Verify authentication modes, exact credential bytes, view lengths, and ownership.
  */
 import std;
-import mcr;
+import mcr.auth;
 
 using Mode = mcr::options::AuthMode;
 

@@ -1,10 +1,10 @@
 # HttpVersion
 
-Import `mcr` or `mcr.http_version` to use `HttpVersionCode` and `HttpVersion`.
+Import `mcr` or `mcr.http` to use `HttpVersionCode` and `HttpVersion`.
 They follow cpr's `include/cpr/http_version.h`.
 
 ```cpp
-import mcr.http_version;
+import mcr.http;
 
 mcr::options::HttpVersion automatic;
 mcr::options::HttpVersion explicit_version{ mcr::options::HttpVersionCode::VERSION_1_1 };

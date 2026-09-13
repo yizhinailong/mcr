@@ -3,7 +3,7 @@
  * @brief Verify proxy ownership, exact protocol lookup, and insertion of empty proxy addresses.
  */
 import std;
-import mcr;
+import mcr.proxy;
 
 using ProxyMap  = std::map<std::string, std::string>;
 using ProxyList = std::initializer_list<ProxyMap::value_type>;

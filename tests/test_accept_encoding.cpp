@@ -1,9 +1,9 @@
 /**
  * @file test_accept_encoding.cpp
- * @brief Verify encoding names, deduplication, empty sets, and disabled validation through the entry module.
+ * @brief Verify encoding names, deduplication, empty sets, and disabled validation through the HTTP options module.
  */
 import std;
-import mcr;
+import mcr.http;
 
 using Methods = mcr::options::AcceptEncodingMethods;
 
