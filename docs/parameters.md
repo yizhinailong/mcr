@@ -1,12 +1,12 @@
 # Parameters
 
-Import `mcr` or `mcr.parameters` to use `Parameters`. The module re-exports
+Import `mcr` or `mcr.fields` to use `Parameters`. The module re-exports
 `mcr.curl_container`, including `Parameter` and `CurlHolder`. It combines cpr's
 `include/cpr/parameters.h` and its otherwise empty `cpr/parameters.cpp` in
 one module; no separate implementation unit is needed.
 
 ```cpp
-import mcr.parameters;
+import mcr.fields;
 
 mcr::Parameters query{ { "q", "hello world" }, { "flag", "" } };
 query.Add(mcr::Parameter{ "q", "x+y" });

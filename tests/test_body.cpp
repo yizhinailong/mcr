@@ -3,7 +3,7 @@
  * @brief Verify owned body constructors, binary file reads, and inherited string operations.
  */
 import std;
-import mcr;
+import mcr.body;
 
 static_assert(std::derived_from<mcr::Body, mcr::StringHolder<mcr::Body>>);
 static_assert(std::is_convertible_v<std::string, mcr::Body>);

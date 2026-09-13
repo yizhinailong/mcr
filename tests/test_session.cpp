@@ -8,8 +8,6 @@
 
 import std;
 import mcr.session;
-import mcr.interceptor;
-import mcr.multiperform;
 import mcr.util;
 
 static_assert(!std::is_copy_constructible_v<mcr::Session> && !std::is_move_constructible_v<mcr::Session>);

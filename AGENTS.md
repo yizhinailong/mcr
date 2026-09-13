@@ -9,9 +9,9 @@
 Source files are grouped by responsibility. Public module names are independent of file paths. Request configuration types use `mcr::options`, with TLS option tags in `mcr::options::ssl`. Reusable utilities use `mcr::utils`, and curl backend interfaces use `mcr::curl`.
 
 - `src/`: library entry module `mcr.cppm`, one-shot request API `api.cppm`, shared types `types.cppm`, and errors/results `error.cppm`.
-- `src/request/`: request bodies and borrowed views, upload buffers and files, multipart data, query parameters, and form payloads. Public types remain in `mcr`, with existing module names such as `mcr.body` and `mcr.parameters`.
+- `src/request/`: request bodies and borrowed views in `mcr.body`, query parameters and form payloads in `mcr.fields`, plus upload buffers, files, and multipart data. Public types remain in `mcr`.
 - `src/http/`: responses, cookies, certificate metadata, status codes, and Server-Sent Events. Public types remain in `mcr`, with status constants in `mcr::status`; existing module names such as `mcr.response` and `mcr.sse` are preserved.
-- `src/session/`: sessions, asynchronous runtime, callbacks, connection pools, and interceptor/batch import entry points. Session implementation units (`session_ssl.cpp`, `session_interceptor.cpp`, and `multiperform.cpp`) live beside `session.cppm` and belong to `mcr.session`. Public types and module names are preserved.
+- `src/session/`: sessions, asynchronous runtime, callbacks, and connection pools. `session.cppm` contains the session, TLS, interceptor, and batch implementations; import `mcr.session` for `Session`, `Interceptor`, `InterceptorMulti`, and `MultiPerform`.
 - `src/options/`: request configuration in namespace `mcr::options`, grouped into six modules. `mcr.auth` provides authentication and bearer tokens; `mcr.proxy` provides proxy addresses and credentials; `mcr.http` provides protocol versions, encodings, redirects, and ranges; `mcr.transfer_options` provides timing, rates, connection selection, capacity, and diagnostics. Network interface selection and TLS configuration remain in `mcr.interface` and `mcr.ssl_options`. Keep related small option types together.
 - `src/utils/`: reusable utilities in namespace `mcr::utils` for secure strings, singleton lifecycle, thread pools, and future wrappers, alongside HTTP parsing and curl callback helpers. Utility modules retain their existing module names, such as `mcr.threadpool` and `mcr.util`.
 - `src/curl/`: curl easy/multi handle ownership, request container encoding, and SSL context support in namespace `mcr::curl`, including module interfaces and their implementations. The request record types `Parameter` and `Pair` remain in namespace `mcr`, alongside `mcr::curl::CurlContainer<T>` in the same module. These modules retain their existing module names, such as `mcr.curlholder`, `mcr.curl_container`, and `mcr.ssl_ctx`.
@@ -39,10 +39,10 @@ Run from the repository root with `mcpp` and a C++23 toolchain supporting `impor
 Follow `.clang-format`: four-space indentation, spaces instead of tabs, and no enforced column limit. Format changed C++ files, for example:
 
 ```sh
-clang-format -i src/main.cpp tests/test_smoke.cpp
+clang-format -i src/api.cppm tests/test_api.cpp
 ```
 
-Preserve C++23 module style, including `import std;`. Use lowercase filenames with underscores, such as `argument_parser.cpp`, and keep implementation in `src/`. No separate lint configuration is checked in.
+Preserve C++23 module style, including `import std;`. Keep library declarations and implementations directly in `.cppm` files under `src/`; do not create separate `.cpp` implementation units. Use lowercase filenames with underscores, such as `argument_parser.cppm`. Tests remain standalone `.cpp` programs. No separate lint configuration is checked in.
 
 Use `std::filesystem` directly through `import std;`, without a filesystem namespace alias or wrapper module.
 

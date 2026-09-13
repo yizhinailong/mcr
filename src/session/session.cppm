@@ -16,14 +16,12 @@ export module mcr.session;
 export import mcr.async;
 export import mcr.auth;
 export import mcr.body;
-export import mcr.body_view;
 export import mcr.callback;
 export import mcr.connection_pool;
+export import mcr.fields;
 export import mcr.http;
 export import mcr.interface;
 export import mcr.multipart;
-export import mcr.parameters;
-export import mcr.payload;
 export import mcr.proxy;
 export import mcr.response;
 export import mcr.sse;
@@ -151,36 +149,36 @@ export namespace mcr {
     private:
         friend Interceptor;
         friend MultiPerform;
-        std::vector<std::shared_ptr<Interceptor>> m_interceptors;                           ///< Interceptors in registration order.
-        std::size_t                               m_next_interceptor{};                     ///< Next interceptor in the current nested request.
-        std::size_t                               m_request_depth{};                        ///< Number of active interceptor/request frames.
-        std::string                               m_method{ "GET" };                        ///< Last prepared method, retained by Proceed.
-        MultiPerform*                             m_multi_owner{};                          ///< Batch that currently owns this session, if any.
-        bool                                      m_multi_preparing{};                      ///< Permit the owning batch to prepare its handle.
-        bool                                      m_in_transfer{};                          ///< Reject recursive transfers from curl callbacks.
+        std::vector<std::shared_ptr<Interceptor>> m_interceptors;                                 ///< Interceptors in registration order.
+        std::size_t                               m_next_interceptor{};                           ///< Next interceptor in the current nested request.
+        std::size_t                               m_request_depth{};                              ///< Number of active interceptor/request frames.
+        std::string                               m_method{ "GET" };                              ///< Last prepared method, retained by Proceed.
+        MultiPerform*                             m_multi_owner{};                                ///< Batch that currently owns this session, if any.
+        bool                                      m_multi_preparing{};                            ///< Permit the owning batch to prepare its handle.
+        bool                                      m_in_transfer{};                                ///< Reject recursive transfers from curl callbacks.
         std::shared_ptr<curl::CurlHolder>         m_curl{ std::make_shared<curl::CurlHolder>() }; ///< Owned transfer resources.
-        Url                                       m_url;                                    ///< Base URL before adding parameters.
-        Parameters                                m_parameters;                             ///< Persistent URL parameters.
-        Header                                    m_header;                                 ///< Persistent request headers.
-        options::Proxies                          m_proxies;                                ///< Persistent proxy selection.
-        options::ProxyAuthentication              m_proxy_auth;                             ///< Persistent encoded proxy credentials.
-        options::AcceptEncoding                   m_accept_encoding;                        ///< Compression preference.
-        Content                                   m_content;                                ///< Owned or borrowed request content.
-        ReadCallback                              m_read;                                   ///< Optional upload producer.
-        HeaderCallback                            m_header_callback;                        ///< Optional header observer.
-        WriteCallback                             m_write;                                  ///< Optional response consumer.
-        ProgressCallback                          m_progress;                               ///< Optional progress observer.
-        DebugCallback                             m_debug;                                  ///< Optional diagnostics observer.
-        ServerSentEventCallback                   m_sse;                                    ///< Optional event consumer.
-        ServerSentEventParser                     m_sse_parser;                             ///< Parser reset before every transfer.
-        std::shared_ptr<std::atomic_bool>         m_cancellation;                           ///< Shared cancellation flag.
-        std::string                               m_response_string;                        ///< Current buffered response body.
-        std::string                               m_header_string;                          ///< Current raw response headers.
-        std::size_t                               m_reserve_size{};                         ///< Requested body buffer reservation.
-        WriteCallback                             m_download_write;                         ///< Consumer used only for a prepared download.
-        std::ofstream*                            m_download_file{};                        ///< Borrowed file for a prepared download.
-        bool                                      m_downloading{};                          ///< Selects the current body destination.
-        std::exception_ptr                        m_callback_error;                         ///< First exception caught inside a curl callback.
+        Url                                       m_url;                                          ///< Base URL before adding parameters.
+        Parameters                                m_parameters;                                   ///< Persistent URL parameters.
+        Header                                    m_header;                                       ///< Persistent request headers.
+        options::Proxies                          m_proxies;                                      ///< Persistent proxy selection.
+        options::ProxyAuthentication              m_proxy_auth;                                   ///< Persistent encoded proxy credentials.
+        options::AcceptEncoding                   m_accept_encoding;                              ///< Compression preference.
+        Content                                   m_content;                                      ///< Owned or borrowed request content.
+        ReadCallback                              m_read;                                         ///< Optional upload producer.
+        HeaderCallback                            m_header_callback;                              ///< Optional header observer.
+        WriteCallback                             m_write;                                        ///< Optional response consumer.
+        ProgressCallback                          m_progress;                                     ///< Optional progress observer.
+        DebugCallback                             m_debug;                                        ///< Optional diagnostics observer.
+        ServerSentEventCallback                   m_sse;                                          ///< Optional event consumer.
+        ServerSentEventParser                     m_sse_parser;                                   ///< Parser reset before every transfer.
+        std::shared_ptr<std::atomic_bool>         m_cancellation;                                 ///< Shared cancellation flag.
+        std::string                               m_response_string;                              ///< Current buffered response body.
+        std::string                               m_header_string;                                ///< Current raw response headers.
+        std::size_t                               m_reserve_size{};                               ///< Requested body buffer reservation.
+        WriteCallback                             m_download_write;                               ///< Consumer used only for a prepared download.
+        std::ofstream*                            m_download_file{};                              ///< Borrowed file for a prepared download.
+        bool                                      m_downloading{};                                ///< Selects the current body destination.
+        std::exception_ptr                        m_callback_error;                               ///< First exception caught inside a curl callback.
 
     public:
         /**
@@ -283,7 +281,7 @@ export namespace mcr {
                 case options::AuthMode::NEGOTIATE: mode = CURLAUTH_NEGOTIATE; break;
                 case options::AuthMode::ANY      : mode = static_cast<long>(CURLAUTH_ANY); break;
                 case options::AuthMode::ANYSAFE  : mode = static_cast<long>(CURLAUTH_ANYSAFE); break;
-                default                 : throw std::invalid_argument{ "mcr::Session: unknown authentication mode." };
+                default                          : throw std::invalid_argument{ "mcr::Session: unknown authentication mode." };
             }
             setOption(CURLOPT_HTTPAUTH, mode);
             setOption(CURLOPT_USERPWD, auth.GetAuthString());
@@ -516,7 +514,7 @@ export namespace mcr {
                 case options::HttpVersionCode::VERSION_2_0_PRIOR_KNOWLEDGE: value = CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE; break;
                 case options::HttpVersionCode::VERSION_3_0                : value = CURL_HTTP_VERSION_3; break;
                 case options::HttpVersionCode::VERSION_3_0_ONLY           : value = CURL_HTTP_VERSION_3ONLY; break;
-                default                                          : throw std::invalid_argument{ "mcr::Session: unknown HTTP version." };
+                default                                                   : throw std::invalid_argument{ "mcr::Session: unknown HTTP version." };
             }
             setOption(CURLOPT_HTTP_VERSION, value);
         }
@@ -1837,4 +1835,501 @@ export namespace mcr {
         auto proceed() -> std::vector<Response>;
     };
 
+} // namespace mcr
+
+namespace mcr::detail {
+    /**
+     * @brief Restore session or batch state on normal and exceptional exits.
+     * @tparam Fn Cleanup callable.
+     */
+    template <typename Fn>
+    struct ScopeExit {
+        Fn cleanup; ///< Cleanup action invoked on scope exit.
+
+        ~ScopeExit() { cleanup(); }
+    };
+
+    /**
+     * @brief Translate a curl multi failure into an exception.
+     * @param result Curl multi operation result.
+     */
+    auto check_multi(CURLMcode result) -> void {
+        if (result != CURLM_OK) {
+            throw std::runtime_error{ std::string{ "mcr::MultiPerform: " } + curl_multi_strerror(result) };
+        }
+    }
+
+    /**
+     * @brief Check whether a batch method tag is recognized.
+     * @param method Method tag to inspect.
+     * @return Whether the tag belongs to the supported method range.
+     */
+    auto valid_method(MultiPerform::HttpMethod method) -> bool {
+        return method >= MultiPerform::HttpMethod::UNDEFINED && method <= MultiPerform::HttpMethod::DOWNLOAD_REQUEST;
+    }
+} // namespace mcr::detail
+
+namespace mcr {
+    auto Session::SetSslOptions(options::SslOptions const& options) -> void {
+        // Some backends reject even the default value for unsupported optional settings.
+        auto optional_option = [this](CURLoption option, auto value, bool requested) {
+            auto const result{ curl_easy_setopt(m_curl->handle, option, value) };
+            if (!requested && (result == CURLE_NOT_BUILT_IN || result == CURLE_UNKNOWN_OPTION)) {
+                return;
+            }
+            checkCurl(result);
+        };
+        auto string_option = [&](CURLoption option, std::string_view value) {
+            optional_option(option, value.empty() ? nullptr : value.data(), !value.empty());
+        };
+        auto blob_option = [&](CURLoption option, std::string_view value) {
+            curl_blob blob{ const_cast<char*>(value.data()), value.size(), CURL_BLOB_COPY };
+            optional_option(option, value.empty() ? nullptr : &blob, !value.empty());
+        };
+
+        string_option(CURLOPT_SSLCERT, options.cert_file);
+        blob_option(CURLOPT_SSLCERT_BLOB, options.cert_file.empty() ? std::string_view{ options.cert_blob } : std::string_view{});
+        setOption(CURLOPT_SSLCERTTYPE, options.cert_type.empty() ? "PEM" : options.cert_type.c_str());
+        string_option(CURLOPT_SSLKEY, options.key_file);
+        blob_option(CURLOPT_SSLKEY_BLOB, options.key_file.empty() ? std::string_view{ options.key_blob } : std::string_view{});
+        setOption(CURLOPT_SSLKEYTYPE, options.key_type.empty() ? "PEM" : options.key_type.c_str());
+        string_option(CURLOPT_KEYPASSWD, options.key_pass);
+        string_option(CURLOPT_PINNEDPUBLICKEY, options.pinned_public_key);
+        setOption(CURLOPT_SSL_ENABLE_ALPN, options.enable_alpn ? 1L : 0L);
+        setOption(CURLOPT_SSL_VERIFYPEER, options.verify_peer ? 1L : 0L);
+        setOption(CURLOPT_SSL_VERIFYHOST, options.verify_host ? 2L : 0L);
+        optional_option(CURLOPT_SSL_VERIFYSTATUS, options.verify_status ? 1L : 0L, options.verify_status);
+        setOption(CURLOPT_SSLVERSION, options.ssl_version | options.max_version);
+        long flags{ options.ssl_no_revoke ? CURLSSLOPT_NO_REVOKE : 0L };
+#ifdef _WIN32
+        flags |= CURLSSLOPT_NATIVE_CA;
+#endif
+        setOption(CURLOPT_SSL_OPTIONS, flags);
+#if LIBCURL_VERSION_NUM >= 0x080F00
+        if (options.ssl_fast_start) {
+            throw std::runtime_error{ "mcr::Session: TLS false start was removed in curl 8.15." };
+        }
+#else
+        optional_option(CURLOPT_SSL_FALSESTART, options.ssl_fast_start ? 1L : 0L, options.ssl_fast_start);
+#endif
+
+        char* default_ca{ nullptr };
+        (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAINFO, &default_ca);
+        setOption(CURLOPT_CAINFO, options.ca_info.empty() ? default_ca : options.ca_info.c_str());
+        blob_option(CURLOPT_CAINFO_BLOB, options.ca_buffer.empty() ? options.ca_info_blob : options.ca_buffer);
+        char* default_path{ nullptr };
+        (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAPATH, &default_path);
+        optional_option(CURLOPT_CAPATH, options.ca_path.empty() ? default_path : options.ca_path.c_str(), !options.ca_path.empty());
+        string_option(CURLOPT_CRLFILE, options.crl_file);
+        string_option(CURLOPT_SSL_CIPHER_LIST, options.ciphers);
+        string_option(CURLOPT_TLS13_CIPHERS, options.tls13_ciphers);
+        setOption(CURLOPT_SSL_SESSIONID_CACHE, options.session_id_cache ? 1L : 0L);
+    }
+
+    auto Session::AddInterceptor(std::shared_ptr<Interceptor> const& interceptor) -> void {
+        if (m_request_depth || m_in_transfer) {
+            throw std::logic_error{ "mcr::Session: cannot modify an active interceptor chain." };
+        }
+        if (!interceptor) {
+            throw std::invalid_argument{ "mcr::Session: interceptor must not be null." };
+        }
+        m_interceptors.push_back(interceptor);
+    }
+
+    auto Session::perform() -> Response {
+        if (m_in_transfer || m_multi_owner) {
+            throw std::logic_error{ "mcr::Session: handle is already in use." };
+        }
+        detail::ScopeExit restore{ [this, next = m_next_interceptor, method = m_method, downloading = m_downloading, write = m_download_write, file = m_download_file]() mutable {
+            m_next_interceptor = next;
+            m_method           = std::move(method);
+            m_downloading      = downloading;
+            --m_request_depth;
+            m_download_write = m_request_depth ? std::move(write) : WriteCallback{};
+            m_download_file  = m_request_depth ? file : nullptr;
+        } };
+        ++m_request_depth;
+        if (m_next_interceptor < m_interceptors.size()) {
+            auto const interceptor{ m_interceptors[m_next_interceptor++] };
+            return interceptor->Intercept(*this);
+        }
+        m_in_transfer = true;
+        detail::ScopeExit finish{ [this] { m_in_transfer = false; } };
+        return Complete(curl_easy_perform(m_curl->handle));
+    }
+
+    auto Session::proceed() -> Response {
+        auto       method{ m_method };
+        auto       write{ m_download_write };
+        auto*      file{ m_download_file };
+        bool const downloading{ m_downloading };
+        prepare(method, downloading);
+        m_download_write = std::move(write);
+        m_download_file  = file;
+        return perform();
+    }
+
+    auto Interceptor::Proceed(Session& session) -> Response {
+        return session.proceed();
+    }
+
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method) -> Response {
+        switch (method) {
+            case ProceedHttpMethod::GET_REQUEST    : return session.Get();
+            case ProceedHttpMethod::POST_REQUEST   : return session.Post();
+            case ProceedHttpMethod::PUT_REQUEST    : return session.Put();
+            case ProceedHttpMethod::DELETE_REQUEST : return session.Delete();
+            case ProceedHttpMethod::PATCH_REQUEST  : return session.Patch();
+            case ProceedHttpMethod::HEAD_REQUEST   : return session.Head();
+            case ProceedHttpMethod::OPTIONS_REQUEST: return session.Options();
+            default                                : throw std::invalid_argument{ "mcr::Interceptor: this method requires a download destination." };
+        }
+    }
+
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Response {
+        if (method != ProceedHttpMethod::DOWNLOAD_FILE_REQUEST) {
+            throw std::invalid_argument{ "mcr::Interceptor: a stream requires DOWNLOAD_FILE_REQUEST." };
+        }
+        return session.Download(file);
+    }
+
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Response {
+        if (method != ProceedHttpMethod::DOWNLOAD_CALLBACK_REQUEST) {
+            throw std::invalid_argument{ "mcr::Interceptor: a callback requires DOWNLOAD_CALLBACK_REQUEST." };
+        }
+        return session.Download(write);
+    }
+
+    MultiPerform::MultiPerform() : m_multi{ std::make_unique<curl::CurlMultiHolder>() } {}
+
+    MultiPerform::MultiPerform(MultiPerform&& other) noexcept {
+        *this = std::move(other);
+    }
+
+    auto MultiPerform::operator=(MultiPerform&& other) noexcept -> MultiPerform& {
+        if (this != &other) {
+            releaseSessions();
+            m_sessions         = std::move(other.m_sessions);
+            m_claimed          = std::move(other.m_claimed);
+            m_multi            = std::move(other.m_multi);
+            m_downloads        = std::move(other.m_downloads);
+            m_interceptors     = std::move(other.m_interceptors);
+            m_next_interceptor = 0;
+            m_request_depth    = 0;
+            m_transferring     = false;
+            rebindSessions();
+        }
+        return *this;
+    }
+
+    MultiPerform::~MultiPerform() {
+        releaseSessions();
+    }
+
+    auto MultiPerform::checkIdleTransfer() const -> void {
+        if (m_transferring) {
+            throw std::logic_error{ "mcr::MultiPerform: cannot modify or reenter a running transfer." };
+        }
+    }
+
+    auto MultiPerform::releaseSessions() noexcept -> void {
+        for (auto const& weak : m_claimed) {
+            if (auto session{ weak.lock() }; session && session->m_multi_owner == this) {
+                session->m_multi_owner = nullptr;
+            }
+        }
+        m_claimed.clear();
+    }
+
+    auto MultiPerform::rebindSessions() noexcept -> void {
+        for (auto const& weak : m_claimed) {
+            if (auto session{ weak.lock() }) {
+                session->m_multi_owner = this;
+            }
+        }
+    }
+
+    auto MultiPerform::synchronizeSessions() -> void {
+        checkIdleTransfer();
+        std::unordered_set<Session*>        seen;
+        std::vector<std::weak_ptr<Session>> claims;
+        claims.reserve(m_sessions.size());
+        for (auto const& [session, method] : m_sessions) {
+            if (!session || !detail::valid_method(method) || !seen.insert(session.get()).second) {
+                throw std::invalid_argument{ "mcr::MultiPerform: null or duplicate session, or invalid HTTP method." };
+            }
+            if (session->m_in_transfer || session->m_request_depth || (session->m_multi_owner && session->m_multi_owner != this)) {
+                throw std::logic_error{ "mcr::MultiPerform: session is already in use." };
+            }
+            claims.push_back(session);
+        }
+        releaseSessions();
+        m_claimed = std::move(claims);
+        rebindSessions();
+        std::erase_if(m_downloads, [&](auto const& entry) { return !seen.contains(entry.first); });
+    }
+
+    auto MultiPerform::AddSession(std::shared_ptr<Session> const& session, HttpMethod method) -> void {
+        synchronizeSessions();
+        if (!session || !detail::valid_method(method)) {
+            throw std::invalid_argument{ "mcr::MultiPerform: invalid session or HTTP method." };
+        }
+        if (session->m_multi_owner || session->m_in_transfer || session->m_request_depth) {
+            throw std::invalid_argument{ "mcr::MultiPerform: session already belongs to a request or batch." };
+        }
+        for (auto const& [existing, existing_method] : m_sessions) {
+            if (existing_method != HttpMethod::UNDEFINED && method != HttpMethod::UNDEFINED &&
+                (existing_method == HttpMethod::DOWNLOAD_REQUEST) != (method == HttpMethod::DOWNLOAD_REQUEST)) {
+                throw std::invalid_argument{ "mcr::MultiPerform: cannot mix download and ordinary registrations." };
+            }
+        }
+        m_claimed.reserve(m_claimed.size() + 1);
+        m_sessions.emplace_back(session, method);
+        m_claimed.emplace_back(session);
+        session->m_multi_owner = this;
+    }
+
+    auto MultiPerform::RemoveSession(std::shared_ptr<Session> const& session) -> void {
+        synchronizeSessions();
+        auto const found{ std::ranges::find_if(m_sessions, [&](auto const& entry) { return entry.first == session; }) };
+        if (found == m_sessions.end()) {
+            throw std::invalid_argument{ "mcr::MultiPerform: session is not registered." };
+        }
+        session->m_multi_owner = nullptr;
+        m_downloads.erase(session.get());
+        std::erase_if(m_claimed, [&](auto const& weak) { return weak.lock() == session; });
+        m_sessions.erase(found);
+    }
+
+    auto MultiPerform::GetSessions() -> Sessions& {
+        checkIdleTransfer();
+        return m_sessions;
+    }
+
+    auto MultiPerform::AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> void {
+        checkIdleTransfer();
+        if (m_request_depth) {
+            throw std::logic_error{ "mcr::MultiPerform: cannot modify an active interceptor chain." };
+        }
+        if (!interceptor) {
+            throw std::invalid_argument{ "mcr::MultiPerform: interceptor must not be null." };
+        }
+        m_interceptors.push_back(interceptor);
+    }
+
+    auto MultiPerform::checkDownloadCount(std::size_t count) -> void {
+        synchronizeSessions();
+        if (count != m_sessions.size()) {
+            throw std::invalid_argument{ "mcr::MultiPerform: provide one download destination per session." };
+        }
+    }
+
+    auto MultiPerform::validateDownloads() const -> void {
+        for (auto const& [session, method] : m_sessions) {
+            if (method != HttpMethod::DOWNLOAD_REQUEST) {
+                throw std::invalid_argument{ "mcr::MultiPerform: PerformDownload requires download registrations." };
+            }
+        }
+    }
+
+    auto MultiPerform::setDownloadTarget(std::size_t index, WriteCallback const& write) -> void {
+        checkIdleTransfer();
+        auto const& [session, method]{ m_sessions.at(index) };
+        if (method != HttpMethod::DOWNLOAD_REQUEST) {
+            throw std::invalid_argument{ "mcr::MultiPerform: destination requires a download method." };
+        }
+        m_downloads.insert_or_assign(session.get(), write);
+    }
+
+    auto MultiPerform::setDownloadTarget(std::size_t index, std::ofstream& file) -> void {
+        checkIdleTransfer();
+        auto const& [session, method]{ m_sessions.at(index) };
+        if (method != HttpMethod::DOWNLOAD_REQUEST) {
+            throw std::invalid_argument{ "mcr::MultiPerform: destination requires a download method." };
+        }
+        m_downloads.insert_or_assign(session.get(), std::ref(file));
+    }
+
+    auto MultiPerform::setHttpMethod(HttpMethod method) -> void {
+        synchronizeSessions();
+        for (auto& [session, selected] : m_sessions) {
+            selected = method;
+        }
+    }
+
+    auto MultiPerform::prepareSessions() -> void {
+        synchronizeSessions();
+        // Validate the complete batch before preparing any handle.
+        bool downloads{ false }, ordinary{ false };
+        for (auto const& [session, method] : m_sessions) {
+            if (method == HttpMethod::UNDEFINED) {
+                throw std::invalid_argument{ "mcr::MultiPerform: select an HTTP method before Perform." };
+            }
+            if (method == HttpMethod::DOWNLOAD_REQUEST) {
+                downloads = true;
+                if (!m_downloads.contains(session.get())) {
+                    throw std::invalid_argument{ "mcr::MultiPerform: missing download destination." };
+                }
+            } else {
+                ordinary = true;
+            }
+        }
+        if (downloads && ordinary) {
+            throw std::invalid_argument{ "mcr::MultiPerform: cannot mix download and ordinary requests." };
+        }
+        for (auto const& [session, method] : m_sessions) {
+            session->m_multi_preparing = true;
+            detail::ScopeExit reset{ [&] { session->m_multi_preparing = false; } };
+            switch (method) {
+                case HttpMethod::GET_REQUEST    : session->PrepareGet(); break;
+                case HttpMethod::POST_REQUEST   : session->PreparePost(); break;
+                case HttpMethod::PUT_REQUEST    : session->PreparePut(); break;
+                case HttpMethod::DELETE_REQUEST : session->PrepareDelete(); break;
+                case HttpMethod::PATCH_REQUEST  : session->PreparePatch(); break;
+                case HttpMethod::HEAD_REQUEST   : session->PrepareHead(); break;
+                case HttpMethod::OPTIONS_REQUEST: session->PrepareOptions(); break;
+                case HttpMethod::DOWNLOAD_REQUEST:
+                    std::visit([&](auto& target) {
+                        if constexpr (std::same_as<std::decay_t<decltype(target)>, WriteCallback>) {
+                            session->PrepareDownload(target);
+                        } else {
+                            session->PrepareDownload(target.get());
+                        }
+                    },
+                               m_downloads.at(session.get()));
+                    break;
+                default: throw std::invalid_argument{ "mcr::MultiPerform: invalid HTTP method." };
+            }
+        }
+    }
+
+    auto MultiPerform::Perform() -> std::vector<Response> {
+        detail::ScopeExit clear{ [this] {
+            if (!m_request_depth) {
+                m_downloads.clear();
+                for (auto const& weak : m_claimed) {
+                    if (auto session{ weak.lock() }) {
+                        session->m_download_write = {};
+                        session->m_download_file  = nullptr;
+                    }
+                }
+            }
+        } };
+        prepareSessions();
+        return makeRequest();
+    }
+
+    auto MultiPerform::makeRequest() -> std::vector<Response> {
+        checkIdleTransfer();
+        detail::ScopeExit restore{ [this, next = m_next_interceptor] { m_next_interceptor = next; --m_request_depth; } };
+        ++m_request_depth;
+        if (m_next_interceptor < m_interceptors.size()) {
+            auto const interceptor{ m_interceptors[m_next_interceptor++] };
+            return interceptor->Intercept(*this);
+        }
+        return runPrepared();
+    }
+
+    auto MultiPerform::proceed() -> std::vector<Response> {
+        return Perform();
+    }
+
+    auto MultiPerform::runPrepared() -> std::vector<Response> {
+        if (!m_multi) {
+            m_multi = std::make_unique<curl::CurlMultiHolder>();
+        }
+        std::vector<Session*> attached;
+        attached.reserve(m_sessions.size());
+        std::unordered_map<CURL*, std::size_t> positions;
+        for (std::size_t index{}; index < m_sessions.size(); ++index) {
+            positions.emplace(m_sessions[index].first->m_curl->handle, index);
+        }
+        std::vector<std::optional<Response>> completed(m_sessions.size());
+        m_transferring = true;
+        detail::ScopeExit detach{ [&] {
+            for (auto* session : attached) {
+                (void)curl_multi_remove_handle(m_multi->handle, session->m_curl->handle);
+                session->m_in_transfer = false;
+            }
+            int queued{};
+            while (curl_multi_info_read(m_multi->handle, &queued)) {}
+            m_transferring = false;
+        } };
+        for (auto const& [session, method] : m_sessions) {
+            detail::check_multi(curl_multi_add_handle(m_multi->handle, session->m_curl->handle));
+            attached.push_back(session.get());
+            session->m_in_transfer = true;
+        }
+        int running{};
+        do {
+            detail::check_multi(curl_multi_perform(m_multi->handle, &running));
+            if (running) {
+                detail::check_multi(curl_multi_poll(m_multi->handle, nullptr, 0, 100, nullptr));
+            }
+        } while (running);
+        int queued{};
+        while (auto* message{ curl_multi_info_read(m_multi->handle, &queued) }) {
+            if (message->msg != CURLMSG_DONE) {
+                continue;
+            }
+            auto const position{ positions.at(message->easy_handle) };
+            completed[position] = m_sessions[position].first->Complete(message->data.result);
+        }
+        std::vector<Response> responses;
+        responses.reserve(completed.size());
+        for (auto& response : completed) {
+            if (!response) {
+                throw std::runtime_error{ "mcr::MultiPerform: curl did not report every transfer's completion." };
+            }
+            responses.push_back(std::move(*response));
+        }
+        return responses;
+    }
+
+    auto MultiPerform::Get() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::GET_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Delete() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::DELETE_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Put() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::PUT_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Head() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::HEAD_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Options() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::OPTIONS_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Patch() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::PATCH_REQUEST);
+        return Perform();
+    }
+
+    auto MultiPerform::Post() -> std::vector<Response> {
+        setHttpMethod(HttpMethod::POST_REQUEST);
+        return Perform();
+    }
+
+    auto InterceptorMulti::Proceed(MultiPerform& multi) -> std::vector<Response> {
+        return multi.proceed();
+    }
+
+    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> void {
+        multi.setDownloadTarget(index, write);
+    }
+
+    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> void {
+        multi.setDownloadTarget(index, file);
+    }
 } // namespace mcr

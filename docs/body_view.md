@@ -1,13 +1,13 @@
 # BodyView
 
-Import `mcr` or `mcr.body_view` to use `BodyView`. The module re-exports
+Import `mcr` or `mcr.body` to use `BodyView`. The module re-exports
 `mcr.buffer` and otherwise depends only on `import std;`. It adapts cpr's
 `include/cpr/body_view.h` as a final class storing one private
 `std::string_view m_body`.
 
 ```cpp
 import std;
-import mcr.body_view;
+import mcr.body;
 
 std::string source{ "x=5" };
 mcr::BodyView body{ source };
