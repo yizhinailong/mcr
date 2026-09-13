@@ -10,6 +10,9 @@ path = "src/mcr.cppm"
 [dependencies.compat]
 curl = "8.21.0"
 
+[dependencies.nlohmann]
+json = "3.12.0"
+
 [target.linux.dependencies.compat]
 openssl = "3.5.1"
 
