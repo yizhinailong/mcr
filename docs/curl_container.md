@@ -1,7 +1,8 @@
 # CurlContainer
 
-Import `mcr` or `mcr.curl_container` to use `mcr::Parameter`, `mcr::Pair`, and
-`mcr::curl::CurlContainer<T>`. The module lives in `src/curl/curl_container.cppm`
+Import `mcr` or `mcr.fields` to use `mcr::Parameter` and `mcr::Pair`.
+Import `mcr.curl_container` explicitly to also use `mcr::curl::CurlContainer<T>`.
+The backend module lives in `src/curl/curl_container.cppm`
 and also re-exports `mcr.curlholder`. The request record types retain namespace
 `mcr`; the container uses namespace `mcr::curl` for its encoding adapter.
 It follows cpr's `include/cpr/curl_container.h` and `cpr/curl_container.cpp`.

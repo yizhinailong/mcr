@@ -4,8 +4,7 @@
  */
 export module mcr.cookies;
 
-export import mcr.curlholder;
-
+import mcr.curlholder;
 import std;
 
 export namespace mcr {

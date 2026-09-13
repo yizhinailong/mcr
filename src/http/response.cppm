@@ -10,10 +10,10 @@ export module mcr.response;
 
 export import mcr.cert_info;
 export import mcr.cookies;
-export import mcr.curlholder;
 export import mcr.error;
 export import mcr.types;
 
+import mcr.curlholder;
 import mcr.util;
 import std;
 

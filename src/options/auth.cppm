@@ -8,8 +8,7 @@ module;
 
 export module mcr.auth;
 
-export import mcr.secure_string;
-
+import mcr.secure_string;
 import std;
 
 export namespace mcr::options {

@@ -1,10 +1,10 @@
 # Thread pool
 
-Import `mcr` or `mcr.threadpool` to use `mcr::utils::ThreadPool`.
+Import `mcr.threadpool` to use `mcr::utils::ThreadPool`.
 
 ```cpp
 import std;
-import mcr;
+import mcr.threadpool;
 
 mcr::utils::ThreadPool pool{1, 4};
 auto answer = pool.Submit([](int value) { return value * 2; }, 21);

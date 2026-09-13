@@ -8,6 +8,7 @@ Wrappers can be moved, but cannot be copied. Results may be values, references,
 ```cpp
 import std;
 import mcr;
+import mcr.threadpool;
 
 mcr::utils::ThreadPool pool{ 1, 2 };
 auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }) };

@@ -22,6 +22,8 @@ Source files are grouped by responsibility. Public module names are independent 
 
 See [the source layout guide](docs/structure.md) for directory contents and module naming.
 
+Keep `mcr.cppm` limited to public request APIs, data types, options, asynchronous results, status codes, and version information. Public modules must use ordinary imports for curl backend and general utility dependencies; explicitly import those modules when naming their interfaces in backend code or tests. `mcr.fields` selectively exports the public `Parameter` and `Pair` records without re-exporting the curl container module.
+
 ## Build, Test, and Development Commands
 
 Run from the repository root with `mcpp` and a C++23 toolchain supporting `import std;`.

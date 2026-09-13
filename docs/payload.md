@@ -1,13 +1,14 @@
 # Payload
 
-Import `mcr` or `mcr.fields` to use `Payload`. The module re-exports
-`mcr.curl_container`, including `Pair` and `CurlHolder`. It combines cpr's
+Import `mcr` or `mcr.fields` to use `Payload` and `Pair`.
+Import `mcr.curlholder` explicitly when naming `mcr::curl::CurlHolder`. The fields module combines cpr's
 `include/cpr/payload.h` and its otherwise empty `cpr/payload.cpp` in one
 module, without a separate implementation unit.
 
 ```cpp
 import std;
 import mcr.fields;
+import mcr.curlholder;
 
 mcr::Payload form{ { "name", "hello world" }, { "flag", "" } };
 form.Add(mcr::Pair{ "name", "x+y" });

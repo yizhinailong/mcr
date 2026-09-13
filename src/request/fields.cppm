@@ -4,11 +4,13 @@
  */
 export module mcr.fields;
 
-export import mcr.curl_container;
-
+import mcr.curl_container;
 import std;
 
 export namespace mcr {
+
+    using mcr::Pair;
+    using mcr::Parameter;
 
     /**
      * @brief Own query parameters, following cpr's Parameters interface.

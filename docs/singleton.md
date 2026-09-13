@@ -1,9 +1,9 @@
 # Singleton
 
-Import `mcr` or `mcr.singleton` and derive from `mcr::utils::Singleton<T>`:
+Import `mcr.singleton` and derive from `mcr::utils::Singleton<T>`:
 
 ```cpp
-import mcr;
+import mcr.singleton;
 
 class Service final : public mcr::utils::Singleton<Service> {
     friend mcr::utils::Singleton<Service>;

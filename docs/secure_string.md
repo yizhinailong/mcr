@@ -1,11 +1,11 @@
 # Secure string
 
-Import `mcr` or `mcr.secure_string` to use `mcr::utils::SecureAllocator<T>` and
+Import `mcr.secure_string` to use `mcr::utils::SecureAllocator<T>` and
 `mcr::utils::SecureString`, following cpr's `include/cpr/secure_string.h`.
 
 ```cpp
 import std;
-import mcr;
+import mcr.secure_string;
 
 int main() {
     mcr::utils::SecureString credentials{ "username" };

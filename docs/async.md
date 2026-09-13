@@ -1,8 +1,9 @@
 # Global async helpers
 
 Import `mcr` or `mcr.async` to use `GlobalThreadPool`, `async`, and `Async`.
-The module re-exports `mcr.async_wrapper`, `mcr.singleton`, and `mcr.threadpool`
-and follows cpr's `include/cpr/async.h` and `cpr/async.cpp`.
+The module re-exports `mcr.async_wrapper` for its public result and cancellation types
+and follows cpr's `include/cpr/async.h` and `cpr/async.cpp`. Import `mcr.singleton`
+or `mcr.threadpool` explicitly when naming the underlying utility types or constants.
 These library-level entry points use namespace `mcr`; the underlying thread pool,
 singleton, future wrapper, and their constants use `mcr::utils` (see [utility namespaces](utils.md)).
 

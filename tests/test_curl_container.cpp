@@ -6,6 +6,7 @@
 
 import std;
 import mcr.fields;
+import mcr.curl_container;
 
 using Parameters = mcr::Parameters;
 using Pairs      = mcr::Payload;

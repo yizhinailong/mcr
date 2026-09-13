@@ -3,7 +3,7 @@
  * @brief Verify CRTP access, singleton identity, concurrent lifecycle calls, and initialization retry.
  */
 import std;
-import mcr;
+import mcr.singleton;
 
 namespace {
 

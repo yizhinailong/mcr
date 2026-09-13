@@ -5,9 +5,9 @@
 export module mcr.async;
 
 export import mcr.async_wrapper;
-export import mcr.singleton;
-export import mcr.threadpool;
 
+import mcr.singleton;
+import mcr.threadpool;
 import std;
 
 export namespace mcr {

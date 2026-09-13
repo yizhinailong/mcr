@@ -4,8 +4,7 @@
  */
 export module mcr.proxy;
 
-export import mcr.secure_string;
-
+import mcr.secure_string;
 import mcr.util;
 import std;
 

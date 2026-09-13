@@ -4,6 +4,8 @@
  */
 import std;
 import mcr;
+import mcr.singleton;
+import mcr.threadpool;
 
 static_assert(std::is_base_of_v<mcr::utils::ThreadPool, mcr::GlobalThreadPool>);
 static_assert(std::is_base_of_v<mcr::utils::Singleton<mcr::GlobalThreadPool>, mcr::GlobalThreadPool>);

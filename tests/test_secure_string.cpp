@@ -3,7 +3,7 @@
  * @brief Verify allocator compatibility, string operations, and memory wiping before release.
  */
 import std;
-import mcr;
+import mcr.secure_string;
 
 namespace {
 

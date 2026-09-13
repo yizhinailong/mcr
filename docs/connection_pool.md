@@ -11,6 +11,7 @@ connections and TLS sessions. It does not enable cookie or DNS sharing.
 
 import std;
 import mcr;
+import mcr.curlholder;
 
 // After successful curl_global_init(), and before curl_global_cleanup():
 {

@@ -6,6 +6,7 @@
 
 import std;
 import mcr;
+import mcr.curlholder;
 
 static_assert(mcr::EXPIRES_STRING_SIZE == 100);
 static_assert(std::is_same_v<decltype(std::declval<mcr::Cookie const&>().GetName()), std::string const&>);

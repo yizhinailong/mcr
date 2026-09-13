@@ -5,7 +5,7 @@
 #include <curl/curl.h>
 
 import std;
-import mcr;
+import mcr.util;
 
 namespace {
 

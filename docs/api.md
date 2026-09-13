@@ -1,8 +1,8 @@
 # 自由函数与兼容入口
 
 对照本地 cpr 的 `api.h`、`ssl_ctx.h` / `ssl_ctx.cpp` 和
-`cmake/cprver.h.in` 补齐入口。`import mcr;` 导出所有这些接口；也可以分别导入
-`mcr.api`、`mcr.version` 和 `mcr.ssl_ctx`。
+`cmake/cprver.h.in` 补齐入口。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
+`mcr.api`、`mcr.version`。SSL 上下文回调属于后端接口，需要显式导入 `mcr.ssl_ctx`。
 HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
 
 | 操作 | 返回值 | 执行方式 |
