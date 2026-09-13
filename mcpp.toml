@@ -1,7 +1,7 @@
 [package]
 name = "mcr"
-version = "0.1.4"
-description = "A modular C++23 package"
+version = "0.1.5"
+description = "A modular C++23 HTTP client library built on libcurl, with synchronous, asynchronous, and batch requests and JSON support"
 license = "MIT"
 
 [lib]
