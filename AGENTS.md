@@ -8,15 +8,19 @@
 
 Source files are grouped by responsibility. Public module names are independent of file paths. Request configuration types use `mcr::options`, with TLS option tags in `mcr::options::ssl`. Reusable utilities use `mcr::utils`, and curl backend interfaces use `mcr::curl`.
 
-- `src/mcr.cppm`: library entry module re-exporting the public interfaces.
+- `src/`: library entry module `mcr.cppm`, one-shot request API `api.cppm`, shared types `types.cppm`, and errors/results `error.cppm`.
+- `src/request/`: request bodies and borrowed views, upload buffers and files, multipart data, query parameters, and form payloads. Public types remain in `mcr`, with existing module names such as `mcr.body` and `mcr.parameters`.
+- `src/http/`: responses, cookies, certificate metadata, status codes, and Server-Sent Events. Public types remain in `mcr`, with status constants in `mcr::status`; existing module names such as `mcr.response` and `mcr.sse` are preserved.
+- `src/session/`: sessions, asynchronous runtime, callbacks, connection pools, and interceptor/batch import entry points. Session implementation units (`session_ssl.cpp`, `session_interceptor.cpp`, and `multiperform.cpp`) live beside `session.cppm` and belong to `mcr.session`. Public types and module names are preserved.
 - `src/options/`: request configuration in namespace `mcr::options`, grouped into six modules. `mcr.auth` provides authentication and bearer tokens; `mcr.proxy` provides proxy addresses and credentials; `mcr.http` provides protocol versions, encodings, redirects, and ranges; `mcr.transfer_options` provides timing, rates, connection selection, capacity, and diagnostics. Network interface selection and TLS configuration remain in `mcr.interface` and `mcr.ssl_options`. Keep related small option types together.
 - `src/utils/`: reusable utilities in namespace `mcr::utils` for secure strings, singleton lifecycle, thread pools, and future wrappers, alongside HTTP parsing and curl callback helpers. Utility modules retain their existing module names, such as `mcr.threadpool` and `mcr.util`.
 - `src/curl/`: curl easy/multi handle ownership, request container encoding, and SSL context support in namespace `mcr::curl`, including module interfaces and their implementations. The request record types `Parameter` and `Pair` remain in namespace `mcr`, alongside `mcr::curl::CurlContainer<T>` in the same module. These modules retain their existing module names, such as `mcr.curlholder`, `mcr.curl_container`, and `mcr.ssl_ctx`.
-- `src/`: sessions, responses, request data, callbacks, and supporting runtime modules.
 - `tests/test_*.cpp`: standalone tests, with shared local HTTP fixtures under `tests/fixtures/`.
 - `mcpp.toml`: package metadata and dependency declarations for `mcr`.
 - `.clang-format`: repository formatting configuration.
 - `target/`, `.mcpp/`, and `compile_commands.json`: generated output or local state ignored by Git; do not commit them.
+
+See [the source layout guide](docs/structure.md) for directory contents and module naming.
 
 ## Build, Test, and Development Commands
 
