@@ -2,10 +2,6 @@
  * @file auth.cppm
  * @brief HTTP authentication modes, owned credentials, and bearer tokens.
  */
-module;
-
-#include <curl/curlver.h>
-
 export module mcr.auth;
 
 import mcr.secure_string;
@@ -68,11 +64,9 @@ export namespace mcr::options {
         }
     };
 
-#if LIBCURL_VERSION_NUM >= 0x073D00 // HTTP bearer authentication was added in 7.61.0.
     /**
      * @brief Own raw bearer token bytes and allow derived classes to customize token access.
-     * @note Available when built with curl headers at least 7.61.0, following cpr.
-     * No authorization prefix, encoding, or validation is applied to the token.
+     * @note No authorization prefix, encoding, or validation is applied to the token.
      */
     class Bearer {
     public:
@@ -128,6 +122,4 @@ export namespace mcr::options {
     protected:
         utils::SecureString m_token_string; ///< Owned token bytes, available for derived customization.
     };
-#endif
-
 } // namespace mcr::options

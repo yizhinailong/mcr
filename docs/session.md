@@ -147,7 +147,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
 - 公共方法统一为 `Intercept` / `Proceed` 和 `ProxyAuthentication::Has`。
   TLS 替换、blob 复制、代理凭据解码、批次归属检查和异常恢复采用上述行为。
 - 当前 curl 8.21 依赖不再支持的 SSLv2、SSLv3、NPN 不提供选项。
-  保留 `SslFastStart` 类型；在 curl 8.15 及之后显式启用它会抛出异常。
+  保留 `SslFastStart` 类型，显式启用它固定抛出异常；不保留旧版 curl 的设置路径。
 - 参数追加到已有 query，且位于 fragment 之前。
 - 每次准备请求都清除上一请求的方法和 curl 内容配置，避免复用时残留；
   保留 Multipart 的 GET 仍使用 GET。HEAD 与 Download 忽略存储的 Content，

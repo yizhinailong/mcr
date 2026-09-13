@@ -4,6 +4,8 @@
 
 `mcr` is an HTTP client library project implemented with the official upstream [cpr](https://github.com/libcpr/cpr) library as its reference. Consult the official repository's APIs, implementation, and tests when developing request methods, options, sessions, responses, and error handling. Adapt designs to C++23 modules and `mcpp`, and document intentional API or behavior differences in pull requests.
 
+Target the dependency versions declared in `mcpp.toml`; do not maintain compatibility branches for older library versions. Keep platform and TLS backend handling where required by the supported environments.
+
 ## Project Structure & Module Organization
 
 Source files are grouped by responsibility. Public module names are independent of file paths. Request configuration types use `mcr::options`, with TLS option tags in `mcr::options::ssl`. Reusable utilities use `mcr::utils`, and curl backend interfaces use `mcr::curl`.

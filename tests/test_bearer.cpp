@@ -2,12 +2,9 @@
  * @file test_bearer.cpp
  * @brief Verify bearer token ownership, view lengths, and polymorphic extension points.
  */
-#include <curl/curlver.h>
-
 import std;
 import mcr.auth;
 
-#if LIBCURL_VERSION_NUM >= 0x073D00
 static_assert(!std::is_default_constructible_v<mcr::options::Bearer>);
 static_assert(std::is_convertible_v<std::string_view, mcr::options::Bearer>);
 static_assert(std::is_copy_constructible_v<mcr::options::Bearer>);
@@ -110,10 +107,8 @@ namespace {
     }
 
 } // namespace
-#endif
 
 int main() {
-#if LIBCURL_VERSION_NUM >= 0x073D00
     bool passed{ check_construction() };
     passed &= check_ownership();
     passed &= check_polymorphism();
@@ -121,8 +116,5 @@ int main() {
         return 1;
     }
     std::println("test_bearer: ok");
-#else
-    std::println("test_bearer: unavailable with curl headers before 7.61.0");
-#endif
     return 0;
 }

@@ -25,8 +25,7 @@ the C++23 module, namespace `mcr::options`, explicit `std::uint16_t`, and taking
 constructor inputs by value and moving them into members instead of copying
 from const references.
 
-In cpr, `Session::SetResolves` consumes these fields to build curl resolve
-entries, and `test/resolve_tests.cpp` covers local HTTP requests and redirects.
-This module provides the option value; request/session integration is not yet
-implemented in this project. Run `mcpp build` and `mcpp test` to verify defaults,
+`Session::SetResolves` builds curl resolve entries from these fields and applies
+them with `CURLOPT_RESOLVE`; `SetResolve` replaces the list with one mapping.
+An empty list clears the overrides. Run `mcpp build` and `mcpp test` to verify defaults,
 custom port sets, owned text, and field updates.

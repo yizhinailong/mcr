@@ -57,8 +57,8 @@ private `m_auth_string` / `m_auth_mode` names. Construction uses checked string
 operations without cpr's unchecked combined-length arithmetic for `reserve`.
 Public signatures and credential formatting are preserved.
 
-cpr's `Session::SetAuth` maps the mode to `CURLOPT_HTTPAUTH` and supplies the
-credential pointer to `CURLOPT_USERPWD`. Session integration is not yet
-implemented here. Run `mcpp build` and `mcpp test` to verify all modes, empty
+`Session::SetAuth` maps the mode to `CURLOPT_HTTPAUTH` and supplies the
+credential pointer to `CURLOPT_USERPWD`, following cpr. Run `mcpp build` and
+`mcpp test` to verify all modes, empty
 inputs, bounded views, UTF-8 and binary bytes, and copy/move ownership. The
 tests use synthetic credentials and do not perform authentication requests.

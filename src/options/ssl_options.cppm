@@ -364,6 +364,7 @@ export namespace mcr::options {
 
         /**
          * @brief Configure SslFastStart.
+         * @note The current curl dependency does not support false start; Session rejects enabled values.
          */
         struct SslFastStart {
             bool enabled{ false }; ///< Stored preference.
@@ -474,7 +475,7 @@ export namespace mcr::options {
         long               ssl_version{ CURL_SSLVERSION_DEFAULT };     ///< Minimum TLS version.
         long               max_version{ CURL_SSLVERSION_MAX_DEFAULT }; ///< Maximum TLS version.
         bool               ssl_no_revoke{ false };                     ///< Disable revocation checks when supported.
-        bool               ssl_fast_start{ false };                    ///< Request false start when supported.
+        bool               ssl_fast_start{ false };                    ///< Unsupported preference; Session rejects true.
         std::string        ca_info;                                    ///< CA bundle path; empty restores curl's default.
         std::string        ca_info_blob;                               ///< CA bundle contents.
         std::string        ca_path;                                    ///< CA directory; empty restores curl's default.

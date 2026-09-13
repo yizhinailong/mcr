@@ -1936,13 +1936,9 @@ namespace mcr {
         flags |= CURLSSLOPT_NATIVE_CA;
 #endif
         setOption(CURLOPT_SSL_OPTIONS, flags);
-#if LIBCURL_VERSION_NUM >= 0x080F00
         if (options.ssl_fast_start) {
             throw std::runtime_error{ "mcr::Session: TLS false start was removed in curl 8.15." };
         }
-#else
-        optional_option(CURLOPT_SSL_FALSESTART, options.ssl_fast_start ? 1L : 0L, options.ssl_fast_start);
-#endif
 
         char* default_ca{ nullptr };
         (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAINFO, &default_ca);

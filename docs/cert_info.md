@@ -39,8 +39,8 @@ member name `m_cert_info`, taking the subscript index by value, and explicit
 `noexcept` on move construction and iterator access. Standard container method
 names are retained, consistently with `Cookies`.
 
-cpr's `Response::GetCertInfos` copies each certificate's curl information lines
-into a `CertInfo`; `test/ssl_tests.cpp` checks these entries using a local TLS
-fixture. Response integration is not yet implemented in this project. Run
+`Response` snapshots curl's certificate information when a transfer completes;
+`GetCertInfos()` returns an independent copy, empty when no certificates are
+available. Local TLS coverage is described in [Session](session.md). Run
 `mcpp build` and `mcpp test` to verify entry ownership, mutation, iteration,
 appending/removal, and certificate-chain storage without requiring TLS access.

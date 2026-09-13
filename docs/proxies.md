@@ -44,8 +44,8 @@ parameters. A transparent `std::less<>` map comparator permits bounded views
 without allocating a key during lookups. Missing-key subscript copies the view
 into owned storage before inserting, preserving cpr's insertion behavior.
 
-The reference's `test/proxy_tests.cpp` and `test/proxy_auth_tests.cpp` exercise
-proxy options through requests and sessions. Session integration is not yet
-implemented in this project. `mcpp build` and `mcpp test` validate the option's
+`Session::SetProxies` retains these options and applies the selected protocol's
+proxy and exclusions before each transfer. See [Session](session.md) for proxy
+authentication and request reuse. `mcpp build` and `mcpp test` validate the option's
 construction, ownership, exact lookup, empty-value insertion, binary text, and
 copy/move behavior without an external proxy service.

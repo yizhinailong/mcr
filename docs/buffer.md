@@ -70,4 +70,5 @@ behavior above. Valid contiguous byte ranges retain the reference behavior.
 Run `mcpp build` and `mcpp test` to verify borrowing, binary subranges,
 supported storage types, empty and reversed ranges, filename ownership,
 and copy/move behavior. [`Part`](multipart.md) can borrow these buffers;
-MIME serialization and request integration are not yet implemented.
+Session serializes them into MIME parts using their explicit byte lengths.
+Keep the underlying storage alive until all transfers using it complete.

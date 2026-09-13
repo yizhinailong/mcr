@@ -25,11 +25,9 @@ Intentional differences from cpr are the C++23 module, namespace `mcr::options`,
 constructor parameter names, and Doxygen documentation. Public field names and
 runtime behavior are unchanged.
 
-In cpr, `Session::SetLimitRate` sends `downrate` to
+`Session::SetLimitRate` sends `downrate` to
 `CURLOPT_MAX_RECV_SPEED_LARGE` and `uprate` to `CURLOPT_MAX_SEND_SPEED_LARGE`.
-Its `test/get_tests.cpp` checks a local request using `LimitRate(1024, 1024)`.
-Session integration is not yet implemented in this project; this module stores
-the option values and does not itself throttle transfers.
+The option stores the values; curl enforces the rates during Session transfers.
 
 Run `mcpp build` and `mcpp test`. `test_limit_rate` checks argument order, zero
 and negative values, rates above 32 bits, both 64-bit boundaries, and independent

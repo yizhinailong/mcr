@@ -77,10 +77,11 @@ vector rvalue constructor now takes a nonconst rvalue and moves it; cpr's
 `const std::vector<Part>&&` overload copied every part. Const inputs still
 copy. Filesystem conversion uses the standard library directly.
 
-These types describe multipart content; MIME serialization and request/session
-integration are not yet implemented. Stored binary strings alone do not
-guarantee their eventual wire treatment: cpr's session sends text parts as
-null-terminated strings, while buffer parts use the explicit byte count.
+`Session::SetMultipart` retains these descriptors and builds a curl MIME tree
+when preparing a request. Text and buffer parts both use explicit byte lengths,
+preserving embedded nulls; files are supplied through `curl_mime_filedata`.
+Borrowed buffers and referenced files must remain available for the transfers.
+See [Session](session.md) for request integration and local HTTP tests.
 Run `mcpp build` and `mcpp test` to verify all field constructors, numeric
 limits, file copying/moving, buffer lifetimes, mixed collections, and vector
 copy/move behavior without filesystem or network I/O.

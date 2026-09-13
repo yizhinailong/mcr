@@ -52,9 +52,7 @@ namespace {
         session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{}));
         try {
             session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::SslFastStart{ true }));
-#if LIBCURL_VERSION_NUM >= 0x080F00
             passed &= check(false, "removed TLS false-start support must not be silently accepted");
-#endif
         } catch (std::runtime_error const&) {}
         return passed;
     }

@@ -18,25 +18,24 @@ validation belongs to the code applying the option. Copying, moving, and
 assignment preserve independent values. Construction supports constant
 evaluation and does not throw.
 
-The module includes `<curl/curlver.h>` in its global module fragment and uses
-`LIBCURL_VERSION_NUM` to select the available enumerators at build time:
+The module declares all protocol policies supported by the curl dependency in
+`mcpp.toml` (currently 8.21.0), without compatibility branches for older headers:
 
-| Enumerator | Ordinal | Minimum curl | Corresponding curl option value |
-| --- | --- | --- | --- |
-| `VERSION_NONE` | 0 | Always available | `CURL_HTTP_VERSION_NONE` |
-| `VERSION_1_0` | 1 | Always available | `CURL_HTTP_VERSION_1_0` |
-| `VERSION_1_1` | 2 | Always available | `CURL_HTTP_VERSION_1_1` |
-| `VERSION_2_0` | 3 | 7.33.0 | `CURL_HTTP_VERSION_2_0` |
-| `VERSION_2_0_TLS` | 4 | 7.47.0 | `CURL_HTTP_VERSION_2TLS` |
-| `VERSION_2_0_PRIOR_KNOWLEDGE` | 5 | 7.49.0 | `CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE` |
-| `VERSION_3_0` | 6 | 7.66.0 | `CURL_HTTP_VERSION_3` |
-| `VERSION_3_0_ONLY` | 7 | 7.88.0 | `CURL_HTTP_VERSION_3ONLY` |
+| Enumerator | Ordinal | Corresponding curl option value |
+| --- | --- | --- |
+| `VERSION_NONE` | 0 | `CURL_HTTP_VERSION_NONE` |
+| `VERSION_1_0` | 1 | `CURL_HTTP_VERSION_1_0` |
+| `VERSION_1_1` | 2 | `CURL_HTTP_VERSION_1_1` |
+| `VERSION_2_0` | 3 | `CURL_HTTP_VERSION_2_0` |
+| `VERSION_2_0_TLS` | 4 | `CURL_HTTP_VERSION_2TLS` |
+| `VERSION_2_0_PRIOR_KNOWLEDGE` | 5 | `CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE` |
+| `VERSION_3_0` | 6 | `CURL_HTTP_VERSION_3` |
+| `VERSION_3_0_ONLY` | 7 | `CURL_HTTP_VERSION_3ONLY` |
 
 These are cpr's contiguous ordinal values, not raw libcurl constants: curl uses
 30 and 31 for its HTTP/3 policies. Do not pass a cast of `code` directly to
-`CURLOPT_HTTP_VERSION`; the session layer must map the named values as cpr's
-`Session::SetHttpVersion` does. This module only stores the preference; session
-integration is not yet implemented.
+`CURLOPT_HTTP_VERSION`. `Session::SetHttpVersion` maps each policy to its
+corresponding curl constant and rejects unnamed enum values.
 
 `VERSION_2_0` attempts HTTP/2 with HTTP/1.1 fallback. `VERSION_2_0_TLS` limits
 that attempt to HTTPS and uses HTTP/1.1 for cleartext HTTP. Prior knowledge mode
@@ -46,18 +45,15 @@ earlier protocols, while `VERSION_3_0_ONLY` does not. Libcurl can prioritize
 reusing an existing connection over the requested version.
 
 The presence of an enumerator does not guarantee that the linked curl backend
-supports that protocol. The exported enum is fixed when this module is built;
-importing it does not export preprocessor macros or reevaluate version guards
-in the consuming source file.
+supports that protocol. All enumerators are always exported; runtime protocol
+support still depends on how curl was built.
 
 Intentional differences from cpr are the C++23 module and namespace, Doxygen
-documentation, `constexpr`/`noexcept` on the explicit constructor, and the
-`VERSION_3_0_ONLY` guard. That guard uses `0x075800` (7.88.0), its first official
-release according to curl's `symbols-in-versions`, instead of cpr's development
-snapshot threshold `0x075701`. Protocol comments follow the local libcurl
+documentation, `constexpr`/`noexcept` on the explicit constructor, and unconditional
+enum declarations for the configured dependency. Protocol comments follow the local libcurl
 documentation, including HTTP/3 fallback and current prior knowledge behavior.
 
-Run `mcpp build` and `mcpp test`. The standalone test checks enum availability
-against the build headers, ordinal compatibility, explicit construction,
+Run `mcpp build` and `mcpp test`. The standalone test checks that all policies
+are available, along with ordinal compatibility, explicit construction,
 default state, constant evaluation, independent field updates, and unnamed
 codes. These are option tests and do not negotiate HTTP protocols.

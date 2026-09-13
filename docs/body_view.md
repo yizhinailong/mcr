@@ -63,5 +63,6 @@ The redundant pointer and size casts in Buffer conversion are unnecessary
 because `mcr::Buffer` already exposes `char const*` and `std::size_t`.
 
 Run `mcpp build` and `mcpp test` to check constant evaluation, non-owning
-copies/moves, binary and empty ranges, and Buffer interoperability. Request
-and session integration is not yet implemented.
+copies/moves, binary and empty ranges, and Buffer interoperability.
+`Session::SetBodyView` borrows the bytes for transfers; the source must remain
+valid until all requests using it complete. See [Session](session.md).

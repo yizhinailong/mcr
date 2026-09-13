@@ -43,9 +43,9 @@ Intentional API differences from cpr are the C++23 module, namespace `mcr::optio
 the private `m_ranges` member name. Multi-range formatting iterates by const
 reference. Formatting behavior is unchanged.
 
-cpr's `Session::SetRange` and `SetMultiRange` pass the formatted string to
-`CURLOPT_RANGE`; its `test/download_tests.cpp` covers whole, partial, and multipart
-downloads using a local HTTP fixture. Session integration is not yet implemented
-in this project. Run `mcpp build` and `mcpp test` to verify defaults, optional and
+`Session::SetRange` and `SetMultiRange` pass the formatted string to
+`CURLOPT_RANGE`, following cpr. Session clears this option for PUT requests;
+see [Session](session.md) for transfer behavior. Run `mcpp build` and `mcpp test`
+to verify defaults, optional and
 negative endpoints, signed 64-bit boundaries, multi-range formatting, and value
 ownership without a network service.

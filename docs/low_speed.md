@@ -26,11 +26,10 @@ Integral durations such as minutes and hours may convert implicitly to seconds
 when representable. Milliseconds and floating-point durations require an
 explicit conversion; the option does not silently truncate them.
 
-In cpr, `Session::SetLowSpeed` applies `limit` to `CURLOPT_LOW_SPEED_LIMIT` and
-the duration's second count to `CURLOPT_LOW_SPEED_TIME`. Its session and error
-tests check normal requests and slow responses against a local HTTP fixture.
-This project currently provides the option value; Session integration and
-transfer timeout enforcement are not yet implemented.
+`Session::SetLowSpeed` applies `limit` to `CURLOPT_LOW_SPEED_LIMIT` and
+the duration's second count to `CURLOPT_LOW_SPEED_TIME`, following cpr.
+Curl enforces the low-speed timeout during transfers and reports failures
+through `Response::error`.
 
 Run `mcpp build` and `mcpp test`. `test_low_speed` checks duration units, signed
 boundaries, field updates, value independence, and compile-time rejection of

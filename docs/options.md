@@ -55,7 +55,8 @@ session.SetSslOptions(mcr::options::Ssl(
 | `mcr.http_version`、`mcr.accept_encoding`、`mcr.redirect`、`mcr.range` | `import mcr.http;` |
 
 `mcr.auth` 现在同时导出用户名密码认证和 Bearer 令牌；已有的 `import mcr.auth;`
-可以继续使用。表中的旧模块不再提供独立文件。`Bearer` 和 HTTP 版本枚举继续保留原有的 curl 版本条件。
+可以继续使用。表中的旧模块不再提供独立文件。选项以 `mcpp.toml` 声明的 curl 依赖为基准，
+`Bearer` 和全部 HTTP 版本枚举直接导出，不为旧版 curl 保留条件分支。
 安全字符串类型可通过 `import mcr;` 或单独导入 `mcr.secure_string` 使用；选项模块仅在内部依赖它。
 
 迁移现有调用时，将 `mcr::Verbose`、`mcr::Timeout` 等选项类型改为

@@ -58,7 +58,7 @@ exceptions; workers already created remain usable.
 
 Differences from the referenced cpr implementation:
 
-- Public types live in `mcr`, exported by C++23 modules. Defaults are named
+- Public types live in `mcr::utils`, exported by C++23 modules. Defaults are named
   `DEFAULT_THREAD_POOL_MIN_THREAD_NUM`, `DEFAULT_THREAD_POOL_MAX_THREAD_NUM`, and
   `DEFAULT_THREAD_POOL_MAX_IDLE_TIME`. The maximum falls back to one when hardware
   concurrency is unknown.

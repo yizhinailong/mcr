@@ -2,10 +2,6 @@
  * @file http.cppm
  * @brief HTTP protocol versions, response encodings, redirects, and transfer ranges.
  */
-module;
-
-#include <curl/curlver.h>
-
 export module mcr.http;
 
 import std;
@@ -15,32 +11,22 @@ export namespace mcr::options {
     /**
      * @brief Select an HTTP protocol policy using cpr's enum names and ordinal values.
      * @note These values require mapping to CURL_HTTP_VERSION_* before use with libcurl.
-     * Availability depends on the build headers, not the runtime backend's protocol support.
+     * All policies are declared; actual protocol support depends on the linked curl backend.
      */
     enum class HttpVersionCode : std::uint8_t {
-        VERSION_NONE,               ///< Let libcurl choose the protocol version.
-        VERSION_1_0,                ///< Request HTTP/1.0.
-        VERSION_1_1,                ///< Request HTTP/1.1.
-#if LIBCURL_VERSION_NUM >= 0x072100 // 7.33.0
-        VERSION_2_0,                ///< Attempt HTTP/2 with fallback to HTTP/1.1 if negotiation fails.
-#endif
-#if LIBCURL_VERSION_NUM >= 0x072F00 // 7.47.0
-        VERSION_2_0_TLS,            ///< Attempt HTTP/2 for HTTPS with HTTP/1.1 fallback; use HTTP/1.1 for plain HTTP.
-#endif
-#if LIBCURL_VERSION_NUM >= 0x073100 // 7.49.0
+        VERSION_NONE,    ///< Let libcurl choose the protocol version.
+        VERSION_1_0,     ///< Request HTTP/1.0.
+        VERSION_1_1,     ///< Request HTTP/1.1.
+        VERSION_2_0,     ///< Attempt HTTP/2 with fallback to HTTP/1.1 if negotiation fails.
+        VERSION_2_0_TLS, ///< Attempt HTTP/2 for HTTPS with HTTP/1.1 fallback; use HTTP/1.1 for plain HTTP.
         /**
          * @brief Use HTTP/2 directly for plain HTTP, without HTTP/1.1 Upgrade.
          * @note Requires server support. HTTPS negotiates with ALPN; since curl 8.10.0,
          * only HTTP/2 is offered for HTTPS with this policy.
          */
         VERSION_2_0_PRIOR_KNOWLEDGE,
-#endif
-#if LIBCURL_VERSION_NUM >= 0x074200 // 7.66.0
-        VERSION_3_0,                ///< Attempt HTTP/3 with fallback to earlier HTTP versions.
-#endif
-#if LIBCURL_VERSION_NUM >= 0x075800 // 7.88.0
-        VERSION_3_0_ONLY,           ///< Attempt HTTP/3 without falling back to earlier HTTP versions.
-#endif
+        VERSION_3_0,      ///< Attempt HTTP/3 with fallback to earlier HTTP versions.
+        VERSION_3_0_ONLY, ///< Attempt HTTP/3 without falling back to earlier HTTP versions.
     };
 
     /**

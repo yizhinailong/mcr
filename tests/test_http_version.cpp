@@ -2,8 +2,6 @@
  * @file test_http_version.cpp
  * @brief Verify HTTP version availability, public option semantics, and cpr ordinal compatibility.
  */
-#include <curl/curlver.h>
-
 import std;
 import mcr.http;
 
@@ -22,43 +20,16 @@ static_assert(mcr::options::HttpVersion{ Code::VERSION_1_1 }.code == Code::VERSI
 
 namespace {
 
-    template <typename Enum>
-    concept HasHttp2 = requires { Enum::VERSION_2_0; };
-    template <typename Enum>
-    concept HasHttp2Tls = requires { Enum::VERSION_2_0_TLS; };
-    template <typename Enum>
-    concept HasHttp2PriorKnowledge = requires { Enum::VERSION_2_0_PRIOR_KNOWLEDGE; };
-    template <typename Enum>
-    concept HasHttp3 = requires { Enum::VERSION_3_0; };
-    template <typename Enum>
-    concept HasHttp3Only = requires { Enum::VERSION_3_0_ONLY; };
-
-    static_assert(HasHttp2<Code> == (LIBCURL_VERSION_NUM >= 0x072100));
-    static_assert(HasHttp2Tls<Code> == (LIBCURL_VERSION_NUM >= 0x072F00));
-    static_assert(HasHttp2PriorKnowledge<Code> == (LIBCURL_VERSION_NUM >= 0x073100));
-    static_assert(HasHttp3<Code> == (LIBCURL_VERSION_NUM >= 0x074200));
-    static_assert(HasHttp3Only<Code> == (LIBCURL_VERSION_NUM >= 0x075800));
-
     // cpr uses contiguous ordinals. In particular HTTP/3 is 6/7, not curl's 30/31.
     constexpr Code CODES[]{
         Code::VERSION_NONE,
         Code::VERSION_1_0,
         Code::VERSION_1_1,
-#if LIBCURL_VERSION_NUM >= 0x072100
         Code::VERSION_2_0,
-#endif
-#if LIBCURL_VERSION_NUM >= 0x072F00
         Code::VERSION_2_0_TLS,
-#endif
-#if LIBCURL_VERSION_NUM >= 0x073100
         Code::VERSION_2_0_PRIOR_KNOWLEDGE,
-#endif
-#if LIBCURL_VERSION_NUM >= 0x074200
         Code::VERSION_3_0,
-#endif
-#if LIBCURL_VERSION_NUM >= 0x075800
         Code::VERSION_3_0_ONLY,
-#endif
     };
 
     static_assert([] {

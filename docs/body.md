@@ -70,4 +70,5 @@ its fields already have the required pointer and size types.
 Run `mcpp build` and `mcpp test` to validate constructor ownership, Buffer
 subranges and lifetimes, inherited operations, empty and binary file reads,
 multiple read blocks, and file failures. Tests create and remove their own
-temporary file; request/session integration is not yet implemented.
+temporary file. `Session::SetBody` owns the bytes and sends them using an explicit
+length; [Session tests](session.md) also cover local HTTP transfers and body reuse.

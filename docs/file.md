@@ -61,11 +61,11 @@ private-member naming changes, `std::string_view` for the optional filename,
 and `noexcept` on iterator accessors. There is no filesystem compatibility
 layer. The descriptor and collection behavior otherwise follows the reference.
 
-In cpr's multipart session code, `filepath` goes to `curl_mime_filedata`, while
+In Session's multipart implementation, `filepath` goes to `curl_mime_filedata`, while
 the transmitted filename is the override or the result of
 `std::filesystem::path(filepath).filename().string()`. The
-[`multipart module`](multipart.md) provides the corresponding descriptors;
-MIME serialization and session integration are not yet implemented here.
+[`multipart module`](multipart.md) provides the corresponding descriptors,
+which Session serializes when preparing the request.
 Run `mcpp build` and `mcpp test` to
 verify descriptor ownership, override detection, both list constructors,
 iteration, appends, removals, copying/moving, and standard filesystem path

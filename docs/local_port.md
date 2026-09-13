@@ -25,11 +25,10 @@ Intentional differences are the C++23 modules, namespace `mcr::options`, private
 names `m_local_port` / `m_local_port_range`, and `[[nodiscard]]` on conversion
 operators. No runtime behavior is changed.
 
-In cpr, `Session::SetLocalPort` and `Session::SetLocalPortRange` convert these
+`Session::SetLocalPort` and `Session::SetLocalPortRange` convert these
 values to `long` for `CURLOPT_LOCALPORT` and `CURLOPT_LOCALPORTRANGE`.
-Its `test/session_tests.cpp` checks source port selection and occupied ports
-against a local HTTP fixture. Session integration is not yet implemented in
-this project; these modules provide the option values.
+Curl applies these preferences when opening a connection. See [Session](session.md)
+for request configuration and connection reuse behavior.
 
 Run `mcpp build` and `mcpp test`. `test_local_port` covers both options' implicit
 conversions, zero and maximum values, and independent copy/move assignments.

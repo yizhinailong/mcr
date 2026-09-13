@@ -27,10 +27,9 @@ Copying owns an independent value; moving is `noexcept`. API differences from
 cpr are the C++23 module and namespace, plus the existing StringHolder accessor
 names and fixes described in [types.md](types.md).
 
-In cpr, `Session::SetInterface` passes a nonempty selector to `CURLOPT_INTERFACE`
-and passes null for an empty selector. Its `test/get_tests.cpp` covers empty
-C-string and string-view options. This project currently provides the option
-value; Session integration and actual connection binding are not implemented.
+`Session::SetInterface` passes a nonempty selector to `CURLOPT_INTERFACE`
+and passes null for an empty selector, following cpr. Curl applies the selector
+when opening a connection. See [Session](session.md) for request configuration.
 
 Run `mcpp build` and `mcpp test` to verify construction, ownership, empty values,
 binary ranges, copying, moving, and inherited operations.
