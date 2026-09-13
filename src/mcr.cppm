@@ -19,6 +19,7 @@ export import mcr.fields;
 export import mcr.file;
 export import mcr.http;
 export import mcr.interface;
+export import mcr.json;
 export import mcr.multipart;
 export import mcr.proxy;
 export import mcr.response;

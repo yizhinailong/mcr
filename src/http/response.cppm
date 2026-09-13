@@ -11,6 +11,7 @@ export module mcr.response;
 export import mcr.cert_info;
 export import mcr.cookies;
 export import mcr.error;
+export import mcr.json;
 export import mcr.types;
 
 import mcr.curlholder;
@@ -92,6 +93,35 @@ export namespace mcr {
                     }
                     m_cert_infos.push_back(std::move(info));
                 }
+            }
+        }
+
+        /**
+         * @brief Parse the current buffered body as JSON without checking HTTP status or Content-Type.
+         * @return An independent JSON value, parsed anew on each call.
+         * @throws mcr::Json::exception If parsing fails, including an empty body or numeric overflow.
+         * @throws std::bad_alloc If parsing storage cannot be allocated.
+         * @note Does not modify text or error. Streaming consumers may leave text empty.
+         */
+        [[nodiscard]] auto Json() const -> mcr::Json { return mcr::Json::parse(text); }
+
+        /**
+         * @brief Parse the current buffered body and return JSON failures as diagnostics.
+         * @return An independent JSON value or an owned JsonError; HTTP and transport outcomes are unchanged.
+         * @throws std::bad_alloc If parsing or diagnostic storage cannot be allocated.
+         * @note Only JSON exceptions are converted. Resource failures still propagate.
+         */
+        [[nodiscard]] auto TryJson() const -> std::expected<mcr::Json, JsonError> {
+            try {
+                return Json();
+            } catch (mcr::Json::parse_error const& failure) {
+                return std::unexpected{
+                    JsonError{ failure.id, failure.what(), failure.byte }
+                };
+            } catch (mcr::Json::exception const& failure) {
+                return std::unexpected{
+                    JsonError{ failure.id, failure.what(), std::nullopt }
+                };
             }
         }
 

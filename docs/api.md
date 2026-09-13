@@ -38,6 +38,10 @@ auto length = mcr::GetCallback(
 std::println("{} bytes", length.Get());
 ```
 
+JSON 请求可将上面的 `Header` 和 `Body` 换成 `mcr::JsonBody{ mcr::Json{ { "message", "hello" } } }`，
+自动设置默认 JSON 媒体类型。响应通过 `response.Json()` 或 `response.TryJson()` 按需解析，
+同步、异步、回调及批量入口均支持，详见 [JSON 请求与响应](json.md)。
+
 - 选项按参数顺序应用。重复 Header 合并，名称忽略大小写，后面的同名值覆盖前面；
   空 Header 不清除前面参数中的字段。其他重复选项沿用对应 Session setter 的行为。
 - Header 的值、左值、const 左值及 `std::ref` / `std::cref` 使用同一套合并规则，

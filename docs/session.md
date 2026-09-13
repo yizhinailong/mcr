@@ -28,7 +28,7 @@ auto main() -> int {
 - 向 `WriteCallback` 或 `std::ofstream` 下载，同步/异步下载，
   `GetDownloadFileLength` 和供外部 curl 驱动使用的 `Complete` / `CompleteDownload`。
 - 现有选项模块的 setter 和 `SetOption` 重载：URL、参数、请求头、认证、Cookie、
-  Body / BodyView / Payload / Multipart、超时、重定向、压缩、限速、网络绑定、
+  Body / BodyView / JsonBody / Payload / Multipart、超时、重定向、压缩、限速、网络绑定、
   DNS 映射、代理地址、连接池、读写/进度/调试/SSE 回调。
 - `Response` 的正文、最终响应头、原始响应头、Cookie、错误、URL、计时、
   字节数、连接地址和证书信息。
@@ -124,9 +124,11 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
 
 - 同一个 Session 的配置与请求必须串行使用。异步请求需要
   `std::make_shared<mcr::Session>()`；任务持有 Session 直到执行结束。
-- Body 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
+- Body、JsonBody 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
   借用的数据、回调捕获对象、下载流和 ConnectionPool 必须覆盖使用它们的生命周期。
 - Content 会跨请求保留，调用 `RemoveContent()` 清除。
+- `SetJsonBody` 保存序列化 JSON，发送时仅在缺少显式 Content-Type 的情况下补齐
+  `application/json`；响应提供 `Json()` / `TryJson()`，详见 [JSON 支持](json.md)。
   ReadCallback 独立保留，可通过 `SetReadCallback({})` 清除。
 - `SetCancellationParam()` 使用共享原子标志，设置为 true 会终止传输。
   `AsyncResponse` 本身沿用不可取消的默认 AsyncWrapper 类型。

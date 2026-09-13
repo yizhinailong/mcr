@@ -258,7 +258,7 @@ namespace mcr::test {
                     body = pending.substr(0, static_cast<std::size_t>(length));
                     pending.erase(0, static_cast<std::size_t>(length));
                 }
-                std::string status{ "200 OK" }, output{ "Hello session!" }, extra;
+                std::string status{ "200 OK" }, output{ "Hello session!" }, content_type{ "text/plain" }, extra;
                 if (target == "/binary") {
                     output.resize(256);
                     for (std::size_t index{}; index < output.size(); ++index) {
@@ -290,6 +290,20 @@ namespace mcr::test {
                         status = "407 Proxy Authentication Required";
                         extra  = "Proxy-Authenticate: Basic realm=\"local-test\"\r\n";
                     }
+                } else if (target.starts_with("/json/")) {
+                    content_type = "application/json";
+                    if (target == "/json/echo") {
+                        output = body;
+                    } else if (target == "/json/error") {
+                        status       = "422 Unprocessable Content";
+                        output       = R"({"error":"invalid input"})";
+                        content_type = "application/problem+json";
+                    } else if (target == "/json/empty") {
+                        status = "204 No Content";
+                        output.clear();
+                    } else {
+                        output = "{invalid";
+                    }
                 } else if (target.starts_with("/echo")) {
                     output = body;
                 } else if (target == "/redirect" || target == "/loop") {
@@ -316,7 +330,7 @@ namespace mcr::test {
                     extra += "X-Request-" + name + ": " + headers[name] + "\r\n";
                 }
                 extra += std::format("X-Method: {}\r\nX-Target: {}\r\n", method, target);
-                auto response{ std::format("HTTP/1.1 {}\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: keep-alive\r\n{}\r\n", status, output.size(), extra) };
+                auto response{ std::format("HTTP/1.1 {}\r\nContent-Length: {}\r\nContent-Type: {}\r\nConnection: keep-alive\r\n{}\r\n", status, output.size(), content_type, extra) };
                 if (method != "HEAD") {
                     response += output;
                 }

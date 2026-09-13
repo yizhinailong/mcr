@@ -21,6 +21,7 @@ export import mcr.connection_pool;
 export import mcr.fields;
 export import mcr.http;
 export import mcr.interface;
+export import mcr.json;
 export import mcr.multipart;
 export import mcr.proxy;
 export import mcr.response;
@@ -34,8 +35,8 @@ import std;
 
 export namespace mcr {
 
-    using AsyncResponse = utils::AsyncWrapper<Response>;                                    ///< Asynchronous transfer result.
-    using Content       = std::variant<std::monostate, Payload, Body, BodyView, Multipart>; ///< Persistent request content.
+    using AsyncResponse = utils::AsyncWrapper<Response>;                                              ///< Asynchronous transfer result.
+    using Content       = std::variant<std::monostate, Payload, Body, BodyView, Multipart, JsonBody>; ///< Persistent request content.
 
     class Session;
     class MultiPerform;
@@ -414,6 +415,18 @@ export namespace mcr {
          * @param body View whose bytes must outlive transfers.
          */
         auto SetBodyView(BodyView body) -> void { m_content = body; }
+
+        /**
+         * @brief Copy serialized JSON for subsequent requests.
+         * @param body JSON bytes to own; supplies a default Content-Type only when sent.
+         */
+        auto SetJsonBody(JsonBody const& body) -> void { m_content = body; }
+
+        /**
+         * @brief Move serialized JSON for subsequent requests.
+         * @param body JSON bytes to own; supplies a default Content-Type only when sent.
+         */
+        auto SetJsonBody(JsonBody&& body) -> void { m_content = std::move(body); }
 
         /**
          * @brief Configure low-speed cancellation.
@@ -1141,6 +1154,18 @@ export namespace mcr {
         auto SetOption(BodyView value) -> void { SetBodyView(value); }
 
         /**
+         * @brief Forward a copied JsonBody option to its setter.
+         * @param value Serialized JSON option.
+         */
+        auto SetOption(JsonBody const& value) -> void { SetJsonBody(value); }
+
+        /**
+         * @brief Forward a moved JsonBody option to its setter.
+         * @param value Serialized JSON option.
+         */
+        auto SetOption(JsonBody&& value) -> void { SetJsonBody(std::move(value)); }
+
+        /**
          * @brief Forward a ReadCallback option to its setter.
          * @param value Option to apply.
          */
@@ -1314,13 +1339,17 @@ export namespace mcr {
         }
 
         /**
-         * @brief Rebuild headers, preserving explicit Expect and Transfer-Encoding options.
+         * @brief Rebuild headers, preserving explicit values ahead of inferred defaults.
          * @param chunked Whether an unknown-sized upload needs chunking.
+         * @param json_body Whether this transfer sends a JSON body.
          */
-        auto prepareHeader(bool chunked) -> void {
+        auto prepareHeader(bool chunked, bool json_body) -> void {
             CurlList list{ nullptr, &curl_slist_free_all };
             for (auto const& [name, value] : m_header) {
                 appendList(list, name + (value.empty() ? ";" : ": " + value));
+            }
+            if (json_body && !m_header.contains("Content-Type")) {
+                appendList(list, "Content-Type: application/json");
             }
             if (chunked && !m_header.contains("Transfer-Encoding")) {
                 appendList(list, "Transfer-Encoding: chunked");
@@ -1443,6 +1472,8 @@ export namespace mcr {
                     prepareBytes(payload->GetContent(*m_curl), true);
                 } else if (auto const* body{ std::get_if<Body>(&m_content) }) {
                     prepareBytes(body->Str(), true);
+                } else if (auto const* json{ std::get_if<JsonBody>(&m_content) }) {
+                    prepareBytes(json->Str(), true);
                 } else if (auto const* view{ std::get_if<BodyView>(&m_content) }) {
                     prepareBytes(view->Str(), false);
                 } else if (auto const* multipart{ std::get_if<Multipart>(&m_content) }) {
@@ -1462,7 +1493,7 @@ export namespace mcr {
             if (method == "PUT") {
                 setOption(CURLOPT_RANGE, static_cast<char const*>(nullptr));
             }
-            prepareHeader(read_upload && m_read.size == -1);
+            prepareHeader(read_upload && m_read.size == -1, !download && method != "HEAD" && std::holds_alternative<JsonBody>(m_content));
             setOption(CURLOPT_URL, GetFullRequestUrl().c_str());
             prepareProxy();
             auto const encodings{ m_accept_encoding.GetString() };
