@@ -1,10 +1,10 @@
 # LowSpeed
 
-Import `mcr` or `mcr.low_speed` to use `mcr::options::LowSpeed`.
+Import `mcr` or `mcr.transfer_options` to use `mcr::options::LowSpeed`.
 
 ```cpp
 import std;
-import mcr.low_speed;
+import mcr.transfer_options;
 
 using namespace std::chrono_literals;
 mcr::options::LowSpeed option{ 1000, 1s };
@@ -20,7 +20,7 @@ values, and the full ranges of both field types. Copying, moving, and assigning
 options preserve independent values; both fields remain mutable.
 
 The API follows cpr's `include/cpr/low_speed.h` with C++23 modules, namespace
-`mcr`, and Doxygen documentation. Its deprecated integer-time constructor is
+`mcr::options`, and Doxygen documentation. Its deprecated integer-time constructor is
 intentionally omitted: use `LowSpeed{1000, 1s}` instead of `LowSpeed{1000, 1}`.
 Integral durations such as minutes and hours may convert implicitly to seconds
 when representable. Milliseconds and floating-point durations require an

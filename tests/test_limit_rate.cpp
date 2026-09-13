@@ -3,7 +3,7 @@
  * @brief Verify download/upload rate ordering, signed boundaries, and independent option values.
  */
 import std;
-import mcr;
+import mcr.transfer_options;
 
 static_assert(!std::is_default_constructible_v<mcr::options::LimitRate>);
 static_assert(!std::is_constructible_v<mcr::options::LimitRate, int>);

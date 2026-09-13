@@ -1,9 +1,9 @@
 # LimitRate
 
-Import `mcr` or `mcr.limit_rate` to use `mcr::options::LimitRate`.
+Import `mcr` or `mcr.transfer_options` to use `mcr::options::LimitRate`.
 
 ```cpp
-import mcr.limit_rate;
+import mcr.transfer_options;
 
 mcr::options::LimitRate limited{ 1024, 2048 }; // Download and upload bytes per second.
 mcr::options::LimitRate unlimited{ 0, 0 };

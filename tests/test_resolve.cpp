@@ -3,7 +3,7 @@
  * @brief Verify resolve defaults, custom ports, text ownership, and public field updates.
  */
 import std;
-import mcr;
+import mcr.transfer_options;
 
 static_assert(!std::is_default_constructible_v<mcr::options::Resolve>);
 static_assert(std::is_same_v<decltype(mcr::options::Resolve::host), std::string>);

@@ -1,9 +1,9 @@
 /**
  * @file test_local_port.cpp
- * @brief Verify local port options, implicit conversions, and uint16_t boundaries through import mcr.
+ * @brief Verify local port options, implicit conversions, and uint16_t boundaries through their module.
  */
 import std;
-import mcr;
+import mcr.transfer_options;
 
 static_assert(!std::is_same_v<mcr::options::LocalPort, mcr::options::LocalPortRange>);
 

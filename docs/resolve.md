@@ -1,6 +1,6 @@
 # Resolve
 
-Import `mcr` or `mcr.resolve` to use `mcr::options::Resolve`.
+Import `mcr` or `mcr.transfer_options` to use `mcr::options::Resolve`.
 
 ```cpp
 import mcr;

@@ -20,8 +20,22 @@ session.SetSslOptions(mcr::options::Ssl(
 ));
 ```
 
-模块名保持原样，例如 `import mcr.verbose;`、`import mcr.timeout;` 和
-`import mcr.ssl_options;`。`import mcr;` 仍导出全部选项。
+常用的小型选项集中在 `src/options/transfer_options.cppm`，仅依赖标准库，
+通过 `import mcr.transfer_options;` 单独导入。`import mcr;` 仍导出全部选项。
+
+| 用途 | 类型（位于 `mcr::options`） |
+| --- | --- |
+| 超时 | `Timeout`、`ConnectTimeout` |
+| 传输速率 | `LowSpeed`、`LimitRate` |
+| 连接选择 | `LocalPort`、`LocalPortRange`、`UnixSocket`、`Resolve` |
+| 诊断与容量 | `Verbose`、`ReserveSize` |
+
+这些类型原有的独立模块已合并。原先单独导入 `mcr.unix_socket`、`mcr.verbose`、
+`mcr.timeout`、`mcr.connect_timeout`、`mcr.low_speed`、`mcr.limit_rate`、
+`mcr.local_port`、`mcr.local_port_range`、`mcr.resolve` 或 `mcr.reserve_size` 的代码，
+统一改为 `import mcr.transfer_options;`。类型名称、构造方式和行为保持不变。
+认证、代理、重定向、协议选择和 TLS 等选项继续使用各自的模块，例如
+`import mcr.auth;` 和 `import mcr.ssl_options;`。
 
 迁移现有调用时，将 `mcr::Verbose`、`mcr::Timeout` 等选项类型改为
 `mcr::options::Verbose`、`mcr::options::Timeout`；将 `mcr::Ssl` 和 `mcr::ssl`

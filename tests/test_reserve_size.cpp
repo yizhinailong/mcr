@@ -1,9 +1,9 @@
 /**
  * @file test_reserve_size.cpp
- * @brief Verify reserve size compatibility and boundaries through the library entry module.
+ * @brief Verify reserve size compatibility and boundaries through the transfer options module.
  */
 import std;
-import mcr;
+import mcr.transfer_options;
 
 static_assert(!std::is_default_constructible_v<mcr::options::ReserveSize>);
 static_assert(std::is_convertible_v<std::size_t, mcr::options::ReserveSize>);

@@ -1,8 +1,7 @@
 # Request and connection timeouts
 
-Import `mcr` or `mcr.timeout` to use `mcr::options::Timeout`.
-Import `mcr` or `mcr.connect_timeout` to use `mcr::options::ConnectTimeout`; the latter
-also re-exports `mcr.timeout`.
+Import `mcr` or `mcr.transfer_options` to use `mcr::options::Timeout` and
+`mcr::options::ConnectTimeout`.
 
 ```cpp
 import std;

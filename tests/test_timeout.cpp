@@ -3,7 +3,7 @@
  * @brief Verify request and connection timeout construction and inherited long-range checks.
  */
 import std;
-import mcr;
+import mcr.transfer_options;
 
 static_assert(!std::is_default_constructible_v<mcr::options::Timeout>);
 static_assert(std::is_convertible_v<std::int32_t, mcr::options::Timeout>);

@@ -1,7 +1,7 @@
 # Local port options
 
-Import `mcr` to use `mcr::options::LocalPort` and `mcr::options::LocalPortRange`, or import their
-individual modules `mcr.local_port` and `mcr.local_port_range`.
+Import `mcr` or `mcr.transfer_options` to use `mcr::options::LocalPort` and
+`mcr::options::LocalPortRange`.
 
 ```cpp
 import std;
