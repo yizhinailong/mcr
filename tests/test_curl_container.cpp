@@ -5,8 +5,7 @@
 #include <curl/curl.h>
 
 import std;
-import mcr.fields;
-import mcr.curl_container;
+import mcr;
 
 using Parameters = mcr::Parameters;
 using Pairs      = mcr::Payload;

@@ -5,7 +5,7 @@
 #include <curl/curl.h>
 
 import std;
-import mcr.curlholder;
+import mcr;
 
 static_assert(!std::is_copy_constructible_v<mcr::curl::CurlHolder>);
 static_assert(!std::is_copy_assignable_v<mcr::curl::CurlHolder>);

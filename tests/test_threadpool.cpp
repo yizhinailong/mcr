@@ -3,7 +3,7 @@
  * @brief Verify task ownership, pool lifecycle, resizing, and concurrent submission.
  */
 import std;
-import mcr.threadpool;
+import mcr;
 
 static_assert(!std::is_copy_constructible_v<mcr::utils::ThreadPool>);
 static_assert(!std::is_move_constructible_v<mcr::utils::ThreadPool>);

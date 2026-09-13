@@ -38,9 +38,11 @@ import mcr.types;      // src/utils/types.cppm
 import mcr.error;      // src/utils/error.cppm
 ```
 
-`import mcr;` 只导出请求 API、会话、请求与响应数据、配置选项、异步结果、状态码和版本信息。
-curl 后端、安全字符串、单例、线程池及解析工具需要显式导入对应模块，公共模块也不转导出这些内部依赖。
-`Parameter`、`Pair` 由 `mcr.fields` 单独导出，异步接口使用的 `AsyncWrapper` 和 `CancellationResult` 仍可通过总入口使用。
+`import mcr;` 统一导出全部公开模块，包括请求 API、会话、请求与响应数据、配置选项、
+异步结果、状态码、版本信息，以及 curl 后端、安全字符串、单例、线程池和解析工具。
+外部代码可以只导入总入口，也可以按需单独导入上表中的模块。
+组件模块内部仍使用普通 import 引入后端和工具依赖；`mcr.fields` 单独导出 `Parameter`、`Pair`。
+新增公开模块时，同时将其加入 `src/mcr.cppm` 的 `export import` 列表。
 
 公共基础类型、错误结果、请求数据、响应和会话类型使用 `mcr`，
 状态码使用 `mcr::status`，配置选项使用 `mcr::options`，工具使用 `mcr::utils`，

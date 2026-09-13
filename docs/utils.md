@@ -2,8 +2,8 @@
 
 `src/utils/` 集中放置基础类型、错误处理和通用工具。通用工具使用 `mcr::utils`；
 `types.cppm`、`error.cppm` 中的公共接口继续使用 `mcr`。
-各模块保持现有导入名。`import mcr;` 保留公共基础类型、错误结果及异步结果类型，
-其余工具需要显式导入对应模块。
+各模块保持现有导入名。`import mcr;` 统一导出全部工具及公共基础类型、错误结果和异步结果类型，
+也可以按需单独导入对应模块。
 
 | 模块导入名 | 主要接口 |
 | --- | --- |
@@ -18,9 +18,6 @@
 ```cpp
 import std;
 import mcr;
-import mcr.secure_string;
-import mcr.threadpool;
-import mcr.util;
 
 mcr::utils::ThreadPool pool{ 1, 2 };
 auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }) };

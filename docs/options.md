@@ -55,8 +55,8 @@ session.SetSslOptions(mcr::options::Ssl(
 | `mcr.http_version`、`mcr.accept_encoding`、`mcr.redirect`、`mcr.range` | `import mcr.http;` |
 
 `mcr.auth` 现在同时导出用户名密码认证和 Bearer 令牌；已有的 `import mcr.auth;`
-可以继续使用。表中的旧模块不再提供独立文件。`Bearer` 和 HTTP 版本枚举继续保留原有的 curl 版本条件，
-需要显式使用安全字符串类型的代码应另行导入 `mcr.secure_string`；选项模块仅在内部依赖它。
+可以继续使用。表中的旧模块不再提供独立文件。`Bearer` 和 HTTP 版本枚举继续保留原有的 curl 版本条件。
+安全字符串类型可通过 `import mcr;` 或单独导入 `mcr.secure_string` 使用；选项模块仅在内部依赖它。
 
 迁移现有调用时，将 `mcr::Verbose`、`mcr::Timeout` 等选项类型改为
 `mcr::options::Verbose`、`mcr::options::Timeout`；将 `mcr::Ssl` 和 `mcr::ssl`

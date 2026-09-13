@@ -11,7 +11,7 @@
 | `mcr.curl_container` | `mcr::curl::CurlContainer<T>`，提供请求容器存储和编码；请求条目为 `mcr::Parameter`、`mcr::Pair` |
 | `mcr.ssl_ctx` | `mcr::curl::sslctx_function_load_ca_cert_from_buffer` 和 `mcr::curl::SSL_CTX_OPENSSL_ENABLED` |
 
-curl 后端接口需要显式导入对应模块，`import mcr;` 不再转导出它们。
+`import mcr;` 统一导出全部 curl 后端接口，也可以按需单独导入对应模块。
 公共请求条目 `Parameter`、`Pair` 仍可通过 `mcr` 或 `mcr.fields` 使用。
 迁移现有调用时，为原 `mcr` 下的后端接口名称添加
 `curl::`，例如 `mcr::CurlHolder` 改为 `mcr::curl::CurlHolder`。
@@ -19,8 +19,7 @@ curl 后端接口需要显式导入对应模块，`import mcr;` 不再转导出�
 
 ```cpp
 #include <curl/curl.h>
-import mcr.curlholder;
-import mcr.curlmultiholder;
+import mcr;
 
 auto main() -> int {
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {

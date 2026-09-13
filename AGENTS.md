@@ -22,7 +22,7 @@ Source files are grouped by responsibility. Public module names are independent 
 
 See [the source layout guide](docs/structure.md) for directory contents and module naming.
 
-Keep `mcr.cppm` limited to public request APIs, data types, options, asynchronous results, status codes, and version information. Public modules must use ordinary imports for curl backend and general utility dependencies; explicitly import those modules when naming their interfaces in backend code or tests. `mcr.fields` selectively exports the public `Parameter` and `Pair` records without re-exporting the curl container module.
+Keep `mcr.cppm` as the complete public entry point: re-export every public `mcr.*` module, including request APIs, data types, options, asynchronous results, status codes, version information, curl backend interfaces, and general utilities. External code and tests may use `import mcr;` alone to access these interfaces, or import individual modules as needed. Component modules should use ordinary imports for curl backend and general utility dependencies. `mcr.fields` selectively exports the public `Parameter` and `Pair` records without re-exporting the curl container module.
 
 ## Build, Test, and Development Commands
 

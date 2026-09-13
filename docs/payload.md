@@ -1,7 +1,8 @@
 # Payload
 
 Import `mcr` or `mcr.fields` to use `Payload` and `Pair`.
-Import `mcr.curlholder` explicitly when naming `mcr::curl::CurlHolder`. The fields module combines cpr's
+The `mcr` entry module also exports `mcr::curl::CurlHolder`; when importing only `mcr.fields`,
+add `mcr.curlholder` to name that backend type. The fields module combines cpr's
 `include/cpr/payload.h` and its otherwise empty `cpr/payload.cpp` in one
 module, without a separate implementation unit.
 

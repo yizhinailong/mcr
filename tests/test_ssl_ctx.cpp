@@ -11,7 +11,7 @@
     #include <openssl/x509v3.h>
 #endif
 import std;
-import mcr.ssl_ctx;
+import mcr;
 
 namespace {
     auto check(bool condition, std::string_view message) -> bool {

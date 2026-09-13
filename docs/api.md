@@ -2,7 +2,8 @@
 
 对照本地 cpr 的 `api.h`、`ssl_ctx.h` / `ssl_ctx.cpp` 和
 `cmake/cprver.h.in` 补齐入口。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
-`mcr.api`、`mcr.version`。SSL 上下文回调属于后端接口，需要显式导入 `mcr.ssl_ctx`。
+`mcr.api`、`mcr.version`。总入口也导出 SSL 上下文回调等后端接口及通用工具；
+只需要 SSL 上下文接口时，可以单独导入 `mcr.ssl_ctx`。
 HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
 
 | 操作 | 返回值 | 执行方式 |
@@ -121,7 +122,7 @@ SSL 上下文入口位于 `mcr::curl`，详见 [curl 后端命名空间](curl.md
 
 ```cpp
 #include <curl/curl.h>
-import mcr.ssl_ctx;
+import mcr;
 
 // ca_pem 是 NUL 结尾且在整个传输期间有效的 PEM bundle。
 curl_easy_setopt(handle, CURLOPT_SSL_CTX_FUNCTION,
