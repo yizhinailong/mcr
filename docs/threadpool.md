@@ -63,8 +63,13 @@ IsStopped 在全部线程汇合后为 true，关闭过程中两者均为 false�
   取消显式以 broken_promise 完成 future，规避 Clang 22/MSVC 的 `import std;`
   在 packaged_task 自动放弃路径上的重复释放问题。
 - 提交使用 `std::invoke` 和拥有存储的转发参数，支持成员指针及仅可移动值。
+  内部队列使用 C++23 的 `std::move_only_function` 直接持有 packaged_task，
+  无需为复制任务包装器额外引入共享所有权。提交失败时显式取消任务，
+  在池互斥量之外释放捕获资源。
 - 保留 cpr 的生命周期返回约定：Start、Stop 在发生转换时返回零，不可执行时返回 -1；
   Pause、Resume 返回零。无效配置和不支持的自身等待通过异常报告。
 
 运行 `mcpp test --timeout 20`，验证生命周期、暂停恢复、扩缩容、任务所有权、
 异常、并发生产者、取消和重启。
+`tests/test_threadpool_allocation.cpp` 逐一注入提交时的内存分配失败，
+检查独占捕获的释放、已接受任务的取消及线程池恢复。

@@ -146,7 +146,7 @@ export namespace mcr {
                 m_current_event.data += value;
                 m_current_event.data += '\n';
             } else if (field == "id") {
-                if (value.find('\0') == std::string_view::npos) {
+                if (!value.contains('\0')) {
                     m_current_event.id = std::string{ value };
                 }
             } else if (field == "retry" && !value.empty()) {

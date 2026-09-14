@@ -121,14 +121,7 @@ export namespace mcr::options {
          * An empty stored name still contributes an element and any required separator.
          */
         [[nodiscard]] auto GetString() const -> std::string {
-            std::string      result;
-            std::string_view separator;
-            for (auto const& method : m_methods) {
-                result    += separator;
-                result    += method;
-                separator  = ", ";
-            }
-            return result;
+            return m_methods | std::views::join_with(std::string_view{ ", " }) | std::ranges::to<std::string>();
         }
 
         /**
@@ -352,14 +345,7 @@ export namespace mcr::options {
          * @return Owned text with no trailing separator, or an empty string for an empty list.
          */
         [[nodiscard]] auto Str() const -> std::string {
-            std::string      result;
-            std::string_view separator;
-            for (auto const& range : m_ranges) {
-                result    += separator;
-                result    += range.Str();
-                separator  = ", ";
-            }
-            return result;
+            return m_ranges | std::views::transform(&Range::Str) | std::views::join_with(std::string_view{ ", " }) | std::ranges::to<std::string>();
         }
     };
 

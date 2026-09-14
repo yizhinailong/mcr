@@ -74,7 +74,7 @@ export namespace mcr::curl {
          * @param elements Values to append in order; an empty list has no effect.
          */
         auto Add(std::initializer_list<T> const& elements) -> void {
-            m_container_list.insert(m_container_list.end(), elements.begin(), elements.end());
+            m_container_list.append_range(elements);
         }
 
         /**

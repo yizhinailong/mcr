@@ -218,19 +218,21 @@ namespace {
 
     void check_stop_and_restart() {
         mcr::utils::ThreadPool pool{ 1, 1 };
-        std::promise<void> release;
-        auto               gate = release.get_future().share();
-        std::atomic<bool>  entered{ false };
-        auto               active            = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; });
-        bool const         active_started    = eventually([&] { return entered.load(); });
-        auto               waiter            = std::async(std::launch::async, [&pool] { pool.Wait(); });
-        bool const         waited_for_active = waiter.wait_for(10ms) == std::future_status::timeout;
-        auto               pending           = pool.Submit([] { return 99; });
-        auto               stopped           = std::async(std::launch::async, [&pool] { return pool.Stop(); });
-        bool const         stopping          = eventually([&] { return !pool.IsStarted(); });
-        bool               rejected{ false };
+        std::promise<void>     release;
+        auto                   gate = release.get_future().share();
+        std::atomic<bool>      entered{ false };
+        auto                   active            = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; });
+        bool const             active_started    = eventually([&] { return entered.load(); });
+        auto                   waiter            = std::async(std::launch::async, [&pool] { pool.Wait(); });
+        bool const             waited_for_active = waiter.wait_for(10ms) == std::future_status::timeout;
+        auto                   pending           = pool.Submit([] { return 99; });
+        auto                   stopped           = std::async(std::launch::async, [&pool] { return pool.Stop(); });
+        bool const             stopping          = eventually([&] { return !pool.IsStarted(); });
+        bool                   rejected{ false };
+        auto                   lifetime = std::make_shared<int>(0);
+        std::weak_ptr<int>     rejected_lifetime{ lifetime };
         try {
-            (void)pool.Submit([] {});
+            (void)pool.Submit([owned = std::make_unique<int>(1), lifetime = std::move(lifetime)] { return *owned; });
         } catch (std::runtime_error const&) {
             rejected = true;
         }
@@ -241,6 +243,7 @@ namespace {
         int const stop_result = stopped.get();
         waiter.get();
         require(active_started && waited_for_active && stopping && rejected && canceled && joined_active && restart_rejected, "Stop must cancel pending work, reject submissions, and wait for the active task");
+        require(rejected_lifetime.expired(), "rejected move-only callables must release their captures");
         require(stop_result == 0 && active.get() == 23 && pool.IsStopped() && pool.GetCurrentThreadNum() == 0, "Stop must preserve the active result and join every worker");
         require(pool.Submit([] { return 42; }).get() == 42, "Submit must restart a fully stopped pool");
         pool.Wait();

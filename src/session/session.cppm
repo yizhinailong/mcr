@@ -748,9 +748,9 @@ export namespace mcr {
             if (m_callback_error) {
                 std::rethrow_exception(std::exchange(m_callback_error, {}));
             }
-            curl_slist* raw_cookies{ nullptr };
-            checkCurl(curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, &raw_cookies));
-            CurlList    owned_cookies{ raw_cookies, &curl_slist_free_all };
+            CurlList owned_cookies{ nullptr, &curl_slist_free_all };
+            // The variadic curl API requires an explicit pointer conversion.
+            checkCurl(curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, static_cast<curl_slist**>(std::out_ptr(owned_cookies))));
             auto        cookies{ utils::parse_cookies(owned_cookies.get()) };
             std::string error_message{ m_curl->error.data() };
             if (curl_error != CURLE_OK && error_message.empty()) {
@@ -2268,8 +2268,8 @@ namespace mcr {
         std::vector<Session*> attached;
         attached.reserve(m_sessions.size());
         std::unordered_map<CURL*, std::size_t> positions;
-        for (std::size_t index{}; index < m_sessions.size(); ++index) {
-            positions.emplace(m_sessions[index].first->m_curl->handle, index);
+        for (auto const& [index, entry] : m_sessions | std::views::enumerate) {
+            positions.emplace(entry.first->m_curl->handle, static_cast<std::size_t>(index));
         }
         std::vector<std::optional<Response>> completed(m_sessions.size());
         m_transferring = true;
@@ -2302,15 +2302,13 @@ namespace mcr {
             auto const position{ positions.at(message->easy_handle) };
             completed[position] = m_sessions[position].first->Complete(message->data.result);
         }
-        std::vector<Response> responses;
-        responses.reserve(completed.size());
-        for (auto& response : completed) {
-            if (!response) {
-                throw std::runtime_error{ "mcr::MultiPerform: curl did not report every transfer's completion." };
-            }
-            responses.push_back(std::move(*response));
-        }
-        return responses;
+        return completed | std::views::transform([](std::optional<Response>& response) -> Response&& {
+                   if (!response) {
+                       throw std::runtime_error{ "mcr::MultiPerform: curl did not report every transfer's completion." };
+                   }
+                   return std::move(*response);
+               }) |
+               std::ranges::to<std::vector<Response>>();
     }
 
     auto MultiPerform::Get() -> std::vector<Response> {

@@ -22,7 +22,7 @@ export namespace mcr::utils {
         using Task = std::function<void()>; ///< A queued operation without a direct return value.
 
     private:
-        using QueuedTask = std::function<void(bool)>; ///< Invoke with true to cancel without calling user code.
+        using QueuedTask = std::move_only_function<void(bool)>; ///< Own a task; invoke with true to cancel without calling user code.
 
         enum class Status : std::uint8_t { STOPPED,
                                            RUNNING,
@@ -291,7 +291,7 @@ export namespace mcr::utils {
         template <typename Fn, typename... Args>
         auto Submit(Fn&& fn, Args&&... args) -> std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>> {
             using ReturnType = std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>;
-            auto task        = std::make_shared<std::packaged_task<ReturnType(bool)>>(
+            std::packaged_task<ReturnType(bool)> task{
                 [function = std::forward<Fn>(fn), arguments = std::tuple<std::decay_t<Args>...>(std::forward<Args>(args)...)](bool cancel) mutable -> ReturnType {
                     if (cancel) {
                         throw std::future_error{ std::future_errc::broken_promise };
@@ -301,11 +301,13 @@ export namespace mcr::utils {
                     },
                                       arguments);
                 }
-            );
-            auto               future = task->get_future();
+            };
+            auto               future = task.get_future();
+            QueuedTask         queued;
             std::list<Worker>  retired;
             std::exception_ptr submission_error;
             try {
+                queued = std::move(task);
                 std::scoped_lock lock{ m_mutex };
                 if (m_status == Status::STOPPING) {
                     throw std::runtime_error{ "mcr::utils::ThreadPool: cannot submit while stopping" };
@@ -315,7 +317,9 @@ export namespace mcr::utils {
                     start(0);
                 }
                 growForTasks(m_tasks.size() + 1);
-                m_tasks.emplace([task](bool cancel) { (*task)(cancel); });
+                // Allocate the queue slot before transferring ownership so failure leaves queued cancellable.
+                m_tasks.emplace();
+                m_tasks.back().swap(queued);
             } catch (...) {
                 submission_error = std::current_exception();
             }
@@ -323,7 +327,11 @@ export namespace mcr::utils {
                 // Avoid packaged_task's abandonment path, which double-frees future_error
                 // with the current Clang/MSVC import-std toolchain. Cancel outside the catch
                 // handler to avoid nested exception handling in instrumented module builds.
-                (*task)(true);
+                if (queued) {
+                    queued(true);
+                } else {
+                    task(true);
+                }
                 std::rethrow_exception(submission_error);
             }
             m_task_cond.notify_one();
