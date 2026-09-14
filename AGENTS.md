@@ -42,7 +42,7 @@
 - `example/`：使用独立 mcpp.toml 的请求示例及本地验证脚本。
 - `mcpp.toml`：包元数据和依赖声明。
 - `.clang-format`：仓库格式配置。
-- `target/`、`.mcpp/`、`compile_commands.json`：Git 忽略的生成内容或本地状态，不得提交。
+- 生成目录 `target/` 和 `.mcpp/`，以及编译数据库 `compile_commands.json`：Git 忽略的生成内容或本地状态，不得提交。
 
 目录内容及模块命名见 [源码结构](docs/structure.md)，使用文档见 [文档索引](docs/README.md)。
 
@@ -84,12 +84,12 @@ clang-format -i src/api.cppm tests/test_api.cpp
 
 库代码、内部辅助函数和测试统一使用 Doxygen 文档注释：
 
-- 即使只有简短 @brief，也使用多行块；/** 和 */ 各占一行，内容行以 ` * ` 开头，
+- 即使只有简短 `@brief`，也使用多行块；`/**` 和 `*/` 各占一行，内容行以 ` * ` 开头，
   不使用单行文档块。
 - 注释紧邻其声明之前，模板注释放在 template 前。
-  使用 @brief，并按需要添加 @tparam、@param、@return、@throws、@note；
+  使用 `@brief`，并按需要添加 `@tparam`、`@param`、`@return`、`@throws`、`@note`；
   每个标签独占一行，不适用的标签省略。
-- C++ 源文件开头添加带 @file 和 @brief 的文件级块。
+- C++ 源文件开头添加带 `@file` 和 `@brief` 的文件级块。
 - 成员和枚举值使用尾随 `///<` 描述；实现解释和命名空间结束标签可使用普通 // 注释。
 - 格式化时保持此布局，遵循已有 .clang-format，不修改该配置文件。
 

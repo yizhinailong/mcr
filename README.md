@@ -20,6 +20,8 @@
 
 Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
 
+<a id="快速开始"></a>
+
 ## 快速开始
 
 在仓库根目录检查环境、构建库并运行测试：
@@ -135,6 +137,9 @@ mcpp test
 ```
 
 第一条命令生成编辑器所需的编译数据库；测试为 `tests/test_*.cpp` 中的独立程序，HTTP 测试使用本地服务。贡献规范见 [AGENTS.md](AGENTS.md)，发布流程见 [版本标签与 Windows CI](docs/ci.md)。
+
+安装 Doxygen 后，在仓库根目录执行 `doxygen Doxyfile`，生成的 API 文档首页为
+`target/doxygen/html/index.html`。源码范围、中文页面和可选图表的配置见 [Doxygen 使用说明](docs/doxygen.md)。
 
 ## 许可证
 

@@ -51,7 +51,7 @@ API 使用 C++23 模块、`mcr::utils` 命名空间、snake_case 自由函数名
 没有冒号的畸形行被忽略；该函数不是完整 HTTP 语法验证器。
 
 `parse_cookies` 借用 `curl_slist const*`，空指针返回空集合。
-按顺序复制 Netscape 格式记录，保留重名和域文本（含 #HttpOnly_），默认 encode 为 true。
+按顺序复制 Netscape 格式记录，保留重名和域文本（含 `#HttpOnly_`），默认 encode 为 true。
 缺失列补空，超过第七列的内容忽略。
 缺失或无效过期时间抛出 std::invalid_argument，超过 time_t 范围抛出 std::out_of_range；
 时间还必须能由 `std::chrono::system_clock::time_point` 表示。
