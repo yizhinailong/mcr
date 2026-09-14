@@ -119,11 +119,13 @@ namespace mcr::detail {
      */
     template <auto Action, typename Then, typename... Ts>
     auto request_callback(Then&& then, Ts&&... options) {
-        return mcr::async<true>([](auto handler, auto... values) -> decltype(auto) {
-            return std::invoke(handler, request<Action>(std::move(values)...));
-        },
-                                std::forward<Then>(then),
-                                std::forward<Ts>(options)...);
+        return mcr::async<true>(
+            [](auto handler, auto... values) -> decltype(auto) {
+                return std::invoke(handler, request<Action>(std::move(values)...));
+            },
+            std::forward<Then>(then),
+            std::forward<Ts>(options)...
+        );
     }
 
     /**
