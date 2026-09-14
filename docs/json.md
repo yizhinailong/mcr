@@ -7,7 +7,23 @@
 `Json` 是已有依赖 `nlohmann::json` 的公开别名，保留其构造、访问、`get<T>()`、
 `parse()` 和 `dump()` 接口。需要直接命名第三方接口时，显式 `import nlohmann.json;`。
 
-以下是已初始化 curl 的函数内用法片段；完整初始化与清理程序见[项目首页](../README.md)。
+JSON POST 提供同步、异步、协程、完成回调、同步批量和异步批量六种可运行示例。
+同步示例位于 [post_json.cpp](../example/src/sync/post_json.cpp)，
+协程示例位于 [post_json_coro.cpp](../example/src/coro/post_json_coro.cpp)。
+按 [示例说明](../example/README.md) 启动本地服务后，在 `example/` 中执行：
+
+```sh
+mcpp run post_json -- http://127.0.0.1:8080/json
+mcpp run post_json_async -- http://127.0.0.1:8080/json
+mcpp run post_json_coro -- http://127.0.0.1:8080/json
+mcpp run post_json_callback -- http://127.0.0.1:8080/json
+mcpp run multi_post_json -- http://127.0.0.1:8080/json
+mcpp run multi_post_json_async -- http://127.0.0.1:8080/json
+```
+
+示例自动初始化和清理 curl，并分别检查传输错误、HTTP 状态及 JSON 解析错误。
+批量示例发送两个带有不同 request 字段的 JSON 对象，并按输入顺序消费全部结果。
+以下是已初始化 curl 的函数内用法片段：
 
 ```cpp
 import std;
@@ -18,7 +34,7 @@ mcr::Json document{
     { "enabled", true }
 };
 auto response = mcr::Post(
-    mcr::Url{ "http://127.0.0.1:8080/users" },
+    mcr::Url{ "http://127.0.0.1:8080/json" },
     mcr::JsonBody{ document }
 );
 if (response.error) {
@@ -48,7 +64,7 @@ JSON 对象、数组、字符串、数值、布尔值和 `null` 都可以作为�
 
 ```cpp
 mcr::Session session;
-session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/echo" });
+session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/json" });
 session.SetJsonBody(mcr::JsonBody{ mcr::Json{ { "count", 3 } } });
 auto response = session.Post();
 auto value = response.Json(); // 解析失败时抛出 JSON 异常

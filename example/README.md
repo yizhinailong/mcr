@@ -5,11 +5,14 @@
 参考 cpr 的 [HTTP API](https://github.com/libcpr/cpr/blob/master/include/cpr/api.h)
 和 [FetchContent 示例](https://github.com/libcpr/example-cmake-fetch-content)。
 覆盖 [src/api.cppm](../src/api.cppm) 中全部公开请求入口：7 种 HTTP 方法 × 6 种调用形式，以及
-4 个下载入口（包括 `Download` 的两个重载），共 46 个独立可执行示例。
+4 个下载入口（包括 `Download` 的两个重载），提供 46 个入口示例。
+另有覆盖六种调用方式的 JSON POST 示例，共 52 个独立可执行程序。
 
 每个入口都有一个按功能命名的 `.cpp` 文件和同名 mcpp 目标。
 示例直接调用对应 API；[support.cppm](src/common/support.cppm) 只共用命令行解析、
 curl 与异步运行时生命周期、响应输出和错误处理。
+[json_support.cppm](src/common/json_support.cppm) 复用 JSON 响应检查与输出，
+各 JSON 示例直接展示对应请求 API 和 `JsonBody` 的构造。
 
 此目录使用自己的 `mcpp.toml`，通过 `mcr = { path = ".." }` 引用本地库。
 主项目的 `mcpp.toml` 保持库配置，根目录的 `mcpp build` 仍构建库。
@@ -35,10 +38,10 @@ mcpp build
 uv run scripts/verify.py --serve --port 8080
 ```
 
-`mcpp build` 编译全部 46 个示例。服务启动后会输出：
+`mcpp build` 编译全部 52 个示例。服务启动后会输出：
 
 ```text
-Serving http://127.0.0.1:8080/echo and /binary (Ctrl+C to stop)
+Serving http://127.0.0.1:8080/echo, /json and /binary (Ctrl+C to stop)
 ```
 
 保持此终端运行，测试结束后按 Ctrl+C 关闭服务。
@@ -88,18 +91,59 @@ mcpp run get -- --help
 输出文件的父目录必须已经存在。`download_callback` 把字节收集到内存并打印十六进制内容。
 请求 `/status/404` 会显示 HTTP 404 和正文 `not found`，并返回退出码 `1`。
 
+## JSON 请求示例
+
+六个示例使用 `JsonBody` 发送包含字符串、布尔值和中文的 JSON 对象。
+请求会自动设置 `Content-Type: application/json`，响应先检查传输与 HTTP 状态，
+再通过 `TryJson()` 解析并打印 JSON。
+
+| 调用方式 | 文件 / 运行目标 | 请求与结果消费 |
+| --- | --- | --- |
+| 同步 | [post_json](src/sync/post_json.cpp) | `Post` 返回响应，直接检查和解析 |
+| 异步 | [post_json_async](src/async/post_json_async.cpp) | `PostAsync` 提交任务，通过 `Get()` 取回响应 |
+| 协程 | [post_json_coro](src/coro/post_json_coro.cpp) | 在协程中 `co_await PostCoro`，主函数通过 `sync_wait` 等待 |
+| 完成回调 | [post_json_callback](src/callback/post_json_callback.cpp) | 在 `PostCallback` 的回调中解析响应，`Get()` 取回退出码 |
+| 同步批量 | [multi_post_json](src/multi/multi_post_json.cpp) | `MultiPost` 并发发送两个 JSON 请求，按输入顺序处理响应 |
+| 异步批量 | [multi_post_json_async](src/multi_async/multi_post_json_async.cpp) | `MultiPostAsync` 返回任务集合，逐一 `Get()` 并解析 |
+
+保持上面的本地服务运行，在另一个终端从仓库根目录执行：
+
+```sh
+cd example
+mcpp run post_json -- http://127.0.0.1:8080/json
+mcpp run post_json_async -- http://127.0.0.1:8080/json
+mcpp run post_json_coro -- http://127.0.0.1:8080/json
+mcpp run post_json_callback -- http://127.0.0.1:8080/json
+mcpp run multi_post_json -- http://127.0.0.1:8080/json
+mcpp run multi_post_json_async -- http://127.0.0.1:8080/json
+```
+
+`/json` 返回收到的 JSON 文档。终端会显示 `Status code: 200`，随后输出：
+
+```text
+JSON: {"enabled":true,"message":"你好，JSON!","name":"Alice"}
+```
+
+批量示例的 JSON 正文还分别包含 `"request":"first"` 和 `"request":"second"`。
+即使服务端先完成第二个请求，响应仍按 first、second 的顺序输出。
+异步和协程示例会在消费全部结果后关闭对应运行时，再清理 curl。
+
+如果将地址改为 `/echo`，服务仍返回 HTTP 200，但正文不是合法 JSON；
+示例会输出 `JSON parse failed:` 和诊断信息，并以退出码 `1` 结束。
+JSON 正文所有权、媒体类型优先级和解析规则见 [JSON 请求与响应](../docs/json.md)。
+
 ## 目录
 
 | 目录               | 内容                             |
 | ------------------ | -------------------------------- |
-| `src/sync/`        | 7 个同步请求入口                 |
-| `src/async/`       | 7 个 future 异步请求入口         |
-| `src/coro/`        | 7 个协程请求入口                 |
-| `src/callback/`    | 7 个完成回调入口                 |
-| `src/multi/`       | 7 个同步批量入口                 |
-| `src/multi_async/` | 7 个异步批量入口                 |
+| `src/sync/`        | 7 个同步请求入口与 JSON POST 示例 |
+| `src/async/`       | 7 个 future 异步请求入口与 JSON POST 示例 |
+| `src/coro/`        | 7 个协程请求入口与 JSON POST 示例 |
+| `src/callback/`    | 7 个完成回调入口与 JSON POST 示例 |
+| `src/multi/`       | 7 个同步批量入口与 JSON POST 示例 |
+| `src/multi_async/` | 7 个异步批量入口与 JSON POST 示例 |
 | `src/download/`    | 4 个下载入口                     |
-| `src/common/`      | 命令行、运行时生命周期与响应输出 |
+| `src/common/`      | 命令行、运行时生命周期与普通 / JSON 响应输出 |
 | `scripts/`         | 本地 HTTP 服务与完整性验证       |
 
 ## 覆盖清单
@@ -138,8 +182,8 @@ mcpp run get -- https://api.github.com/repos/libcpr/cpr/contributors
 公网请求需要可用的网络连接，服务端须支持所选 HTTP 方法。
 文件下载失败时可能留下部分内容。
 
-单请求示例附加 `message=hello world` 查询参数；POST、PUT、PATCH 发送
-`text/plain` 正文。批量示例向同一 URL 发送两个请求，分别带
+单请求示例附加 `message=hello world` 查询参数；普通 POST、PUT、PATCH 示例发送
+`text/plain` 正文，六种 JSON 示例发送 `application/json` 正文。批量示例向同一 URL 发送两个请求，分别带
 `request=first` 和 `request=second`，按输入顺序输出所有结果。
 请求使用 10 秒超时。
 
@@ -150,7 +194,7 @@ mcpp run get -- https://api.github.com/repos/libcpr/cpr/contributors
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | HTTP 2xx，或成功显示 `--help` |
-| `1` | HTTP 非 2xx、传输错误或运行异常 |
+| `1` | HTTP 非 2xx、传输错误、JSON 解析失败或运行异常 |
 | `2` | 缺失或多余的命令行参数 |
 
 ## 用 uv 验证全部示例
@@ -183,15 +227,16 @@ uv run scripts/verify.py --bin-dir "target/x86_64-windows-msvc/<构建指纹>/bi
 ```
 
 路径相对于当前终端目录解析，也接受绝对路径；包含空格时使用引号。
-该目录中应包含全部 46 个可执行文件，不能只编译其中一个目标。
+该目录中应包含全部 52 个可执行文件，不能只编译其中一个目标。
 
-脚本对照 `src/api.cppm` 检查是否遗漏入口或下载重载，然后用临时的本地服务运行全部
-46 个示例，检查真实 HTTP 方法、查询参数、正文、批量结果顺序、二进制下载内容、
-HTTP 404、传输失败、下载文件打开失败和 CLI 退出码。HTTP 验证仅访问本机，
+脚本对照 `src/api.cppm` 检查是否遗漏入口或下载重载，并检查 JSON 的六种调用方式是否齐全，
+然后用临时的本地服务运行全部 52 个示例，检查真实 HTTP 方法、查询参数、正文、批量结果顺序、二进制下载内容、
+JSON 请求媒体类型与响应解析、HTTP 404、传输失败、下载文件打开失败和 CLI 退出码。
+JSON 示例还验证 HTTP 200 携带非法 JSON 时的失败路径，以及批量 JSON 响应与输入的对应顺序。HTTP 验证仅访问本机，
 下载文件放在临时目录中并在验证结束后清理。全部通过时最后输出：
 
 ```text
-46 request examples passed; every public request declaration is covered.
+52 request examples passed; every public request declaration is covered.
 ```
 
 验证脚本成功时退出码为 `0`，失败时返回非零并显示出错的示例和检查信息。

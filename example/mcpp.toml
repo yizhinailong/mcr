@@ -35,6 +35,30 @@ main = "src/multi_async/multi_get_async.cpp"
 kind = "bin"
 main = "src/sync/post.cpp"
 
+[targets.post_json]
+kind = "bin"
+main = "src/sync/post_json.cpp"
+
+[targets.post_json_async]
+kind = "bin"
+main = "src/async/post_json_async.cpp"
+
+[targets.post_json_coro]
+kind = "bin"
+main = "src/coro/post_json_coro.cpp"
+
+[targets.post_json_callback]
+kind = "bin"
+main = "src/callback/post_json_callback.cpp"
+
+[targets.multi_post_json]
+kind = "bin"
+main = "src/multi/multi_post_json.cpp"
+
+[targets.multi_post_json_async]
+kind = "bin"
+main = "src/multi_async/multi_post_json_async.cpp"
+
 [targets.post_async]
 kind = "bin"
 main = "src/async/post_async.cpp"

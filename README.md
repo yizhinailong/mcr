@@ -32,7 +32,7 @@ mcpp build
 mcpp test
 ```
 
-根项目是库，没有默认可执行程序。运行示例需要进入 `example/`，该目录提供 46 个独立请求示例和本地 HTTP 服务。准备好 [uv](https://docs.astral.sh/uv/) 后，在第一个终端从仓库根目录执行：
+根项目是库，没有默认可执行程序。运行示例需要进入 `example/`，该目录提供 52 个独立请求示例和本地 HTTP 服务。准备好 [uv](https://docs.astral.sh/uv/) 后，在第一个终端从仓库根目录执行：
 
 ```sh
 cd example
@@ -47,6 +47,8 @@ cd example
 mcpp run get -- http://127.0.0.1:8080/echo
 mcpp run post_async -- http://127.0.0.1:8080/echo
 mcpp run get_coro -- http://127.0.0.1:8080/echo
+mcpp run post_json -- http://127.0.0.1:8080/json
+mcpp run post_json_coro -- http://127.0.0.1:8080/json
 ```
 
 GET 示例会输出 `Status code: 200` 和 `Text: GET single`。下载、批量请求和完整验证步骤见 [示例说明](example/README.md)。
@@ -116,7 +118,7 @@ auto main() -> int {
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |
 | 下载到文件或回调 | `Download`、`DownloadAsync`、`DownloadCoro` | 响应元数据 |
 
-JSON 使用 `JsonBody` 发送，通过 `Response::Json()` 或 `TryJson()` 解析；具体规则见 [JSON 文档](docs/json.md)。
+JSON 使用 `JsonBody` 发送，通过 `Response::Json()` 或 `TryJson()` 解析；具体规则见 [JSON 文档](docs/json.md)，同步、异步、协程、回调和两种批量调用的运行目标见 [示例说明](example/README.md)。
 
 使用时需要遵循以下约定：
 
