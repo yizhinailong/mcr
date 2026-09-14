@@ -10,11 +10,13 @@ HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
 | --- | --- | --- |
 | `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Response` | 临时 Session，同步请求 |
 | 各方法的 `*Async` | `AsyncResponse` | 全局线程池中的独立请求 |
+| 各方法的 `*Coro` | `mcr::Task<Response>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro.md) |
 | 各方法的 `*Callback` | `mcr::utils::AsyncWrapper<回调返回类型, true>` | 请求完成后在线程池任务中调用 continuation |
 | `MultiGet` / `MultiPost` / `MultiPut` / `MultiHead` / `MultiDelete` / `MultiOptions` / `MultiPatch` | `std::vector<Response>` | 由 MultiPerform 并发执行，结果保持参数顺序 |
 | 各批量方法的 `Multi*Async` | `std::vector<mcr::utils::AsyncWrapper<Response, true>>` | 独立提交，可分别取消 |
 | `Download(std::ofstream&, ...)` / `Download(WriteCallback const&, ...)` | `Response` | 同步下载，正文交给指定消费者 |
 | `DownloadAsync(std::filesystem::path, ...)` | `AsyncResponse` | 在线程池中打开、下载并关闭目标文件 |
+| `DownloadCoro(std::filesystem::path, ...)` | `mcr::Task<Response>` | 启动时打开文件，经 curl multi 下载，关闭后返回元数据 |
 
 请求选项沿用 Session 的 `SetOption`。传输配置类型位于 `mcr::options`，详见[选项命名空间](options.md)：
 

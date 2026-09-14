@@ -50,7 +50,28 @@ Preserve C++23 module style, including `import std;`. Keep library declarations 
 
 Use `std::filesystem` directly through `import std;`, without a filesystem namespace alias or wrapper module.
 
-Use Doxygen documentation comments: `/** ... */` with `@brief`, `@param`, `@tparam`, `@return`, and `@throws` where applicable, and `///<` for member descriptions.
+Use Doxygen documentation comments consistently in library code, internal helpers, and tests:
+
+- Write documentation blocks in multiline form, even when they contain only a short `@brief`. Put `/**` and `*/` on their own lines, and prefix each content line with ` * `. Do not use single-line `/** ... */` documentation blocks.
+- Place each block immediately before the declaration it documents (before `template` for templates). Use `@brief`, and add `@tparam`, `@param`, `@return`, `@throws`, and `@note` where applicable. Put each tag on its own line; omit tags that do not apply.
+- Use a file-level block with `@file` and `@brief` at the beginning of C++ source files.
+- Use trailing `///<` comments for member and enumerator descriptions. Ordinary `//` comments remain appropriate for implementation explanations and namespace closing labels.
+- Preserve this layout when running `clang-format`; follow the existing `.clang-format` without modifying it.
+
+```cpp
+/**
+ * @brief Check whether this task still owns an unconsumed result.
+ * @return True if a result remains available.
+ */
+[[nodiscard]] bool Valid() const noexcept;
+
+/**
+ * @brief Wake the runtime when cancellation is requested.
+ */
+void Wake() noexcept;
+
+bool m_stopping{ false }; ///< Whether shutdown has begun.
+```
 
 ## Testing Guidelines
 

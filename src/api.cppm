@@ -1,9 +1,11 @@
 /**
  * @file api.cppm
- * @brief One-shot HTTP requests, asynchronous continuations and tuple-based batches.
+ * @brief One-shot HTTP requests, coroutines, asynchronous continuations and tuple-based batches.
  */
 export module mcr.api;
 export import mcr.session;
+export import mcr.task;
+import mcr.coro_runtime;
 import std;
 
 namespace mcr::detail {
@@ -89,6 +91,21 @@ namespace mcr::detail {
     template <auto Action, typename... Ts>
     auto request_async(Ts&&... options) -> AsyncResponse {
         return mcr::async([](auto... values) { return request<Action>(std::move(values)...); }, std::forward<Ts>(options)...);
+    }
+
+    /**
+     * @brief Own request options in a lazy coroutine frame and transfer through curl multi.
+     * @tparam Prepare Session preparation method, without synchronous network I/O.
+     * @tparam Tuple Owned option tuple type.
+     * @param options Options captured at the public API call, before initial suspension.
+     * @return A single-consumer response task.
+     */
+    template <auto Prepare, typename Tuple>
+    auto request_coro(Tuple options) -> Task<Response> {
+        auto session = std::make_shared<Session>();
+        apply_options(*session, std::move(options));
+        auto token = co_await TaskStopToken{};
+        co_return co_await CoroTransferAwaiter{ std::move(session), Prepare, token };
     }
 
     /**
@@ -204,6 +221,17 @@ export namespace mcr {
     }
 
     /**
+     * @brief Create a lazy GET request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Options copied or moved now; views and reference wrappers remain borrowed.
+     * @return Task yielding a Response; cancellation produces ABORTED_BY_CALLBACK.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto GetCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PrepareGet>(std::tuple{ std::move(options)... });
+    }
+
+    /**
      * @brief Submit GET followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
@@ -260,6 +288,17 @@ export namespace mcr {
     template <typename... Ts>
     auto PostAsync(Ts... options) -> AsyncResponse {
         return detail::request_async<&Session::Post>(std::move(options)...);
+    }
+
+    /**
+     * @brief Create a lazy POST request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Task yielding a Response or propagating a preparation/callback exception.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto PostCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PreparePost>(std::tuple{ std::move(options)... });
     }
 
     /**
@@ -322,6 +361,17 @@ export namespace mcr {
     }
 
     /**
+     * @brief Create a lazy PUT request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Single-consumer response task.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto PutCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PreparePut>(std::tuple{ std::move(options)... });
+    }
+
+    /**
      * @brief Submit PUT followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
@@ -378,6 +428,17 @@ export namespace mcr {
     template <typename... Ts>
     auto HeadAsync(Ts... options) -> AsyncResponse {
         return detail::request_async<&Session::Head>(std::move(options)...);
+    }
+
+    /**
+     * @brief Create a lazy HEAD request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Single-consumer response task with an empty body.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto HeadCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PrepareHead>(std::tuple{ std::move(options)... });
     }
 
     /**
@@ -440,6 +501,17 @@ export namespace mcr {
     }
 
     /**
+     * @brief Create a lazy DELETE request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Single-consumer response task.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto DeleteCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PrepareDelete>(std::tuple{ std::move(options)... });
+    }
+
+    /**
      * @brief Submit DELETE followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
@@ -499,6 +571,17 @@ export namespace mcr {
     }
 
     /**
+     * @brief Create a lazy OPTIONS request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Single-consumer response task.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto OptionsCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PrepareOptions>(std::tuple{ std::move(options)... });
+    }
+
+    /**
      * @brief Submit OPTIONS followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
@@ -555,6 +638,17 @@ export namespace mcr {
     template <typename... Ts>
     auto PatchAsync(Ts... options) -> AsyncResponse {
         return detail::request_async<&Session::Patch>(std::move(options)...);
+    }
+
+    /**
+     * @brief Create a lazy PATCH request driven by curl multi.
+     * @tparam Ts Request option types.
+     * @param options Owned options; underlying borrowed data must outlive the request.
+     * @return Single-consumer response task.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto PatchCoro(Ts... options) -> Task<Response> {
+        return detail::request_coro<&Session::PreparePatch>(std::tuple{ std::move(options)... });
     }
 
     /**
@@ -646,5 +740,35 @@ export namespace mcr {
         },
                           std::move(local_path),
                           std::move(options)...);
+    }
+
+    /**
+     * @brief Create a lazy curl multi download owning its destination path and options.
+     * @tparam Ts Request option types.
+     * @param local_path File opened in binary truncation mode when the task starts.
+     * @param options Owned options; views and reference wrappers retain borrowed lifetimes.
+     * @return Task yielding response metadata after closing the file.
+     * @throws std::runtime_error If opening or closing the file fails.
+     * @note Failed or cancelled transfers may leave a partial file.
+     */
+    template <typename... Ts>
+    [[nodiscard]] auto DownloadCoro(std::filesystem::path local_path, Ts... options) -> Task<Response> {
+        std::ofstream file{ local_path, std::ios::binary | std::ios::trunc };
+        if (!file.is_open() || !file.good()) {
+            throw std::runtime_error{ "mcr::DownloadCoro: output stream is not writable." };
+        }
+        auto session = std::make_shared<Session>();
+        detail::set_options(*session, std::move(options)...);
+        auto token    = co_await detail::TaskStopToken{};
+        auto response = co_await detail::CoroTransferAwaiter{
+            std::move(session),
+            [&file](Session& current) { current.PrepareDownload(file); },
+            token
+        };
+        file.close();
+        if (file.fail()) {
+            throw std::runtime_error{ "mcr::DownloadCoro: could not finish writing the output file." };
+        }
+        co_return response;
     }
 } // namespace mcr

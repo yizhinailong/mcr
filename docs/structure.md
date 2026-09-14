@@ -8,6 +8,7 @@
 | `src/request/` | `body.cppm`、`json.cppm`、`buffer.cppm`、`file.cppm`、`multipart.cppm`、`fields.cppm` | 请求正文、JSON、上传数据、查询参数和表单 |
 | `src/http/` | `response.cppm`、`cookies.cppm`、`cert_info.cppm`、`status_code.cppm`、`sse.cppm` | 响应、HTTP 元数据和事件流 |
 | `src/session/` | `session.cppm`、`async.cppm`、`callback.cppm`、`connection_pool.cppm` | 会话、异步运行时、回调、连接共享和批量执行 |
+| `src/coro/` | `task.cppm`、`runtime.cppm` | `mcr::Task<T>` 与 curl multi 协程运行时，公共请求函数仍位于 `src/api.cppm`，详见[协程请求](coro.md) |
 | `src/options/` | `auth.cppm`、`proxy.cppm`、`http.cppm`、`transfer_options.cppm`、`interface.cppm`、`ssl_options.cppm` | 请求配置，详见[选项说明](options.md) |
 | `src/curl/` | `curlholder.cppm`、`curlmultiholder.cppm`、`curl_container.cppm`、`ssl_ctx.cppm` | curl 句柄、容器编码和 TLS 后端支持，详见[curl 模块](curl.md) |
 | `src/utils/` | `types.cppm`、`error.cppm`、`secure_string.cppm`、`singleton.cppm`、`threadpool.cppm`、`async_wrapper.cppm`、`util.cppm` | 公共类型、错误结果、通用工具及 HTTP/curl 辅助函数，详见[工具模块](utils.md) |
