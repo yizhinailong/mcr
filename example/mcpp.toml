@@ -1,0 +1,192 @@
+[package]
+name = "mcr_examples"
+version = "0.1.0"
+description = "Standalone examples for every public mcr request entry point"
+license = "MIT"
+
+[dependencies]
+mcr = { path = ".." }
+
+[targets.get]
+kind = "bin"
+main = "src/sync/get.cpp"
+
+[targets.get_async]
+kind = "bin"
+main = "src/async/get_async.cpp"
+
+[targets.get_coro]
+kind = "bin"
+main = "src/coro/get_coro.cpp"
+
+[targets.get_callback]
+kind = "bin"
+main = "src/callback/get_callback.cpp"
+
+[targets.multi_get]
+kind = "bin"
+main = "src/multi/multi_get.cpp"
+
+[targets.multi_get_async]
+kind = "bin"
+main = "src/multi_async/multi_get_async.cpp"
+
+[targets.post]
+kind = "bin"
+main = "src/sync/post.cpp"
+
+[targets.post_async]
+kind = "bin"
+main = "src/async/post_async.cpp"
+
+[targets.post_coro]
+kind = "bin"
+main = "src/coro/post_coro.cpp"
+
+[targets.post_callback]
+kind = "bin"
+main = "src/callback/post_callback.cpp"
+
+[targets.multi_post]
+kind = "bin"
+main = "src/multi/multi_post.cpp"
+
+[targets.multi_post_async]
+kind = "bin"
+main = "src/multi_async/multi_post_async.cpp"
+
+[targets.put]
+kind = "bin"
+main = "src/sync/put.cpp"
+
+[targets.put_async]
+kind = "bin"
+main = "src/async/put_async.cpp"
+
+[targets.put_coro]
+kind = "bin"
+main = "src/coro/put_coro.cpp"
+
+[targets.put_callback]
+kind = "bin"
+main = "src/callback/put_callback.cpp"
+
+[targets.multi_put]
+kind = "bin"
+main = "src/multi/multi_put.cpp"
+
+[targets.multi_put_async]
+kind = "bin"
+main = "src/multi_async/multi_put_async.cpp"
+
+[targets.head]
+kind = "bin"
+main = "src/sync/head.cpp"
+
+[targets.head_async]
+kind = "bin"
+main = "src/async/head_async.cpp"
+
+[targets.head_coro]
+kind = "bin"
+main = "src/coro/head_coro.cpp"
+
+[targets.head_callback]
+kind = "bin"
+main = "src/callback/head_callback.cpp"
+
+[targets.multi_head]
+kind = "bin"
+main = "src/multi/multi_head.cpp"
+
+[targets.multi_head_async]
+kind = "bin"
+main = "src/multi_async/multi_head_async.cpp"
+
+[targets.delete]
+kind = "bin"
+main = "src/sync/delete.cpp"
+
+[targets.delete_async]
+kind = "bin"
+main = "src/async/delete_async.cpp"
+
+[targets.delete_coro]
+kind = "bin"
+main = "src/coro/delete_coro.cpp"
+
+[targets.delete_callback]
+kind = "bin"
+main = "src/callback/delete_callback.cpp"
+
+[targets.multi_delete]
+kind = "bin"
+main = "src/multi/multi_delete.cpp"
+
+[targets.multi_delete_async]
+kind = "bin"
+main = "src/multi_async/multi_delete_async.cpp"
+
+[targets.options]
+kind = "bin"
+main = "src/sync/options.cpp"
+
+[targets.options_async]
+kind = "bin"
+main = "src/async/options_async.cpp"
+
+[targets.options_coro]
+kind = "bin"
+main = "src/coro/options_coro.cpp"
+
+[targets.options_callback]
+kind = "bin"
+main = "src/callback/options_callback.cpp"
+
+[targets.multi_options]
+kind = "bin"
+main = "src/multi/multi_options.cpp"
+
+[targets.multi_options_async]
+kind = "bin"
+main = "src/multi_async/multi_options_async.cpp"
+
+[targets.patch]
+kind = "bin"
+main = "src/sync/patch.cpp"
+
+[targets.patch_async]
+kind = "bin"
+main = "src/async/patch_async.cpp"
+
+[targets.patch_coro]
+kind = "bin"
+main = "src/coro/patch_coro.cpp"
+
+[targets.patch_callback]
+kind = "bin"
+main = "src/callback/patch_callback.cpp"
+
+[targets.multi_patch]
+kind = "bin"
+main = "src/multi/multi_patch.cpp"
+
+[targets.multi_patch_async]
+kind = "bin"
+main = "src/multi_async/multi_patch_async.cpp"
+
+[targets.download]
+kind = "bin"
+main = "src/download/download.cpp"
+
+[targets.download_callback]
+kind = "bin"
+main = "src/download/download_callback.cpp"
+
+[targets.download_async]
+kind = "bin"
+main = "src/download/download_async.cpp"
+
+[targets.download_coro]
+kind = "bin"
+main = "src/download/download_coro.cpp"
