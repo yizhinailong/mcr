@@ -1,7 +1,9 @@
-# HttpVersion
+# HttpVersion：HTTP 协议策略
 
-Import `mcr` or `mcr.http` to use `HttpVersionCode` and `HttpVersion`.
-They follow cpr's `include/cpr/http_version.h`.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.http`，使用 `mcr::options::HttpVersionCode` 和 `HttpVersion`。
+它们参考 cpr 的 `include/cpr/http_version.h`。
 
 ```cpp
 import mcr.http;
@@ -11,17 +13,14 @@ mcr::options::HttpVersion explicit_version{ mcr::options::HttpVersionCode::VERSI
 automatic.code = mcr::options::HttpVersionCode::VERSION_1_0;
 ```
 
-`HttpVersionCode` is a scoped enum with underlying type `std::uint8_t`.
-`HttpVersion` defaults its public `code` field to `VERSION_NONE` and explicitly
-accepts an enum value. Construction stores even unnamed enum values verbatim;
-validation belongs to the code applying the option. Copying, moving, and
-assignment preserve independent values. Construction supports constant
-evaluation and does not throw.
+`HttpVersionCode` 为底层类型是 `std::uint8_t` 的作用域枚举。
+`HttpVersion` 的公开 `code` 字段默认为 `VERSION_NONE`，也可通过显式构造函数传入枚举。
+构造支持常量求值且不抛异常；即使是未命名枚举值也原样保存，由应用选项的代码验证。
+复制、移动和赋值保留独立数值。
 
-The module declares all protocol policies supported by the curl dependency in
-`mcpp.toml` (currently 8.21.0), without compatibility branches for older headers:
+全部策略按 `mcpp.toml` 声明的 curl 依赖导出，不为旧头文件保留兼容分支：
 
-| Enumerator | Ordinal | Corresponding curl option value |
+| 枚举值 | 序号 | 对应的 curl 常量 |
 | --- | --- | --- |
 | `VERSION_NONE` | 0 | `CURL_HTTP_VERSION_NONE` |
 | `VERSION_1_0` | 1 | `CURL_HTTP_VERSION_1_0` |
@@ -32,28 +31,16 @@ The module declares all protocol policies supported by the curl dependency in
 | `VERSION_3_0` | 6 | `CURL_HTTP_VERSION_3` |
 | `VERSION_3_0_ONLY` | 7 | `CURL_HTTP_VERSION_3ONLY` |
 
-These are cpr's contiguous ordinal values, not raw libcurl constants: curl uses
-30 and 31 for its HTTP/3 policies. Do not pass a cast of `code` directly to
-`CURLOPT_HTTP_VERSION`. `Session::SetHttpVersion` maps each policy to its
-corresponding curl constant and rejects unnamed enum values.
+序号沿用 cpr，不是 libcurl 的原始常量；curl 的 HTTP/3 策略值为 30 和 31。
+不可直接将 `code` 强制转换后传给 `CURLOPT_HTTP_VERSION`。
+`Session::SetHttpVersion` 负责映射，并拒绝未命名枚举值。
 
-`VERSION_2_0` attempts HTTP/2 with HTTP/1.1 fallback. `VERSION_2_0_TLS` limits
-that attempt to HTTPS and uses HTTP/1.1 for cleartext HTTP. Prior knowledge mode
-uses HTTP/2 directly for cleartext requests without HTTP/1.1 Upgrade; HTTPS uses
-ALPN, offering only HTTP/2 since curl 8.10.0. `VERSION_3_0` permits fallback to
-earlier protocols, while `VERSION_3_0_ONLY` does not. Libcurl can prioritize
-reusing an existing connection over the requested version.
+`VERSION_2_0` 尝试 HTTP/2，允许回退到 HTTP/1.1；`VERSION_2_0_TLS` 仅在 HTTPS 下尝试 HTTP/2，明文 HTTP 使用 HTTP/1.1。
+预先获知模式在明文连接上直接使用 HTTP/2，不执行 HTTP/1.1 Upgrade；当前依赖的 HTTPS ALPN 仅提供 HTTP/2。
+`VERSION_3_0` 允许回退到更早协议，`VERSION_3_0_ONLY` 不允许。libcurl 可能优先复用已有连接。
 
-The presence of an enumerator does not guarantee that the linked curl backend
-supports that protocol. All enumerators are always exported; runtime protocol
-support still depends on how curl was built.
+枚举存在不代表所链接的 curl 支持相应协议，实际能力取决于 curl 的构建配置。
+与 cpr 的区别是模块、命名空间、Doxygen 注释、显式构造函数的 `constexpr` / `noexcept`，以及无条件导出的枚举。
 
-Intentional differences from cpr are the C++23 module and namespace, Doxygen
-documentation, `constexpr`/`noexcept` on the explicit constructor, and unconditional
-enum declarations for the configured dependency. Protocol comments follow the local libcurl
-documentation, including HTTP/3 fallback and current prior knowledge behavior.
-
-Run `mcpp build` and `mcpp test`. The standalone test checks that all policies
-are available, along with ordinal compatibility, explicit construction,
-default state, constant evaluation, independent field updates, and unnamed
-codes. These are option tests and do not negotiate HTTP protocols.
+运行 `mcpp build` 和 `mcpp test`。测试覆盖全部策略、序号、显式构造、默认状态、
+常量求值、字段独立修改和未命名枚举值，不实际协商 HTTP 协议。

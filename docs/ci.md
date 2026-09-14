@@ -1,72 +1,67 @@
-# Version tags and Windows CI
+# 版本标签与 Windows CI
 
-The workflow structure follows `FileMonitor`: an independent version workflow
-creates an annotated tag and explicitly dispatches a Windows workflow at that tag.
-After the Windows build and tests succeed, a separate job publishes a GitHub Release.
-All CI logic is inline in the two workflow YAML files; no separate scripts are
-required. Inline Python uses the standard `tomllib` parser for package versions,
-and PowerShell handles Git operations, workflow dispatch, and tool installation.
+[文档索引](README.md) · [项目首页](../README.md)
 
-`.github/workflows/version-tag.yml` runs when a push to `main` changes `mcpp.toml`.
-It parses `[package].version` as TOML at the push's previous and current commit,
-so multi-commit pushes are compared as a whole. A version change such as
-`0.1.0` to `0.2.0` creates the annotated tag `v0.2.0` at that push's final commit,
-with the annotation `mcr 0.2.0` and the GitHub Actions bot as tagger.
-Changes to dependencies, descriptions, formatting, or comments do not create
-tags when the package version stays the same. Initial branch/manifest creation
-establishes a baseline without a tag.
+发布流程由两个独立工作流组成：版本工作流创建带注释的标签，并显式触发该标签上的 Windows CI；
+构建和测试成功后，独立任务发布 GitHub Release。
+逻辑直接写在 YAML 中，不依赖额外脚本。
+内联 Python 使用标准库 tomllib 解析版本，PowerShell 负责 Git、工作流触发和工具安装。
 
-Existing tags are never overwritten. Reusing a version tagged at a different
-commit fails the workflow; choose an unused version. Retrying the same push
-reuses its existing tag (including earlier lightweight tags) and dispatches
-Windows tests again. The workflows do not commit files or bump the package version.
+## 版本标签
 
-The version workflow also supports manual runs on the default branch. A manual
-run compares the selected commit with its first parent, so it still cannot tag
-an unchanged version. For a multi-commit push, rerun the original workflow to
-retain its original comparison endpoints. Concurrent attempts for the same
-commit are serialized without grouping unrelated version changes together.
+[version-tag.yml](../.github/workflows/version-tag.yml) 在推送到 main 且修改 mcpp.toml 时运行。
+它按 TOML 解析推送前后提交中的 `[package].version`，一次推送包含多个提交时比较整体端点。
+例如版本从 0.1.0 变成 0.2.0，会在推送的最终提交创建带注释标签 v0.2.0，
+注释为 `mcr 0.2.0`，标签创建者为 GitHub Actions 机器人。
 
-After publishing the tag, the version workflow runs
-`gh workflow run windows-ci.yml --ref <tag>` using the built-in token. This is
-necessary because pushes made with `GITHUB_TOKEN` do not start new push
-workflows, as described in the
-[GitHub triggering documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
-The Windows workflow accepts `workflow_dispatch`, which GitHub permits the
-built-in token to trigger, and also handles `v*` tags pushed by users. It can be
-run manually from the Actions UI. Ordinary branch pushes and pull requests do
-not start Windows tests. Duplicate Windows runs for the same ref cancel older
-in-progress runs, as in FileMonitor.
+仅改依赖、描述、格式或注释而版本不变时，不创建标签。
+首次创建分支或清单只建立比较基准，不打标签。
+已有标签不会覆盖；若版本已标记在其他提交上，工作流失败，需使用未占用版本。
+重试同一次推送时复用已有标签（包括早期的轻量标签），再次触发 Windows CI。
+工作流不提交文件或自动递增版本。
 
-Both workflows use `windows-2025`. The Windows job checks out the selected ref,
-checks that a tag matches `[package].version`, prepares the MSVC x64 environment,
-and installs the checksum-pinned official
-`mcpp` Windows release `2026.9.11.1` into the runner's temporary directory,
-installs and selects `llvm@22.1.8`, and runs `mcpp build` followed by `mcpp test`.
-The hosted Windows image supplies the Visual Studio/Windows SDK installation required by
-the LLVM MSVC target. Update the version and checksum together in
-the `Install mcpp` step in `windows-ci.yml` when upgrading mcpp.
+支持在默认分支手动运行，比较所选提交及其第一父提交，版本未变仍不打标签。
+多提交推送应重跑原工作流，以保留原始比较端点。
+同一提交的并发尝试串行执行，不把不同版本变更合为一组。
 
-The tag job requests `contents: write` and `actions: write`, and the release job
-requests `contents: write`; Windows tests use read-only repository access.
-The built-in token is sufficient, with no additional secret required.
-Repository rules must allow the tag job to create version tags. A failed
-Windows test leaves the tag in place and marks the independent Windows CI run
-as failed; rerun that workflow after investigating. A successful version run
-means the tag exists and Windows CI was dispatched, not that tests have passed.
+## Windows 构建和测试
 
-The `release` job runs only for `v*` tag refs after the `test` job succeeds.
-It uses `gh release create --verify-tag --generate-notes` to publish a release
-titled `mcr <version>`. The tag must already exist; publishing a release cannot
-create an additional tag. Prerelease versions such as `0.2.0-rc.1` are marked
-as prereleases. An existing release is left intact when the workflow is retried.
-Branch-based manual runs and failed builds or tests do not publish releases.
-GitHub provides the source archives associated with the release tag; this module
-library does not add executable build artifacts. See the
-[GitHub CLI release documentation](https://cli.github.com/manual/gh_release_create)
-for the release creation flags.
+创建标签后，版本工作流使用内置令牌执行
+`gh workflow run windows-ci.yml --ref <tag>`。
+原因是 GITHUB_TOKEN 发起的推送不会启动新的 push 工作流，
+但可触发 workflow_dispatch，见 [GitHub 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。
 
-Local validation:
+[windows-ci.yml](../.github/workflows/windows-ci.yml) 接受 workflow_dispatch 和用户推送的 v* 标签，
+也可从 Actions 页面手动运行。普通分支推送和拉取请求不触发 Windows 测试；
+同一引用的重复运行会取消较早、尚未完成的运行。
+
+两个工作流均使用 windows-2025。测试任务检出所选引用，检查标签与包版本一致，
+准备 MSVC x64 环境，然后安装经过固定校验和验证的 mcpp 官方 Windows 版本
+`2026.9.11.1` 到运行器临时目录，安装并选择 `llvm@22.1.8`，
+依次执行 `mcpp build` 和 `mcpp test`。
+托管镜像提供 LLVM MSVC 目标需要的 Visual Studio 和 Windows SDK。
+升级 mcpp 时，必须同时更新 Install mcpp 步骤中的版本与校验和。
+
+标签任务请求 contents: write 和 actions: write；发布任务请求 contents: write；
+测试任务仅需要仓库只读权限。使用内置令牌，无需额外密钥，
+仓库规则必须允许标签任务创建版本标签。
+
+Windows 测试失败时保留标签，并将独立 Windows CI 标记失败；排查后可重跑。
+版本工作流成功仅表示标签存在且已触发 Windows CI，不能据此判断测试通过。
+
+## 发布与本地验证
+
+release 任务仅在 v* 标签引用上、test 成功后运行。
+它执行 `gh release create --verify-tag --generate-notes`，
+以 `mcr <version>` 为标题创建发布。
+标签必须已存在，发布操作不会额外创建标签。
+0.2.0-rc.1 等预发布版本标记为预发布；重跑时保留已有 Release。
+
+基于分支的手动运行、构建失败或测试失败均不发布。
+GitHub 提供标签对应的源码归档，本模块库不附加可执行构建产物。
+参数说明见 [GitHub CLI 发布文档](https://cli.github.com/manual/gh_release_create)。
+
+在仓库根目录验证：
 
 ```sh
 actionlint .github/workflows/version-tag.yml .github/workflows/windows-ci.yml

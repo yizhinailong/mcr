@@ -1,8 +1,9 @@
-# Buffer
+# Buffer：借用的上传字节
 
-Import `mcr` or `mcr.buffer` to use `Buffer`. It adapts cpr's
-`include/cpr/buffer.h` using only `import std;` and `std::filesystem::path`.
-There is no filesystem compatibility layer or additional dependency.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.buffer`，使用 `mcr::Buffer`。它参考 cpr 的
+`include/cpr/buffer.h`，仅依赖标准库，直接使用 `std::filesystem::path`。
 
 ```cpp
 import std;
@@ -10,65 +11,51 @@ import mcr.buffer;
 
 std::vector<unsigned char> bytes{ 'h', 'i', 0, 0xff };
 mcr::Buffer buffer{ bytes.begin(), bytes.end(), "upload.bin" };
-// buffer.data points into bytes; buffer.datalen is 4, including the null byte.
+// buffer.data 指向 bytes；buffer.datalen 为 4，包含空字节。
 
 std::filesystem::path filename{ "another.bin" };
 mcr::Buffer named{ bytes.cbegin(), bytes.cend(), std::move(filename) };
 ```
 
-The public fields retain cpr's names and types:
+公开字段保留 cpr 的名称和类型：
 
-| Member | Type | Meaning |
+| 成员 | 类型 | 含义 |
 | --- | --- | --- |
-| `data_t` | `char const*` | Alias for the borrowed byte pointer |
-| `data` | `data_t` | Read-only access to source memory; the pointer itself is mutable |
-| `datalen` | `std::size_t` | Byte count; publicly mutable |
-| `filename` | `std::filesystem::path const` | Owned, immutable upload filename |
+| `data_t` | `char const*` | 借用字节指针的别名 |
+| `data` | `data_t` | 只读访问源字节，指针本身可修改 |
+| `datalen` | `std::size_t` | 可修改的字节数 |
+| `filename` | `std::filesystem::path const` | 拥有存储、不可修改的上传文件名 |
 
-Construction takes two iterators of the same type and a
-`std::filesystem::path&&`. A filename literal converts to a temporary path;
-pass an existing path with `std::move`, or explicitly copy it into a temporary
-to retain the original. An empty filename is allowed. Paths are stored without
-normalization, basename extraction, opening a file, or checking its existence.
+构造接收两个同类型迭代器和 `std::filesystem::path&&`。
+文件名字面量转换为临时路径；已有路径可用 `std::move`，或显式复制为临时路径以保留原值。
+允许空文件名，路径不规范化、不提取基本文件名，也不打开或检查文件。
 
-Constructor `static_assert` checks require a C++20 contiguous iterator and
-an element size of one byte. Pointers, string/vector/array iterators, and span
-iterators over `char`, signed/unsigned char, and `std::byte` are supported.
-Multibyte elements such as `std::uint32_t`, list/deque iterators,
-`std::vector<bool>` proxies, and reverse iterators are rejected. The byte
-check concerns size, not a whitelist of element types. `std::to_address`
-obtains the real element address without invoking an overloaded `operator&`.
-Assertions are checked when the constructor body is instantiated; merely
-using `std::is_constructible` does not test these assertions.
+## 范围约束与生命周期
 
-The range must belong to the same live contiguous sequence. A pair of null
-pointers also describes an empty range. Equal iterators produce `data ==
-nullptr` and `datalen == 0` without dereferencing or subtracting them.
-For a nonempty range, `end - begin` determines the length. A negative distance
-throws `std::invalid_argument`. Unrelated, dangling, or otherwise invalid
-iterators remain caller errors and cannot be validated here.
+构造函数中的 `static_assert` 要求 C++20 连续迭代器，元素大小必须为一个字节。
+支持指针及字符串、vector、array、span 中指向 char、signed/unsigned char、`std::byte` 的迭代器。
+多字节元素、list/deque 迭代器、`vector<bool>` 代理和反向迭代器不符合要求。
+检查针对元素大小，不是类型白名单；`std::to_address` 避免调用重载的取地址运算符。
+断言在构造函数体实例化时检查，单独使用 `std::is_constructible` 不会验证这些断言。
 
-`Buffer` does not copy or own the bytes. Keep the source storage alive and
-avoid invalidating its address until all consumers, including asynchronous
-uploads, finish reading it. Changes to existing source elements are visible
-through the buffer. Embedded null bytes are retained; a string terminator is
-included only if it lies inside the supplied range.
+范围必须属于同一存活的连续序列；两个空指针也表示空范围。
+相等迭代器直接产生 `data == nullptr`、`datalen == 0`，不解引用或相减。
+非空范围通过 `end - begin` 计算长度，负距离抛出 `std::invalid_argument`。
+不相关、悬空等无效迭代器仍由调用方负责。
 
-There is no default constructor. Implicit copy and move constructors share
-the byte pointer and length. Because `filename` is const, it is copied even
-during a move, which can allocate and throw. Copy and move assignment are
-unavailable because of that const member, matching cpr.
+Buffer 不复制或拥有字节。包括异步上传在内的全部读取完成前，源存储必须存活且地址有效。
+已有元素的修改可被看到，内嵌空字节保留；字符串结束符仅在传入范围包含它时计入。
 
-Intentional differences from cpr are the module/namespace, direct standard
-filesystem use, and stronger constructor validation. The reference only
-checks the legacy random-access iterator category, which can admit
-noncontiguous memory, and dereferences `begin` even when the range is empty.
-The unused public `is_random_access_iterator` helper is replaced by the
-constructor's static assertions. Empty and reversed ranges have the defined
-behavior above. Valid contiguous byte ranges retain the reference behavior.
+没有默认构造函数。隐式复制和移动共享指针与长度。
+由于 `filename` 为 const，移动时也复制路径，可能分配并抛异常；复制和移动赋值均不可用，与 cpr 一致。
 
-Run `mcpp build` and `mcpp test` to verify borrowing, binary subranges,
-supported storage types, empty and reversed ranges, filename ownership,
-and copy/move behavior. [`Part`](multipart.md) can borrow these buffers;
-Session serializes them into MIME parts using their explicit byte lengths.
-Keep the underlying storage alive until all transfers using it complete.
+## 与 cpr 的差异及验证
+
+除模块、命名空间和直接使用标准文件系统外，构造检查更严格。
+上游仅检查旧随机访问迭代器类别，可能接受非连续存储，并在空范围上解引用 begin；
+此处以构造断言替代未使用的 `is_random_access_iterator`，为空范围和反向范围定义上述行为。
+有效连续字节范围的语义保持一致。
+
+运行 `mcpp build` 和 `mcpp test`，验证借用、二进制子范围、存储类型、空范围和反向范围、
+文件名所有权及复制移动。[Part](multipart.md) 可以借用 Buffer，Session 按显式字节长度生成 MIME 部分；
+底层存储必须保持到全部相关传输结束。

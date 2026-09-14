@@ -1,10 +1,10 @@
-# Payload
+# Payload：表单键值对
 
-Import `mcr` or `mcr.fields` to use `Payload` and `Pair`.
-The `mcr` entry module also exports `mcr::curl::CurlHolder`; when importing only `mcr.fields`,
-add `mcr.curlholder` to name that backend type. The fields module combines cpr's
-`include/cpr/payload.h` and its otherwise empty `cpr/payload.cpp` in one
-module, without a separate implementation unit.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.fields`，使用 `mcr::Payload` 和 `Pair`。
+总入口也导出 `mcr::curl::CurlHolder`；只导入 fields 时，如需命名该后端类型，
+应另导入 `mcr.curlholder`。实现参考 cpr 的 `include/cpr/payload.h`，在模块内完成。
 
 ```cpp
 import std;
@@ -19,47 +19,34 @@ std::vector<mcr::Pair> pairs{ { "first", "one" }, { "last", "two" } };
 mcr::Payload from_range{ pairs.cbegin(), pairs.cend() };
 mcr::Payload empty{};
 
-// After curl_global_init(), and before curl_global_cleanup():
+// 成功初始化 curl 后执行，holder 必须先于 curl 全局清理销毁。
 mcr::curl::CurlHolder holder;
 auto encoded = form.GetContent(holder);
 // name=hello%20world&flag=&name=x%2By
 ```
 
-`mcr::Payload` is a distinct public subclass of `mcr::curl::CurlContainer<mcr::Pair>`. The
-non-explicit `std::initializer_list<Pair> const&` constructor copies the
-supplied entries, preserving order, duplicate keys, and empty strings.
-There is no default constructor, matching cpr: `Payload payload;` is invalid
-and `std::is_default_constructible_v<Payload>` is false. `Payload{}` works
-through the empty initializer-list constructor.
+Payload 公开继承 `mcr::curl::CurlContainer<mcr::Pair>`。
+非 explicit 的 `std::initializer_list<Pair> const&` 构造函数复制条目，
+保留顺序、重复键和空字符串。它没有默认构造函数：
+`Payload payload;` 无效，`std::is_default_constructible_v<Payload>` 为 false；
+`Payload{}` 通过空初始化列表构造，行为与 cpr 一致。
 
-The range constructor takes two copyable iterators of the same type and
-calls `Add(*iterator)` for each entry in a single pass. It accepts pointers,
-const and mutable container iterators, noncontiguous iterators, and
-single-pass input iterators yielding pairs. It does not require random
-access or precompute a distance. Traversal order determines stored order;
-reverse iterators produce reversed entries. Equal iterators, including two
-null pointers, create an empty payload without dereferencing them.
-The supplied range must be valid, with its end reachable from its beginning.
-As in cpr, separate sentinel types are not accepted, and unsuitable iterator
-types fail when the constructor body is instantiated.
+范围构造接收两个同类型、可复制的迭代器，单次遍历并对每项调用 `Add(*iterator)`。
+支持指针、可变和 const 容器迭代器、非连续迭代器及产生 Pair 的单遍输入迭代器，
+不要求随机访问或预先计算距离。存储顺序取决于遍历顺序，反向迭代器产生反序条目。
+相等迭代器（包括两个空指针）产生空集合，不解引用。
+范围必须有效且终点可达；不支持独立哨兵类型，不合适的迭代器在函数体实例化时报错。
 
-Each range entry is copied through `Add(Pair const&)`, even with move
-iterators. Source elements can be modified or destroyed after construction.
-Both constructors enable encoding. Copying a payload produces independent
-storage; implicit moves are `noexcept`. Copy/move operations retain the
-encoding flag as well as the ordered pairs.
+每项均通过 `Add(Pair const&)` 复制，即使使用移动迭代器也是如此。
+构造后可修改或销毁来源。两种构造都启用编码；复制拥有独立存储，隐式移动为 `noexcept`，
+复制移动同时保留条目顺序和编码标志。
 
-`Add()`, both `GetContent()` overloads, public `encode`, and protected
-`m_container_list` are inherited. With encoding enabled,
-`GetContent(holder)` percent-encodes values and emits keys verbatim. Each
-pair always contains `=`, including empty values; pairs are joined by `&`.
-`GetContent()` always returns raw bytes without using curl. See
-[CurlContainer](curl_container.md) for binary lengths, escaping, and holder
-error behavior. No request or content-type header is created by this module.
+继承 `Add()`、两个 `GetContent()` 重载、公开 `encode` 和受保护的 `m_container_list`。
+启用编码时，`GetContent(holder)` 仅百分号编码值，键原样输出。
+每对始终含等号（包括空值），条目用 `&` 连接；`GetContent()` 始终输出原始字节，不调用 curl。
+二进制长度、转义和句柄错误见 [CurlContainer](curl_container.md)。
+该模块不发送请求或创建媒体类型请求头。
 
-Apart from the module and namespace, the wrapper follows the reference's
-constructors directly and inherits the documented base-module differences.
-Run `mcpp build` and `mcpp test`. `tests/test_curl_container.cpp` exercises the
-actual `Payload` and `Parameters` wrappers, including payload list/range
-construction, source ownership, single-pass and move iterators, empty
-ranges, raw/encoded output, appends, copy/move operations, and holder errors.
+除模块、命名空间及基类差异外，构造接口沿用 cpr。
+运行 `mcpp build` 和 `mcpp test`。`tests/test_curl_container.cpp` 验证列表与范围构造、
+所有权、单遍和移动迭代器、空范围、原始与编码输出、追加、复制移动及句柄错误。

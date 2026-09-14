@@ -1,9 +1,11 @@
-# AsyncWrapper
+# AsyncWrapper：异步结果与取消
 
-Import `mcr` or `mcr.async_wrapper` to use `mcr::utils::AsyncWrapper<RetType, is_cancellable>`.
-It follows cpr's `include/cpr/async_wrapper.h` and owns a `std::future<RetType>`.
-Wrappers can be moved, but cannot be copied. Results may be values, references,
-`void`, or move-only types.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.async_wrapper`，使用
+`mcr::utils::AsyncWrapper<RetType, is_cancellable>`。
+它参考 cpr 的 `include/cpr/async_wrapper.h`，拥有一个 `std::future<RetType>`，
+可移动、不可复制，结果支持值、引用、void 和仅可移动类型。
 
 ```cpp
 import std;
@@ -20,13 +22,11 @@ auto cancellable = mcr::utils::AsyncWrapper{ std::move(future), std::shared_ptr{
 auto cancellation = cancellable.Cancel();
 ```
 
-The deduction guides select the ordinary specialization when given a future
-and the cancellable specialization when also given a shared atomic flag.
-Only the ordinary specialization can be default-constructed. Both accept an
-invalid future. The ordinary future constructor is explicit; both constructors
-take their handles by rvalue reference and consume them on success.
+推导指引在仅传入 future 时选择普通版本，同时传入共享原子标志时选择可取消版本。
+只有普通版本可默认构造；两者都允许无效 future。
+普通 future 构造函数为 explicit；两种构造都以右值引用接收句柄，并在成功时消费它们。
 
-Public future operations use the project's naming convention:
+## 结果访问
 
 | cpr | mcr |
 | --- | --- |
@@ -36,68 +36,57 @@ Public future operations use the project's naming convention:
 | `wait_for(duration)` | `WaitFor(duration)` |
 | `wait_until(deadline)` | `WaitUntil(deadline)` |
 | `share()` | `Share()` |
-| `Cancel()`, `IsCancelled()` | Unchanged |
+| `Cancel()`、`IsCancelled()` | 名称不变 |
 
-`Get()` waits for and consumes the future, returning its result or propagating
-the stored exception. Wait operations retain the result, and timed waits
-forward `ready`, `timeout`, and `deferred` status values. Deferred work runs on
-an untimed wait or `Get`, as with `std::future`. Calls to `Get` or waits on an
-invalid future throw `std::logic_error` with an operation-specific diagnostic.
-`Share()` transfers ownership into `std::shared_future` without throwing; an
-invalid wrapper produces an invalid shared future. The wrapper then has no
-future state.
+Get 等待并消费 future，返回结果或传播保存的异常。等待操作保留结果，
+限时等待转发 ready、timeout、deferred 状态。
+与 `std::future` 一致，延迟任务在不限时等待或 Get 时执行。
+对无效 future 调用 Get 或等待会抛出带操作诊断的 `std::logic_error`。
 
-The cancellable specialization publicly derives from the ordinary one and
-requires a nonnull `std::shared_ptr<std::atomic_bool>`. The same flag must be
-observed by the task, for example through `mcr::CancellationCallback`.
-`Cancel()` changes the flag to true; it cannot force an uncooperative task to
-stop. `IsCancelled()` reports the flag independently of the future's state.
-`Valid()` is false when cancelled or when the future has been consumed, shared,
-or moved out.
+Share 不抛异常，将所有权转给 `std::shared_future`；
+无效包装产生无效 shared future，操作后包装不再有 future 状态。
 
-`CancellationResult` retains cpr's enumerators and values: `failure = 0`
-(reserved and not returned here), `success = 1`, and `invalid_operation = 2`.
-The first successful flag transition returns `success`. Repeated cancellation,
-or cancellation without a valid future, returns `invalid_operation`.
-A ready but unconsumed future can still be cancelled. Concurrent `Cancel`
-calls on wrappers sharing a flag produce exactly one successful transition,
-provided their future handles and object lifetimes remain unchanged.
+## 取消与所有权
 
-Cancellation is checked before `Get()` and wait operations, which throw
-`std::logic_error` if it was already requested. It does not wake a wait that
-has already started, and there is no second cancellation check after waiting.
-The inherited `Share()` does not check cancellation, matching cpr; the resulting
-shared future can retrieve a result even after cancellation.
+可取消版本公开继承普通版本，要求非空 `std::shared_ptr<std::atomic_bool>`。
+任务必须观察同一标志，例如通过 `mcr::CancellationCallback`。
+Cancel 将标志设置为 true，不能强制终止不配合的任务。
+IsCancelled 独立于 future 状态报告标志；取消、消费、共享或移出后 Valid 为 false。
 
-Destruction signals the retained flag before releasing the future, including
-after `Get()` or `Share()`. A shared future therefore does not detach the task
-from the wrapper's cancellation-on-destruction behavior. Move assignment signals
-the old flag before releasing its old future, then takes the incoming handles.
-Self-move leaves a cancellable wrapper unchanged. Future release can block when
-it drops the last reference to a running `std::async` state. Wrappers are value
-types with a nonvirtual base destructor, as in cpr.
+`CancellationResult` 保留 cpr 的名称和值：
 
-Intentional differences and fixes beyond module and method naming:
+| 枚举值 | 数值 | 含义 |
+| --- | --- | --- |
+| `failure` | 0 | 保留，本实现不返回 |
+| `success` | 1 | 首次成功设置取消标志 |
+| `invalid_operation` | 2 | 重复取消或没有有效 future |
 
-- A null cancellation flag throws `std::invalid_argument` before the source
-  future is consumed, instead of allowing cpr's later null dereference.
-- Moved-from cancellable wrappers are safe to query: `Valid()` and
-  `IsCancelled()` are false, `Cancel()` returns `invalid_operation`, and result
-  access throws for the invalid future. Destruction does not affect the owner.
-- Move assignment cancels the replaced operation before releasing its future;
-  cpr's defaulted assignment can wait on a task without signalling cancellation.
-- Cancellation uses an atomic exchange rather than a separate load and store,
-  so racing requests cannot both report success.
-- Private members use `m_` names, diagnostics name `mcr` operations, and safe
-  state queries, cancellation, and ordinary future construction are `noexcept`.
+已就绪但未消费的 future 仍可取消。
+共享同一标志的包装对象并发调用 Cancel 时，只会有一次成功转换，
+前提是 future 句柄和对象生命周期不变。
 
-Only the flag is synchronized. Coordinate `Get`, `Share`, moving, and destruction
-with other accesses to the same wrapper. The wrapper does not create threads
-or introduce global async helpers; it works with futures from `std::async`,
-promises, and the existing `ThreadPool`.
+Get 和等待操作在开始前检查取消，已取消则抛出 `std::logic_error`。
+取消不唤醒已经开始的等待，等待完成后也不再次检查。
+继承的 Share 不检查取消，因此得到的 shared future 可在取消后读取结果，与 cpr 一致。
 
-Run `mcpp build` and `mcpp test`. Tests adapt the standalone wrapper behavior
-from cpr's `test/multiasync_tests.cpp` using controlled local tasks, covering
-future status and result types, exceptions, sharing, concurrent cancellation,
-moved-from access, destruction and replacement of running tasks, and integration
-with `CancellationCallback` and `ThreadPool`.
+析构先设置保留的取消标志，再释放 future，即使已经 Get 或 Share 也是如此；
+shared future 不会解除包装对象的析构取消行为。
+移动赋值先取消并释放原操作，再接收新句柄；自移动保持不变。
+释放 future 若丢弃运行中 `std::async` 状态的最后一个引用，可能阻塞。
+包装是值类型，基类析构函数不是虚函数。
+
+## 与 cpr 的差异及验证
+
+- 空取消标志在消费源 future 前抛出 `std::invalid_argument`，避免稍后解引用空指针。
+- 移出后的可取消包装可安全查询：Valid 和 IsCancelled 为 false，Cancel 返回 invalid_operation，
+  访问结果按无效 future 抛出；析构不影响新拥有者。
+- 移动赋值先通知原任务取消；上游默认赋值可能在未通知取消时等待原任务。
+- 原子 exchange 代替分开的 load/store，避免并发取消同时报告成功。
+- 私有字段采用 `m_`，诊断使用 mcr 操作名；安全状态查询、取消和普通 future 构造为 `noexcept`。
+
+仅取消标志经过同步。同一包装对象的 Get、Share、移动、析构与其他访问需要协调。
+包装自身不创建线程，可接收 `std::async`、promise 和 ThreadPool 的 future。
+
+运行 `mcpp build` 和 `mcpp test`。测试参考 cpr 的 `test/multiasync_tests.cpp`，
+用受控本地任务验证状态、结果类型、异常、共享、并发取消、移出后访问、
+运行任务的析构和替换，以及 CancellationCallback 和 ThreadPool 集成。

@@ -1,5 +1,7 @@
 # 基础工具命名空间
 
+[文档索引](README.md) · [项目首页](../README.md)
+
 `src/utils/` 集中放置基础类型、错误处理和通用工具。通用工具使用 `mcr::utils`；
 `types.cppm`、`error.cppm` 中的公共接口继续使用 `mcr`。
 各模块保持现有导入名。`import mcr;` 统一导出全部工具及公共基础类型、错误结果和异步结果类型，

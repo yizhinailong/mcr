@@ -1,6 +1,8 @@
-# Range and MultiRange
+# Range 与 MultiRange：字节范围
 
-Import `mcr` or `mcr.http` to use both range types.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.http`，使用 `mcr::options::Range` 和 `MultiRange`。
 
 ```cpp
 import std;
@@ -12,13 +14,12 @@ mcr::options::MultiRange ranges{ mcr::options::Range{ std::nullopt, 3 }, mcr::op
 std::println("{}", ranges.Str()); // 0-3, 5-6
 ```
 
-`Range` follows cpr's `include/cpr/range.h`. Its explicit constructor takes two
-optional `std::int64_t` endpoints. An absent start becomes `0`; an absent finish
-becomes `-1`. The public `resume_from` and `finish_at` fields retain their signed
-values and can be updated after construction. `Str()` reads their current
-values, omits the digits of every negative endpoint, and inserts one hyphen.
+`Range` 参考 cpr 的 `include/cpr/range.h`。显式构造函数接收两个可选的
+`std::int64_t` 端点；起点缺省为 `0`，终点缺省为 `-1`。
+公开字段 `resume_from`、`finish_at` 保留有符号数值，可在构造后修改。
+`Str()` 读取当前值，省略负端点的数字，并在中间添加一个连字符。
 
-| Range | Text |
+| 范围 | 输出 |
 | --- | --- |
 | `Range{}` | `0-` |
 | `Range{1, std::nullopt}` | `1-` |
@@ -27,25 +28,15 @@ values, omits the digits of every negative endpoint, and inserts one hyphen.
 | `Range{-1, 500}` | `-500` |
 | `Range{-1, -1}` | `-` |
 
-No `bytes=` prefix is added. Endpoints are not reordered, clamped, or validated:
-for example, `Range{10, 2}` produces `10-2`. All nonnegative 64-bit endpoints
-format without narrowing, and negative values remain unchanged in storage.
+不添加 `bytes=` 前缀，也不排序、限制或验证端点；例如 `Range{10, 2}` 输出 `10-2`。
+全部非负 64 位端点均可无窄化地格式化，负值在存储中保持不变。
 
-`MultiRange` copies an initializer list of `Range` values into a private vector.
-`Str()` joins each range's text with `", "`, preserving order, overlapping ranges,
-and duplicates, with no trailing separator. An empty list (`MultiRange{}`)
-produces an empty string. Changes to the original ranges do not affect the
-stored copies. Both types support independent copy/move construction and
-assignment, and every `Str()` call returns an owned string.
+`MultiRange` 将初始化列表复制到私有 vector。`Str()` 用 `", "` 连接各范围，
+保留顺序、重叠和重复项，不产生末尾分隔符。`MultiRange{}` 输出空字符串。
+原始范围的修改不影响副本。两种类型均支持独立的复制移动和赋值，每次 `Str()` 返回拥有存储的字符串。
 
-Intentional API differences from cpr are the C++23 module, namespace `mcr::options`,
-`Str()` replacing `str()`, returning `std::string` without top-level const, and
-the private `m_ranges` member name. Multi-range formatting iterates by const
-reference. Formatting behavior is unchanged.
+与 cpr 的区别是 C++23 模块、`mcr::options` 命名空间、用 `Str()` 替代 `str()`、
+返回值不带顶层 const，以及私有成员 `m_ranges` 的命名。多范围格式化通过 const 引用遍历，输出行为不变。
 
-`Session::SetRange` and `SetMultiRange` pass the formatted string to
-`CURLOPT_RANGE`, following cpr. Session clears this option for PUT requests;
-see [Session](session.md) for transfer behavior. Run `mcpp build` and `mcpp test`
-to verify defaults, optional and
-negative endpoints, signed 64-bit boundaries, multi-range formatting, and value
-ownership without a network service.
+`Session::SetRange` 和 `SetMultiRange` 将结果传给 `CURLOPT_RANGE`，准备 PUT 请求时清除该选项，见 [Session](session.md)。
+运行 `mcpp build` 和 `mcpp test`，验证默认值、可选与负端点、64 位边界、多范围格式和所有权；选项测试无需网络服务。

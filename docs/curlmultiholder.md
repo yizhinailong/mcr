@@ -1,11 +1,12 @@
-# CurlMultiHolder
+# CurlMultiHolder：multi 句柄所有权
 
-Import `mcr.curlmultiholder` to use `mcr::curl::CurlMultiHolder`.
-See [curl backend namespaces](curl.md) for the other backend interfaces and migration details.
-It follows cpr's `include/cpr/curlmultiholder.h` and
-`cpr/curlmultiholder.cpp`: construction calls `curl_multi_init()`, the public
-`CURLM* handle` provides access to libcurl, and destruction calls
-`curl_multi_cleanup()`.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.curlmultiholder`，使用 `mcr::curl::CurlMultiHolder`。
+其他接口与迁移规则见 [curl 后端](curl.md)。
+实现参考 cpr 的 `include/cpr/curlmultiholder.h` 和 `cpr/curlmultiholder.cpp`：
+构造调用 curl_multi_init，公开 `CURLM* handle` 用于访问 libcurl，
+析构调用 curl_multi_cleanup。
 
 ```cpp
 #include <curl/curl.h>
@@ -13,7 +14,11 @@ It follows cpr's `include/cpr/curlmultiholder.h` and
 import std;
 import mcr.curlmultiholder;
 
-int main() {
+/**
+ * @brief 初始化 curl 并执行一次空 multi 操作。
+ * @return 操作成功时返回零。
+ */
+auto main() -> int {
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
         return 1;
     }
@@ -32,31 +37,22 @@ int main() {
 }
 ```
 
-The holder owns only the multi handle. Easy handles added through
-`curl_multi_add_handle()` retain their existing owners, such as `CurlHolder`.
-Remove each easy handle with `curl_multi_remove_handle()` before cleaning it
-up, destroying the multi holder, or replacing the destination of a move
-assignment. This follows libcurl's cleanup order and cpr's `MultiPerform`.
-Callback data must remain alive until multi cleanup finishes, since closing
-cached connections can invoke socket callbacks. Destruction and replacement
-must occur outside callbacks on the same multi handle. The caller manages
-process-wide curl initialization and cleanup.
+该包装只拥有 multi 句柄。经 curl_multi_add_handle 添加的 easy 句柄仍由 CurlHolder 等原拥有者管理。
+清理 easy、销毁 multi 或替换移动赋值目标前，必须用 curl_multi_remove_handle 移除每个 easy。
+这符合 libcurl 的清理顺序及 cpr 的 MultiPerform 用法。
 
-Intentional differences from cpr, matching the existing `CurlHolder`:
+关闭缓存连接可能触发套接字回调，因此回调数据必须保持有效直到 multi 清理结束。
+销毁和替换必须在同一 multi 的回调之外执行，调用方负责 curl 全局初始化和清理。
 
-- Initialization failure throws `std::runtime_error` naming `curl_multi_init`
-  instead of relying on a debug-only assertion.
-- Copying is deleted to prevent shared ownership and double cleanup.
-- Moving is `noexcept` and transfers the original handle, preserving options
-  and attached easy handles. The source becomes null and remains safe to
-  destroy or assign to. Move assignment releases the destination's old handle;
-  self-move leaves it unchanged.
+与 cpr 的差异与 CurlHolder 保持一致：
 
-The raw pointer remains public for cpr compatibility. If assigning to it
-directly, the caller must release the previous handle and transfer exclusive
-ownership of the replacement. The holder does not add a `MultiPerform` API.
+- 初始化失败抛出标明 curl_multi_init 的 std::runtime_error，不依赖仅调试构建有效的断言。
+- 禁止复制，防止共享所有权和重复清理。
+- 移动为 noexcept，转移原句柄并保留选项及附加的 easy 句柄。
+  源变为空，仍可安全销毁或赋值；移动赋值先释放目标旧句柄，自移动保持原值。
 
-Run `mcpp build` and `mcpp test`. The standalone test checks ownership and
-move behavior, empty multi operations, two queued URL failures without network
-access, easy-handle reuse after removal, allocation failure, and resource
-release using libcurl's custom memory callbacks.
+原始指针保持公开。直接赋值时，调用方必须释放旧句柄并将替换句柄的独占所有权交给包装。
+该类型自身不提供 MultiPerform API。
+
+运行 `mcpp build` 和 `mcpp test`，验证所有权和移动、空 multi 操作、
+无需网络的两个 URL 失败、移除后 easy 复用、分配失败，以及通过 curl 自定义内存回调检查资源释放。

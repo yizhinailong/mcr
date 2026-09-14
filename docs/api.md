@@ -1,7 +1,9 @@
-# 自由函数与兼容入口
+# 请求 API 与版本信息
 
-对照本地 cpr 的 `api.h`、`ssl_ctx.h` / `ssl_ctx.cpp` 和
-`cmake/cprver.h.in` 补齐入口。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
+[文档索引](README.md) · [项目首页](../README.md)
+
+请求入口和版本接口参考 cpr 的 `api.h`、`ssl_ctx.h` / `ssl_ctx.cpp` 和
+`cmake/cprver.h.in`。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
 `mcr.api`、`mcr.version`。总入口也导出 SSL 上下文回调等后端接口及通用工具；
 只需要 SSL 上下文接口时，可以单独导入 `mcr.ssl_ctx`。
 HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
@@ -11,14 +13,17 @@ HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
 | `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Response` | 临时 Session，同步请求 |
 | 各方法的 `*Async` | `AsyncResponse` | 全局线程池中的独立请求 |
 | 各方法的 `*Coro` | `mcr::Task<Response>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro.md) |
-| 各方法的 `*Callback` | `mcr::utils::AsyncWrapper<回调返回类型, true>` | 请求完成后在线程池任务中调用 continuation |
+| 各方法的 `*Callback` | `mcr::utils::AsyncWrapper<回调返回类型, true>` | 请求完成后在线程池任务中调用完成回调 |
 | `MultiGet` / `MultiPost` / `MultiPut` / `MultiHead` / `MultiDelete` / `MultiOptions` / `MultiPatch` | `std::vector<Response>` | 由 MultiPerform 并发执行，结果保持参数顺序 |
 | 各批量方法的 `Multi*Async` | `std::vector<mcr::utils::AsyncWrapper<Response, true>>` | 独立提交，可分别取消 |
 | `Download(std::ofstream&, ...)` / `Download(WriteCallback const&, ...)` | `Response` | 同步下载，正文交给指定消费者 |
 | `DownloadAsync(std::filesystem::path, ...)` | `AsyncResponse` | 在线程池中打开、下载并关闭目标文件 |
 | `DownloadCoro(std::filesystem::path, ...)` | `mcr::Task<Response>` | 启动时打开文件，经 curl multi 下载，关闭后返回元数据 |
 
-请求选项沿用 Session 的 `SetOption`。传输配置类型位于 `mcr::options`，详见[选项命名空间](options.md)：
+## 请求选项与结果
+
+请求选项沿用 Session 的 `SetOption`。传输配置类型位于 `mcr::options`，详见[选项命名空间](options.md)。
+以下均为函数内用法片段，需在已初始化 curl 的环境中执行；完整程序见[项目首页](../README.md)。
 
 ```cpp
 import std;
@@ -52,12 +57,14 @@ JSON 请求可将上面的 `Header` 和 `Body` 换成 `mcr::JsonBody{ mcr::Json{
 - `*Async`、`*Callback` 拷贝普通左值选项，移动右值选项，任务独立拥有这些对象。
   BodyView、Multipart Buffer、ConnectionPool、回调捕获的引用及显式 reference_wrapper
   仍借用底层对象，必须覆盖实际任务的生命周期。
-- continuation 以持有的左值调用，支持不可复制的捕获、不可复制的返回值、引用及 `void`。
+- 完成回调以持有的左值调用，支持不可复制的捕获、不可复制的返回值、引用及 `void`。
   请求准备异常、用户回调异常通过 future 的 `Get()` 传播；传输错误位于 `Response::error`。
 - 零个选项是合法调用；例如 `Get()` 返回缺少 URL 的传输错误。
   零个批量参数返回空 vector；`MultiGet(std::tuple<>{})` 则执行一个缺少 URL 的请求。
 
-批量接口的每个参数是一个请求的选项 tuple：
+## 批量请求
+
+批量接口的每个参数是一个请求的选项元组（tuple）：
 
 ```cpp
 auto first = std::tuple{
@@ -83,6 +90,8 @@ auto result = tasks[0].Get();
   普通 `*Async` 返回不可取消的 `AsyncResponse`。需要取消请求时使用 `Multi*Async`
   或显式 Session 的取消参数。
 
+## 下载与生命周期
+
 下载保留二进制数据：
 
 ```cpp
@@ -103,7 +112,7 @@ curl 的全局初始化、清理和全局线程池生命周期沿用 [Session �
 [Async 约定](async.md)。显式清理 curl 前应等待所有异步任务完成；
 `Async::Cleanup()` 需在任务之外调用。
 
-文件系统及版本信息：
+## 文件系统与版本信息
 
 | cpr 入口 | mcr 对应项 |
 | --- | --- |
@@ -119,6 +128,8 @@ C++23 通过 `import std;` 直接使用 `std::filesystem`。模块不导出预�
 mcpp 的生成目录；修改版本会重新生成，无需维护第二份版本号。
 完整版本字符串保留后缀，三段数字分别占 8 位；超出范围时构建失败。
 `CURL_VERSION_NUM` 描述构建头文件，运行时动态库信息仍应通过 curl 自身接口查询。
+
+## SSL 上下文
 
 SSL 上下文入口位于 `mcr::curl`，详见 [curl 后端命名空间](curl.md)：
 
@@ -145,7 +156,7 @@ curl_easy_setopt(handle, CURLOPT_SSL_CTX_DATA, ca_pem.data());
 - 通用请求使用 `mcr::options::Ssl(mcr::options::ssl::CaBuffer{...})` 或 `mcr::options::ssl::CaInfoBlob`，由 curl 复制并管理 CA 数据，
   无需直接操作 SSL_CTX。Session 继续使用这条路径。
 
-验证：
+## 验证
 
 - `mcpp build`、`mcpp test`。
 - `tests/test_api.cpp` 复用 `tests/fixtures/http_server.hpp` 的回环服务器，验证所有方法、
@@ -153,5 +164,4 @@ curl_easy_setopt(handle, CURLOPT_SSL_CTX_DATA, ca_pem.data());
 - `tests/test_version.cpp` 通过总入口检查生成常量，并与 manifest 对照。
 - `tests/test_ssl_ctx.cpp` 在 OpenSSL 构建下生成短期自签 CA，检查坏证书、bundle、重复加载
   和实际 trust store 验证；Schannel 构建验证明确的不支持返回值。
-  本机还使用现有 vcpkg OpenSSL 3.6.3 单独编译并通过该 OpenSSL 分支测试，
-  没有改变主构建的 Schannel 后端；Linux/macOS 的完整 mcpp 构建尚未在本机执行。
+  自动化构建目前覆盖 Windows，Linux/macOS 平台配置见 [mcpp.toml](../mcpp.toml)。

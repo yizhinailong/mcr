@@ -1,5 +1,7 @@
 # curl 后端命名空间
 
+[文档索引](README.md) · [项目首页](../README.md)
+
 `src/curl/` 中的后端类型、函数和常量使用 `mcr::curl` 命名空间。
 请求条目 `Parameter`、`Pair` 保留在 `mcr`，与 `mcr::curl::CurlContainer<T>`
 在同一模块中导出。声明和实现直接放在各自的 `.cppm` 中，各模块保留现有导入名。

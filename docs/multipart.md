@@ -1,9 +1,10 @@
-# Part and Multipart
+# Part 与 Multipart：分段表单
 
-Import `mcr` or `mcr.multipart` to use `Part` and `Multipart`. The module
-re-exports `mcr.buffer` and `mcr.file`, using only the standard library for
-its implementation. It combines cpr's `include/cpr/multipart.h` and
-`cpr/multipart.cpp` in one module.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.multipart`，使用 `mcr::Part` 和 `Multipart`。
+模块同时导出 `mcr.buffer` 和 `mcr.file`，实现仅依赖标准库，
+将 cpr 的 `include/cpr/multipart.h` 和 `cpr/multipart.cpp` 合并在模块内。
 
 ```cpp
 import std;
@@ -21,67 +22,54 @@ mcr::Multipart form{
 form.parts.emplace_back("text", "another value");
 ```
 
-`Part` has five constructors taking a field name, one of the inputs below,
-and an optional content type defaulting to empty. Names, text values, and
-content types are copied from `std::string_view` into owned strings.
-Empty strings, bounded views, and embedded null bytes are retained without
-encoding, normalization, or validation.
+## 表单部分与所有权
 
-| Input | Stored value | `is_file` | `is_buffer` |
+Part 有五个构造函数，接收字段名、下表中的输入及可选媒体类型（默认为空）。
+名称、文本值和媒体类型从 `std::string_view` 复制到拥有存储的字符串，
+保留空字符串、有界视图和内嵌空字节，不编码、规范化或验证。
+
+| 输入 | 存储的 value | `is_file` | `is_buffer` |
 | --- | --- | --- | --- |
-| `std::string_view` | Copied text | false | false |
-| `std::int32_t` | Signed decimal text via `std::to_string` | false | false |
-| `Files const&` | Empty; file descriptors are copied into `files` | true | false |
-| `Files&&` | Empty; file descriptors are moved into `files` | true | false |
+| `std::string_view` | 复制的文本 | false | false |
+| `std::int32_t` | `std::to_string` 生成的有符号十进制文本 | false | false |
+| `Files const&` | 空，文件描述复制到 files | true | false |
+| `Files&&` | 空，文件描述移动到 files | true | false |
 | `Buffer const&` | `buffer.filename.string()` | false | true |
 
-The public fields retain cpr's names and types: `std::string name`, `value`,
-and `content_type`; `Buffer::data_t data`; `std::size_t datalen`; `bool is_file`
-and `is_buffer`; and `Files files`. Text and file fields have null `data` and
-zero `datalen`. Text and buffer fields have an empty `files` collection.
-There is no default constructor. All fields remain mutable; callers changing
-the mode flags must keep the associated fields consistent.
+公开字段保留上游名称和类型：字符串 `name`、`value`、`content_type`，
+`Buffer::data_t data`、`std::size_t datalen`、布尔值 `is_file`、`is_buffer` 和 `Files files`。
+文本和文件部分的 data 为空、datalen 为零，文本和缓冲区部分的 files 为空。
+没有默认构造函数。字段可修改，修改模式标志时必须保持关联字段一致。
 
-A `File` implicitly converts to a one-element `Files`, so a single file can
-be passed directly. File order, duplicate descriptors, and filename overrides
-are preserved without opening or checking any path. Empty file collections
-still select file mode. The descriptor constructor performs no I/O.
+单个 File 可隐式转换为单元素 Files，因此可直接传入。
+文件顺序、重复描述符和替换文件名均保留；空 Files 也选择文件模式。
+构造描述符不打开或检查路径，不执行 I/O。
 
-Buffer construction copies only metadata: `data` and `datalen` snapshot the
-descriptor's borrowed range, and `value` owns its full filename converted
-with standard `std::filesystem::path::string()`. Directory components are
-not removed, and `value` remains a string as in cpr. Empty buffers retain
-buffer mode with null/zero data. The `Buffer` object may be destroyed or its
-fields changed afterward, but its backing bytes must stay alive and at the
-same address until all consumers finish. Copying or moving a `Part` or
-`Multipart` does not extend that lifetime.
+Buffer 构造仅复制元数据：data 和 datalen 保存当时的借用范围，
+value 拥有通过标准路径 `.string()` 转换得到的完整文件名，不剥离目录。
+空 Buffer 仍选择缓冲区模式，数据为空、长度为零。
+随后可销毁或修改 Buffer 描述符，但底层字节必须存活且地址有效到全部消费者结束。
+复制移动 Part 或 Multipart 不延长字节生命周期。
 
-`Multipart` owns a public `std::vector<Part> parts`. Its non-explicit
-initializer-list constructor copies entries in order and allows nested list
-syntax and `Multipart{}`. It has no default constructor, so
-`Multipart multipart;` is invalid. Both vector constructors are explicit:
-`std::vector<Part> const&` copies, while `std::vector<Part>&&` moves storage
-without throwing. A const vector rvalue binds to the const-reference
-constructor and is copied. Duplicate field names and empty vectors are
-retained without interpretation.
+## 集合与请求集成
 
-Implicit copy/move construction and assignment are available for both
-types; moves are `noexcept`. Copies own independent strings and file
-descriptors while retaining the same borrowed buffer addresses and lengths.
-The public `parts` vector supports normal mutation and its usual reference
-and iterator invalidation rules.
+Multipart 拥有公开 `std::vector<Part> parts`。
+非 explicit 的初始化列表构造按顺序复制条目，支持嵌套列表和 `Multipart{}`，
+但没有默认构造函数，`Multipart multipart;` 无效。
+两个 vector 构造均为 explicit：const 引用复制，非 const 右值引用无异常地转移存储；
+const 右值绑定 const 引用并复制。重复字段名和空 vector 均保留。
 
-Intentional differences from cpr are the module/namespace, read-only text
-parameters using `std::string_view`, and taking the integer by value. The
-vector rvalue constructor now takes a nonconst rvalue and moves it; cpr's
-`const std::vector<Part>&&` overload copied every part. Const inputs still
-copy. Filesystem conversion uses the standard library directly.
+两种类型均支持隐式复制移动构造和赋值，移动为 `noexcept`。
+复制拥有独立字符串和文件描述，但仍借用同一缓冲区地址与长度。
+parts 的修改遵循 vector 的引用及迭代器失效规则。
 
-`Session::SetMultipart` retains these descriptors and builds a curl MIME tree
-when preparing a request. Text and buffer parts both use explicit byte lengths,
-preserving embedded nulls; files are supplied through `curl_mime_filedata`.
-Borrowed buffers and referenced files must remain available for the transfers.
-See [Session](session.md) for request integration and local HTTP tests.
-Run `mcpp build` and `mcpp test` to verify all field constructors, numeric
-limits, file copying/moving, buffer lifetimes, mixed collections, and vector
-copy/move behavior without filesystem or network I/O.
+与 cpr 的区别是模块、命名空间、只读文本参数使用 `std::string_view`、整数按值传递，
+以及 vector 右值构造使用非 const 右值并真正移动；上游 const 右值重载会复制全部 Part。
+const 输入仍复制，文件系统转换直接使用标准库。
+
+`Session::SetMultipart` 保存描述符，并在准备请求时构造 curl MIME 树。
+文本和缓冲区使用显式长度，保留内嵌空字节；文件通过 `curl_mime_filedata` 提供。
+借用缓冲区和源文件必须在传输期间可用，见 [Session](session.md)。
+
+运行 `mcpp build` 和 `mcpp test`，验证构造、整数边界、文件复制移动、
+缓冲区生命周期、混合集合和 vector 复制移动；描述符类型测试无需文件或网络 I/O。

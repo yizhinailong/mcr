@@ -1,27 +1,28 @@
 # Session、TLS、拦截器和批量请求
 
-参考本地 cpr 的 `include/cpr/session.h`、`ssl_options.h`、`proxyauth.h`、
+[文档索引](README.md) · [项目首页](../README.md)
+
+参考 cpr 的 `include/cpr/session.h`、`ssl_options.h`、`proxyauth.h`、
 `interceptor.h`、`multiperform.h` 及对应实现和测试，将请求流程接入 C++23 模块。
+
+以下是已初始化 curl 的函数内用法片段；完整初始化与清理程序见[项目首页](../README.md)。
 
 ```cpp
 import std;
 import mcr;
 
-auto main() -> int {
-    mcr::Session session;
-    session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/echo" });
-    session.SetTimeout(mcr::options::Timeout{ std::chrono::seconds{ 5 } });
-    session.SetBody(mcr::Body{ "hello" });
-    auto response = session.Post();
-    if (response.error) {
-        std::println("{}", response.error.message);
-        return 1;
-    }
-    std::println("{}: {}", response.status_code, response.text);
+mcr::Session session;
+session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/echo" });
+session.SetTimeout(mcr::options::Timeout{ std::chrono::seconds{ 5 } });
+session.SetBody(mcr::Body{ "hello" });
+auto response = session.Post();
+if (response.error) {
+    throw std::runtime_error{ response.error.message };
 }
+std::println("{}: {}", response.status_code, response.text);
 ```
 
-实现范围：
+## 接口范围
 
 - `Get`、`Head`、`Post`、`Put`、`Patch`、`Delete`、`Options`，以及对应的
   `Prepare*`、`*Async` 和 `*Callback` 方法。
@@ -35,7 +36,7 @@ auto main() -> int {
 - `ProxyAuthentication`、`VerifySsl` / `SslOptions`、单请求及批量拦截器、
   `MultiPerform` 并发请求和下载。
 
-TLS 和代理认证：
+## TLS 与代理认证
 
 ```cpp
 mcr::Session session;
@@ -65,12 +66,14 @@ auto response = session.Get();
   setter 失败可能已应用前面的选项；修正后应重新设置完整配置。
 - Schannel 的 P12 文件可通过 `SslOptions::cert_file`、`cert_type = "P12"`
   和 `key_pass` 指定；内存 P12 使用 `cert_blob` 并清空 `cert_file`。
-  本机 curl 8.21 / Schannel 对测试生成的 P12 返回 `SEC_E_UNKNOWN_CREDENTIALS`，
-  因此本次未验证双向 TLS 成功握手。库保留该传输错误；
+  Windows TLS 测试允许 curl 8.21 / Schannel 对生成的 P12 返回 `SEC_E_UNKNOWN_CREDENTIALS`，
+  遇到该错误时跳过双向 TLS 成功握手检查。库保留该传输错误；
   curl 上游也记录了相关的 [Schannel 客户端证书限制](https://github.com/curl/curl/issues/17626)。
 - 代理认证按目标 URL 的协议选择，替换映射或不再使用对应代理时清除旧凭据。
   `EncodedAuthentication` 的访问器返回百分号编码后的值；交给 curl 的独立
   用户名/密码选项前解码，确保 `$`、`@` 等字符按原始值认证。
+
+## 拦截器
 
 拦截器在注册顺序上进入，并可修改选项、返回合成响应或多次调用 `Proceed` 重试。
 重试只进入当前拦截器之后的链；新请求及异常后的请求从链首开始。
@@ -89,7 +92,7 @@ public:
 session.AddInterceptor(std::make_shared<RequestHeader>());
 ```
 
-并发批量请求：
+## 并发批量请求
 
 ```cpp
 auto first = std::make_shared<mcr::Session>();
@@ -120,7 +123,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
   下载目标在本次调用结束时清除，再次下载必须重新提供目标。
 - 仅允许移动未执行请求的批次；移动后更新 Session 归属，移出后的对象可重新使用。
 
-生命周期与错误约定：
+## 生命周期与错误
 
 - 同一个 Session 的配置与请求必须串行使用。异步请求需要
   `std::make_shared<mcr::Session>()`；任务持有 Session 直到执行结束。
@@ -137,7 +140,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
 - 与现有 CurlHolder 一致，调用方负责需要显式管理的 curl 全局初始化/清理；
   Session 不执行进程级清理。库中其他 curl 使用者尚未结束时不能清理 curl。
 
-有意区别于 cpr：
+## 与 cpr 的有意差异
 
 - Session、MultiPerform 及两种拦截器使用 `mcr` 命名空间；传输配置使用 `mcr::options`，
   TLS 选项标签使用 `mcr::options::ssl`，详见[选项命名空间](options.md)。为避免模块循环，这些会话和拦截器类型
@@ -163,7 +166,9 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
 - Response 的默认移动操作沿用成员的异常说明，不强制承诺 `noexcept`。
 - Session 销毁前重置 curl 选项，使外部保留的 CurlHolder 不引用已销毁的回调或正文数据。
 
-本地验证：`mcpp build`、`mcpp test`。
+## 验证
+
+运行 `mcpp build` 和 `mcpp test`。
 `tests/test_session.cpp` 使用 `tests/fixtures/http_server.hpp` 中跨 Windows / POSIX 的回环 HTTP 服务，使用系统分配的端口，
 不依赖 Python、外部网络或固定端口。覆盖连接复用、方法切换、上传下载、请求选项、
 重定向、错误恢复、取消、回调异常、SSE、连接池、异步生命周期、代理认证、拦截器

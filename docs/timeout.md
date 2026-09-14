@@ -1,7 +1,8 @@
-# Request and connection timeouts
+# 请求与连接超时
 
-Import `mcr` or `mcr.transfer_options` to use `mcr::options::Timeout` and
-`mcr::options::ConnectTimeout`.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.transfer_options`，使用 `mcr::options::Timeout` 和 `ConnectTimeout`。
 
 ```cpp
 import std;
@@ -15,34 +16,28 @@ std::println("{} ms", timeout.Milliseconds()); // 2000 ms
 timeout.ms = 500ms;
 ```
 
-`Timeout` accepts an integer millisecond count (`std::int32_t`) or any
-`std::chrono::duration<Rep, Period>`. Both constructors allow implicit
-conversion. There is no default constructor; use `Timeout{0}` to represent
-no overall request timeout when passed to curl. The public `ms` member stores
-`std::chrono::milliseconds` and can be updated after construction.
+## 总请求超时
 
-Chrono construction uses `std::chrono::duration_cast`, truncating fractional
-milliseconds toward zero. For example, `1999us` becomes `1ms` and `-1999us`
-becomes `-1ms`. As in cpr, callers must supply durations that convert within
-the milliseconds representation without overflowing the conversion arithmetic;
-floating-point durations must also be finite.
+`Timeout` 接收整数毫秒数 `std::int32_t` 或任意 `std::chrono::duration<Rep, Period>`，
+两种构造均允许隐式转换，没有默认构造函数。`Timeout{0}` 传给 curl 时表示不设置总请求超时。
+公开字段 `ms` 保存 `std::chrono::milliseconds`，可在构造后修改。
 
-`Milliseconds()` returns the `long` required by curl's `CURLOPT_TIMEOUT_MS`.
-It throws `std::overflow_error` above `LONG_MAX` and `std::underflow_error`
-below `LONG_MIN`, including the stored count in the diagnostic. Range checks
-occur when reading the value, so they also apply to changes made through `ms`.
-Zero and representable negative values are preserved without validation.
+时长通过 `duration_cast` 转换，向零截断不足一毫秒的部分：
+`1999us` 变为 `1ms`，`-1999us` 变为 `-1ms`。
+调用方必须保证转换运算和毫秒表示不溢出，浮点时长还必须为有限值。
 
-The interface and behavior follow cpr's `include/cpr/timeout.h` and
-`cpr/timeout.cpp`. Intentional differences are the C++23 module exports,
-namespace `mcr::options`, diagnostic prefix `mcr::options::Timeout`, and passing the integer
-constructor argument by value instead of by const reference.
+`Milliseconds()` 返回 curl 所需的 `long`。超过 `LONG_MAX` 抛出
+`std::overflow_error`，低于 `LONG_MIN` 抛出 `std::underflow_error`，诊断包含原始计数。
+检查在读取时执行，因此也适用于通过 `ms` 修改的值；零和可表示的负值原样返回。
 
-`ConnectTimeout` publicly derives from `Timeout`, following cpr's
-`include/cpr/connect_timeout.h`. It adds no state and inherits both `ms` and
-`Milliseconds()`, including the base class's range checks and diagnostics.
-Its distinct type allows a session to distinguish connection timeout options
-from overall request timeout options.
+接口参考 cpr 的 `include/cpr/timeout.h` 和 `cpr/timeout.cpp`。
+有意差异是模块、命名空间、诊断前缀 `mcr::options::Timeout`，以及整数构造参数按值传递。
+
+## 连接超时
+
+`ConnectTimeout` 参考 cpr 的 `include/cpr/connect_timeout.h`，公开继承 `Timeout`，
+不增加状态，复用 `ms`、`Milliseconds()` 及其范围检查和诊断。
+独立类型使 Session 能区分连接超时和总请求超时。
 
 ```cpp
 mcr::options::ConnectTimeout connect{ 1500 };
@@ -51,23 +46,14 @@ mcr::options::ConnectTimeout from_seconds{ 2s };
 connect.ms = 750ms;
 ```
 
-The two constructors accept `std::int32_t` and
-`std::chrono::milliseconds const&`, and neither is explicit. Unlike `Timeout`,
-the derived type does not expose a generic duration constructor. Direct
-construction from seconds or minutes works through chrono's lossless
-conversion to milliseconds. Copy-initialization from seconds would require
-two user-defined conversions and is not supported. Sub-millisecond and
-floating-point durations require an explicit `duration_cast` to milliseconds.
-There is no default constructor. The integer is passed by value, matching
-the existing base class rather than cpr's const-reference parameter.
+两个非 explicit 构造函数分别接收 `std::int32_t` 和
+`std::chrono::milliseconds const&`，不提供通用时长构造或默认构造。
+从秒、分钟直接构造可通过 chrono 的无损转换完成；从秒复制初始化需要两次用户定义转换，因此不可用。
+不足毫秒的时长和浮点时长必须先显式 `duration_cast` 为毫秒。
 
-In cpr, `Session::SetConnectTimeout` applies the inherited millisecond value
-to `CURLOPT_CONNECTTIMEOUT_MS`. It covers DNS resolution and protocol
-handshakes until a connection is established. Zero selects curl's built-in
-300-second connection timeout; an overall request timeout can still impose a
-shorter limit. These modules only represent options and do not apply them to
-requests yet.
+`Session::SetTimeout` 和 `SetConnectTimeout` 分别设置 `CURLOPT_TIMEOUT_MS` 和
+`CURLOPT_CONNECTTIMEOUT_MS`。连接超时涵盖 DNS 解析和建立连接所需的协议握手；
+零使用 curl 默认的 300 秒连接超时，总请求超时仍可施加更短限制。见
+[libcurl 连接超时说明](https://curl.se/libcurl/c/CURLOPT_CONNECTTIMEOUT_MS.html)。
 
-Run `mcpp build` and `mcpp test` to validate conversions, truncation, public
-member updates, connection constructor constraints, and platform-dependent
-range checks for both timeout types.
+运行 `mcpp build` 和 `mcpp test`，验证转换、截断、字段修改、连接超时构造约束及平台相关范围检查。

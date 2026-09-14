@@ -1,10 +1,11 @@
-# ConnectionPool
+# ConnectionPool：共享连接与 TLS 会话
 
-Import `mcr` or `mcr.connection_pool` to use `mcr::ConnectionPool`.
-The implementation follows cpr's `include/cpr/connection_pool.h` and
-`cpr/connection_pool.cpp`. It creates a `CURLSH` handle and enables
-`CURL_LOCK_DATA_CONNECT` and `CURL_LOCK_DATA_SSL_SESSION` to share reusable
-connections and TLS sessions. It does not enable cookie or DNS sharing.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.connection_pool`，使用 `mcr::ConnectionPool`。
+实现参考 cpr 的 `include/cpr/connection_pool.h` 和 `cpr/connection_pool.cpp`。
+它创建 CURLSH 句柄，启用 `CURL_LOCK_DATA_CONNECT` 和 `CURL_LOCK_DATA_SSL_SESSION`，
+共享可复用连接和 TLS 会话；不启用 Cookie 或 DNS 共享。
 
 ```cpp
 #include <curl/curl.h>
@@ -12,60 +13,50 @@ connections and TLS sessions. It does not enable cookie or DNS sharing.
 import std;
 import mcr;
 
-// After successful curl_global_init(), and before curl_global_cleanup():
+// 成功初始化 curl 后执行，全部资源必须先于 curl 全局清理销毁。
 {
     mcr::ConnectionPool pool;
     mcr::curl::CurlHolder first;
     mcr::curl::CurlHolder second;
     pool.SetupHandler(first.handle);
     pool.SetupHandler(second.handle);
-    // Configure and perform the requests sequentially through libcurl.
-    // Easy handles are destroyed before the pool at the end of this scope.
+    // 通过 libcurl 配置并顺序执行请求。
+    // 离开作用域时，easy 句柄先于连接池销毁。
 }
 ```
 
-`SetupHandler(CURL*) const` attaches an idle easy handle using `CURLOPT_SHARE`.
-It does not perform requests or take ownership of the easy handle. Copy
-construction shares the same caches and lock storage; copy assignment remains
-deleted as in cpr. There is no consuming move operation: constructing from an
-rvalue uses the copy constructor, leaving the source usable. Assignment from
-an rvalue is also unavailable.
+`SetupHandler(CURL*) const` 通过 `CURLOPT_SHARE` 将空闲 easy 句柄附加到共享句柄，
+不执行请求或接管 easy 句柄。
+复制构造共享缓存与锁存储，复制赋值与 cpr 一样被删除。
+没有消费源对象的移动操作：从右值构造调用复制构造，源仍可用；从右值赋值也不可用。
 
-Keep at least one pool copy alive until every attached easy handle has been
-cleaned up or explicitly detached using
-`curl_easy_setopt(easy, CURLOPT_SHARE, static_cast<CURLSH*>(nullptr))`.
-An easy handle does not retain ownership of the C++ pool. The final copy disables
-the lock and unlock callbacks and calls `curl_share_cleanup()` before releasing
-the mutex storage. Libcurl refuses cleanup while easy handles are still attached;
-destroying the final copy too early violates this lifetime requirement.
+## 生命周期与线程限制
 
-Pool use must be serialized across threads. Libcurl explicitly does not support
-sharing connection caches between concurrent threads, even with lock callbacks.
-Use separate pools for concurrent workers, or use one multi handle to drive
-concurrent transfers on a single thread. This restriction comes from
-`CURLSHOPT_SHARE` for `CURL_LOCK_DATA_CONNECT`; cpr's async example does not remove
-it. The caller also manages curl's process-wide initialization and cleanup.
+全部附加的 easy 句柄清理或显式解除共享之前，必须保留至少一个连接池副本。
+解除方式为 `curl_easy_setopt(easy, CURLOPT_SHARE, static_cast<CURLSH*>(nullptr))`。
+easy 句柄不持有 C++ 连接池的所有权。
 
-Intentional differences and fixes:
+最后一个副本先禁用加锁/解锁回调，调用 `curl_share_cleanup()`，再释放互斥量。
+仍有 easy 句柄附加时，libcurl 拒绝清理；过早销毁最后一个副本违反生命周期要求。
 
-- Locks are indexed by curl data type, following `CURLSHOPT_LOCKFUNC` and
-  `CURLSHOPT_UNLOCKFUNC`, instead of cpr's single mutex for all shared data.
-  Callbacks cannot propagate C++ exceptions through libcurl.
-- A failed `curl_share_init()` or `curl_share_setopt()` throws
-  `std::runtime_error` identifying the operation; partially created state is
-  released automatically. Unsupported TLS session sharing is reported as a
-  configuration error. C++ allocation failures propagate `std::bad_alloc`.
-- `SetupHandler(nullptr)` throws `std::invalid_argument`; a failed
-  `CURLOPT_SHARE` throws `std::runtime_error`. cpr ignores these curl errors.
-- Shared lock storage is allocated before initializing curl, and curl ownership
-  is established before configuring any options, covering construction failures.
-- Private members use the project's `m_` naming convention. Public API names
-  remain unchanged.
+跨线程使用连接池必须串行化。libcurl 不支持多个线程并发共享连接缓存，即使提供锁回调也是如此。
+并发工作线程应使用各自的池，或在一个线程中用同一个 multi 句柄驱动并发传输。
+该限制来自 `CURL_LOCK_DATA_CONNECT`，cpr 的异步示例不消除限制。
+调用方也负责 curl 的全局初始化和清理。见 [libcurl 线程安全说明](https://curl.se/libcurl/c/threadsafe.html)。
 
-Run `mcpp build` and `mcpp test`. The standalone test adapts cpr's sequential
-connection reuse test with an HTTP/1.1 server bound to an ephemeral loopback
-port. Three independent requests open three connections; four requests using
-pool copies open only one. It also checks copy lifetime, easy-handle replacement
-and detachment, null input, and curl allocation failures during initialization
-and TLS cache configuration. Memory callbacks verify that resources are freed.
-The test does not perform TLS handshakes or unsupported concurrent pool transfers.
+## 与 cpr 的差异及验证
+
+- 按 curl 数据类型分别索引锁，遵循 `CURLSHOPT_LOCKFUNC` / `CURLSHOPT_UNLOCKFUNC`，
+  不使用上游覆盖全部共享数据的单个互斥量。回调不允许 C++ 异常穿过 libcurl。
+- `curl_share_init()` 或 `curl_share_setopt()` 失败抛出标明操作的
+  `std::runtime_error`，自动释放部分创建的状态。不支持 TLS 会话共享属于配置错误，
+  C++ 分配失败传播 `std::bad_alloc`。
+- `SetupHandler(nullptr)` 抛出 `std::invalid_argument`，设置 CURLOPT_SHARE 失败抛出
+  `std::runtime_error`；上游忽略这些 curl 错误。
+- 先分配共享锁存储，再初始化 curl；配置选项前先建立 curl 所有权，以覆盖构造失败路径。
+- 私有成员采用 `m_` 命名，公开 API 名称不变。
+
+运行 `mcpp build` 和 `mcpp test`。测试使用绑定动态回环端口的 HTTP/1.1 服务：
+三个独立请求建立三条连接，四个共享池副本的请求只建立一条。
+还验证副本生命周期、句柄替换与解除共享、空输入及初始化/TLS 缓存配置中的分配失败，
+并通过内存回调检查释放。该测试不执行 TLS 握手或不受支持的跨线程并发共享。

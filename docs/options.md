@@ -1,5 +1,7 @@
 # 请求配置选项
 
+[文档索引](README.md) · [项目首页](../README.md)
+
 `src/options/` 中的公开类型、枚举、函数和常量统一使用 `mcr::options` 命名空间。
 TLS 选项标签位于 `mcr::options::ssl`，通过 `mcr::options::Ssl(...)` 组合。
 

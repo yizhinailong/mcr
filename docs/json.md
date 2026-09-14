@@ -1,34 +1,34 @@
 # JSON 请求与响应
 
+[文档索引](README.md) · [项目首页](../README.md)
+
 `import mcr;` 提供 `Json`、`JsonBody`、`JsonError` 和响应解析接口。
 也可以分别导入 `mcr.json`、`mcr.response`、`mcr.session` 或 `mcr.api`。
 `Json` 是已有依赖 `nlohmann::json` 的公开别名，保留其构造、访问、`get<T>()`、
 `parse()` 和 `dump()` 接口。需要直接命名第三方接口时，显式 `import nlohmann.json;`。
 
+以下是已初始化 curl 的函数内用法片段；完整初始化与清理程序见[项目首页](../README.md)。
+
 ```cpp
 import std;
 import mcr;
 
-auto main() -> int {
-    mcr::Json document{
-        { "name", "Alice" },
-        { "enabled", true }
-    };
-    auto response = mcr::Post(
-        mcr::Url{ "http://127.0.0.1:8080/users" },
-        mcr::JsonBody{ document }
-    );
-    if (response.error) {
-        std::println("请求失败：{}", response.error.message);
-        return 1;
-    }
-    auto result = response.TryJson();
-    if (!result) {
-        std::println("JSON 解析失败：{}", result.error().message);
-        return 1;
-    }
-    std::println("HTTP {}：{}", response.status_code, result->dump());
+mcr::Json document{
+    { "name", "Alice" },
+    { "enabled", true }
+};
+auto response = mcr::Post(
+    mcr::Url{ "http://127.0.0.1:8080/users" },
+    mcr::JsonBody{ document }
+);
+if (response.error) {
+    throw std::runtime_error{ response.error.message };
 }
+auto result = response.TryJson();
+if (!result) {
+    throw std::runtime_error{ result.error().message };
+}
+std::println("HTTP {}：{}", response.status_code, result->dump());
 ```
 
 ## 请求正文
@@ -103,4 +103,4 @@ cpr 使用 `Body` 和显式 `Content-Type` 发送 JSON，并在 `Response::text`
 不提供跨 JSON 实现的抽象适配层。
 
 运行 `mcpp test test_json` 验证模块导出、序列化所有权、解析诊断、请求头优先级、
-正文切换和异步/批量请求；运行 `mcpp test` 验证完整测试集。HTTP 测试使用本地 fixture。
+正文切换和异步/批量请求；运行 `mcpp test` 验证完整测试集。HTTP 测试使用本地测试服务。

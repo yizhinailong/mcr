@@ -1,8 +1,10 @@
-# Body
+# Body：拥有存储的请求正文
 
-Import `mcr` or `mcr.body` to use `Body`. The module re-exports `mcr.buffer`,
-`mcr.file`, and `mcr.types`. `Body` derives from `StringHolder<Body>` and owns
-its request bytes, adapting cpr's `include/cpr/body.h`.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.body`，使用 `mcr::Body`。模块同时导出 `mcr.buffer`、
+`mcr.file` 和 `mcr.types`。`Body` 继承 `StringHolder<Body>`，拥有请求字节，
+设计参考 cpr 的 `include/cpr/body.h`。
 
 ```cpp
 import std;
@@ -11,64 +13,50 @@ import mcr.body;
 mcr::Body text{ "x=", "5&y=13" };
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };
 mcr::Buffer buffer{ bytes.begin(), bytes.end(), "ignored.bin" };
-mcr::Body binary = buffer; // Copies all three bytes into owned storage.
-mcr::Body from_file{ mcr::File{ "request.bin" } }; // Reads immediately.
+mcr::Body binary = buffer; // 复制三个字节并拥有存储。
+mcr::Body from_file{ mcr::File{ "request.bin" } }; // 立即读取文件。
 ```
 
-The default constructor creates an empty body. All reference constructors
-are retained and non-explicit:
+默认构造产生空正文，其他构造均保留上游的非 explicit 接口：
 
-| Input | Behavior |
+| 输入 | 行为 |
 | --- | --- |
-| `std::string` by value | Moves the supplied string into storage |
-| `std::string_view` | Copies the view's exact bytes |
-| `char const*` | Copies a valid, nonnull C string up to its first null |
-| `char const*`, `std::size_t` | Copies the specified number of readable bytes |
-| `std::initializer_list<std::string>` | Concatenates fragments without separators |
-| `Buffer const&` | Copies `data` and `datalen` bytes, ignoring the filename |
-| `File const&` | Opens `filepath` in binary mode and reads to EOF |
+| 按值传入的 `std::string` | 移入存储 |
+| `std::string_view` | 按视图长度复制 |
+| `char const*` | 从有效非空指针复制到首个空字符 |
+| `char const*`、`std::size_t` | 复制指定长度的可读字节 |
+| `std::initializer_list<std::string>` | 无分隔符拼接片段 |
+| `Buffer const&` | 复制 `data` 和 `datalen` 指定的字节，忽略文件名 |
+| `File const&` | 以二进制模式打开 `filepath`，读取到文件结束 |
 
-Length-based input preserves embedded nulls and requires no terminator. A
-null pointer with a zero length is accepted, including an empty `Buffer`.
-Input must otherwise describe a valid readable range. After construction,
-source strings and buffers can be modified or destroyed without affecting
-the body. No encoding, trimming, content-type inference, or automatic
-conversion from `BodyView` is added.
+显式长度保留内嵌空字节，无需结束符。零长度允许空指针，包括空 Buffer；其余输入必须是有效可读范围。
+构造后修改或销毁源字符串、缓冲区不影响正文。
+不进行编码、去空白、媒体类型推断，也不增加从 `BodyView` 的自动转换。
 
-File construction reads synchronously using `std::ifstream`. It uses the
-string `File::filepath` exactly as supplied; `overriden_filename` has no
-effect. Empty files produce an empty body. Binary mode preserves all bytes,
-including CR/LF and control characters on Windows. The implementation uses
-fixed-size read blocks and appends their contents to the owned string until
-normal EOF, without a filesystem compatibility layer or preliminary size
-query. The entire file contents still occupy memory; this is not a streamed
-request-body API. Concurrent file changes are not an atomic snapshot.
+## 文件与所有权
 
-If opening fails, construction throws `std::invalid_argument` with cpr's
-message, `Can't open the file for HTTP request body!`. A read failure before
-normal EOF throws `std::runtime_error` with
-`Can't read the file for HTTP request body!`. Allocation and string-capacity
-errors propagate as `std::bad_alloc` or `std::length_error`. RAII closes the
-stream on every exit; a successfully constructed body remains valid after
-the source file is replaced or removed.
+文件构造通过 `std::ifstream` 同步读取，原样使用 `File::filepath`，
+忽略 `overriden_filename`。空文件得到空正文，二进制模式保留 Windows 上的 CR/LF 和控制字节。
+实现按固定大小的块读取到正常 EOF，不预先查询文件大小。全部正文仍驻留内存，
+并发修改文件不保证得到原子快照。
 
-`Str()`, `CStr()`, `Data()`, comparisons, concatenation returning `Body`,
-void-returning `+=`, explicit conversion to `std::string`, and stream output
-are inherited from `StringHolder`. Copying produces independent bytes; moves
-are `noexcept`. The destructor overrides the base's virtual destructor, and
-the class remains extensible. Protected storage is named `m_str`, following
-the existing base module.
+打开失败抛出 `std::invalid_argument`，消息为 `Can't open the file for HTTP request body!`。
+正常 EOF 前的读取失败抛出 `std::runtime_error`，消息为
+`Can't read the file for HTTP request body!`。分配和容量错误分别传播
+`std::bad_alloc`、`std::length_error`。所有退出路径均通过 RAII 关闭文件；
+构造完成后删除或替换源文件不影响正文。
 
-Intentional differences from cpr are the module/namespace and inherited
-project naming, plus checked reads to EOF. The reference seeks to determine
-the length, resizes a string, and reads once without checking seek/read
-failures. This implementation avoids converting a failed size query to an
-unsigned allocation size and throws on read errors instead of exposing a
-partial or padded body. Buffer conversion needs no redundant casts because
-its fields already have the required pointer and size types.
+继承的接口包括 `Str()`、`CStr()`、`Data()`、比较、返回 Body 的拼接、
+返回 void 的 `+=`、显式 `std::string` 转换和流输出。
+复制拥有独立字节，移动为 `noexcept`。析构函数重写基类虚析构，类仍可派生，受保护存储名为 `m_str`。
 
-Run `mcpp build` and `mcpp test` to validate constructor ownership, Buffer
-subranges and lifetimes, inherited operations, empty and binary file reads,
-multiple read blocks, and file failures. Tests create and remove their own
-temporary file. `Session::SetBody` owns the bytes and sends them using an explicit
-length; [Session tests](session.md) also cover local HTTP transfers and body reuse.
+## 与 cpr 的差异及验证
+
+除模块、命名空间及继承的命名规范外，文件读取会检查每次读取直到 EOF。
+上游先定位文件长度、调整字符串大小，再单次读取，未检查定位和读取失败；
+此处避免将失败的大小查询转换成无符号分配量，并在读取错误时抛出，防止暴露部分正文或填充字节。
+Buffer 字段已具备所需类型，无需多余转换。
+
+运行 `mcpp build` 和 `mcpp test`，验证构造所有权、Buffer 子范围与生命周期、
+继承操作、空文件、二进制及多块读取、文件失败。测试自行创建并清理临时文件。
+`Session::SetBody` 拥有正文并按显式长度发送；本地 HTTP 传输与复用见 [Session](session.md)。

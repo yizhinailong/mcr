@@ -1,5 +1,7 @@
 # 协程请求
 
+[文档索引](README.md) · [项目首页](../README.md)
+
 `import mcr;` 提供 `mcr::Task<T>`、`mcr::sync_wait`、`mcr::Coro`，以及
 `GetCoro` / `PostCoro` / `PutCoro` / `HeadCoro` / `DeleteCoro` /
 `OptionsCoro` / `PatchCoro` / `DownloadCoro`。
@@ -76,14 +78,14 @@ auto b = mcr::sync_wait(std::move(second));
 - 一个 I/O 线程，通过 `curl_multi_perform` / `curl_multi_poll` 管理多个 easy handle。
   提交和取消通过 `curl_multi_wakeup` 唤醒等待。每轮独立处理完成的请求，
   无需等待同批的其他请求。
-- 一个 continuation 线程，串行恢复完成请求的协程。用户在 `co_await` 之后的代码
+- 一个后续处理线程，串行恢复完成请求的协程。用户在 `co_await` 之后的代码
   不保证回到原调用线程。连续等待下一个请求会再次挂起，从而释放该线程。
 
 所有 curl 读写、Header、Progress、Debug 等传输回调在 I/O 线程执行，需及时返回。
 较长的后续计算会延迟其他协程恢复，适合交给应用自己的执行器处理；网络循环仍可推进。
 DNS 是否需要额外线程或会阻塞，取决于构建 libcurl 时选用的解析器。
 
-I/O 和 continuation 线程中调用 `sync_wait` 或 `Coro::Cleanup()` 会抛出
+I/O 和后续处理线程中调用 `sync_wait` 或 `Coro::Cleanup()` 会抛出
 `std::logic_error`，避免等待自身退出。任务在初始调用线程内尚未挂起的代码，
 以及已经完成任务的等待，不承诺线程切换。
 
@@ -120,7 +122,7 @@ auto response = mcr::sync_wait(std::move(request));
 ## 清理
 
 `mcr::Coro::Cleanup()` 停止接受新请求，取消排队和正在传输的请求，排空完成队列，
-等待 I/O 与 continuation 线程退出后释放 multi handle。正常清理以
+等待 I/O 与后续处理线程退出后释放 multi handle。正常清理以
 `ABORTED_BY_CALLBACK` 结束尚未完成的传输，已经完成的请求保留其结果。
 方法可重复调用，也可以和提交、取消并发调用；开始关闭之后的新提交会抛出
 `std::logic_error`。关闭期间恢复的协程如再发起新请求，同样会收到该异常。
@@ -143,5 +145,5 @@ HTTP API、选项和错误语义参考
 [wakeup](https://curl.se/libcurl/c/curl_multi_wakeup.html) 的约定。
 
 `tests/test_task.cpp` 覆盖惰性执行、所有权、异常、父子取消和完成竞争；
-`tests/test_coro.cpp` 使用本地 HTTP fixture 验证各方法、并发传输、线程分工、
+`tests/test_coro.cpp` 使用本地 HTTP 测试服务 验证各方法、并发传输、线程分工、
 取消、下载，以及关闭时的活动请求和排队请求。运行 `mcpp test` 验证整个库。

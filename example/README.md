@@ -1,8 +1,10 @@
 # 请求接口示例
 
+[项目首页](../README.md) · [文档索引](../docs/README.md) · [请求 API](../docs/api.md)
+
 参考 cpr 的 [HTTP API](https://github.com/libcpr/cpr/blob/master/include/cpr/api.h)
 和 [FetchContent 示例](https://github.com/libcpr/example-cmake-fetch-content)。
-覆盖 `src/api.cppm` 中全部公开请求入口：7 种 HTTP 方法 × 6 种调用形式，以及
+覆盖 [src/api.cppm](../src/api.cppm) 中全部公开请求入口：7 种 HTTP 方法 × 6 种调用形式，以及
 4 个下载入口（包括 `Download` 的两个重载），共 46 个独立可执行示例。
 
 每个入口都有一个按功能命名的 `.cpp` 文件和同名 mcpp 目标。
@@ -123,7 +125,7 @@ mcpp run get -- --help
 
 同步入口为 `Get`、`Post`、`Put`、`Head`、`Delete`、`Options`、`Patch`；
 其余列对应 `*Async`、`*Coro`、`*Callback`、`Multi*`、`Multi*Async`。
-协程入口是 mcr 扩展。Session、选项和工具类不在这次示例清单中。
+协程入口是 mcr 扩展。Session、选项和工具类的用法见[文档索引](../docs/README.md)。
 
 ## 请求参数与返回结果
 
@@ -139,7 +141,7 @@ mcpp run get -- https://api.github.com/repos/libcpr/cpr/contributors
 单请求示例附加 `message=hello world` 查询参数；POST、PUT、PATCH 发送
 `text/plain` 正文。批量示例向同一 URL 发送两个请求，分别带
 `request=first` 和 `request=second`，按输入顺序输出所有结果。
-请求使用 10 秒超时，不发送 cpr 示例中的占位认证信息。
+请求使用 10 秒超时。
 
 `*Async` 演示取回 future，`*Callback` 在完成回调中处理响应并返回退出码，
 `*Coro` 在拥有 URL 的协程函数内直接 `co_await`。

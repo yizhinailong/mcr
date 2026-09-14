@@ -1,6 +1,8 @@
-# CertInfo
+# CertInfo：证书信息
 
-Import `mcr` or `mcr.cert_info` to use `mcr::CertInfo`.
+[文档索引](README.md) · [项目首页](../README.md)
+
+导入 `mcr` 或 `mcr.cert_info`，使用 `mcr::CertInfo`。
 
 ```cpp
 import std;
@@ -16,31 +18,24 @@ for (auto const& entry : certificate) {
 }
 ```
 
-The type follows cpr's `include/cpr/cert_info.h` and `cpr/cert_info.cpp`, storing
-an owned `std::vector<std::string>` internally. Default construction creates
-an empty collection. Initializer-list construction preserves entry order,
-duplicates, empty strings, embedded nulls, and multiline text without parsing
-or certificate validation.
+类型参考 cpr 的 `include/cpr/cert_info.h` 和 `cpr/cert_info.cpp`，
+内部拥有 `std::vector<std::string>`。
+默认构造为空，初始化列表保留顺序、重复项、空字符串、内嵌空字节和多行文本，
+不解析或验证证书。
 
-The public interface provides mutable `operator[]`, mutable and const
-`begin()` / `end()`, and read-only `cbegin()` / `cend()`. The iterator aliases
-are the corresponding vector iterator types. `emplace_back` and `push_back`
-both accept one `std::string const&`, copy it, and return `void`, matching cpr.
-`pop_back` removes the last entry. Indexes must be in range and popping requires
-a nonempty collection; reference and iterator invalidation follows vector.
+公开接口包含可变 operator[]、可变和 const 的 begin/end，以及只读 cbegin/cend；
+迭代器别名对应 vector 类型。
+emplace_back 和 push_back 均接收单个 `std::string const&`，复制并返回 void，与 cpr 一致。
+pop_back 删除末项，要求集合非空；下标必须有效。引用和迭代器遵循 vector 的失效规则。
 
-Copy construction owns independent entries, and move construction transfers
-them. As in the reference, copy and move assignment are unavailable. A
-`std::vector<CertInfo>` can still collect a certificate chain through copy or
-move insertion and grow using move construction.
+复制构造拥有独立条目，移动构造转移存储。与上游一致，不支持复制或移动赋值。
+`std::vector<CertInfo>` 仍可通过复制或移动插入构造证书链，并以移动构造扩容。
 
-Intentional differences from cpr are C++23 modules, namespace `mcr`, private
-member name `m_cert_info`, taking the subscript index by value, and explicit
-`noexcept` on move construction and iterator access. Standard container method
-names are retained, consistently with `Cookies`.
+有意差异是 C++23 模块、命名空间、私有字段 m_cert_info、下标按值传递，
+以及移动构造和迭代器访问器上的显式 noexcept。
+保留标准容器方法名称，与 Cookies 一致。
 
-`Response` snapshots curl's certificate information when a transfer completes;
-`GetCertInfos()` returns an independent copy, empty when no certificates are
-available. Local TLS coverage is described in [Session](session.md). Run
-`mcpp build` and `mcpp test` to verify entry ownership, mutation, iteration,
-appending/removal, and certificate-chain storage without requiring TLS access.
+Response 在传输完成时保存 curl 证书信息快照，
+GetCertInfos 返回独立副本，无证书时返回空集合。本地 TLS 覆盖见 [Session](session.md)。
+运行 `mcpp build` 和 `mcpp test`，验证条目所有权、修改、遍历、追加删除及证书链存储；
+类型测试不要求 TLS 连接。
