@@ -15,7 +15,7 @@ mcr::BodyView body{ source };
 std::string_view borrowed = body.Str();
 
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };
-mcr::Buffer buffer{ bytes.begin(), bytes.end(), "body.bin" };
+auto buffer = mcr::Buffer::Create( bytes.begin(), bytes.end(), "body.bin" ).value();
 mcr::BodyView binary = buffer; // 三个字节，包含内嵌空字节。
 ```
 

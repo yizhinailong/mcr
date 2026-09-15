@@ -81,10 +81,10 @@ namespace {
 
     void check_tasks() {
         mcr::utils::ThreadPool pool{ 1, 4 };
-        require(pool.Submit([](int a, int b) { return a + b; }, 20, 22).get() == 42, "Submit must automatically start a stopped pool and return a result");
+        require(pool.Submit([](int a, int b) { return a + b; }, 20, 22).value().get() == 42, "Submit must automatically start a stopped pool and return a result");
 
-        auto moved_argument = pool.Submit([](std::unique_ptr<int> value) { return *value; }, std::make_unique<int>(7));
-        auto moved_callable = pool.Submit([value = std::make_unique<int>(9)] { return *value; });
+        auto moved_argument = pool.Submit([](std::unique_ptr<int> value) { return *value; }, std::make_unique<int>(7)).value();
+        auto moved_callable = pool.Submit([value = std::make_unique<int>(9)] { return *value; }).value();
         require(moved_argument.get() == 7 && moved_callable.get() == 9, "move-only arguments and callables must retain ownership");
 
         struct Counter {
@@ -94,39 +94,40 @@ namespace {
         };
 
         Counter counter;
-        require(pool.Submit(&Counter::Add, std::ref(counter), 3).get() == 3, "member pointers must work with reference wrappers");
-        pool.Submit([](int& value) { ++value; }, std::ref(counter.value)).get();
-        auto reference = pool.Submit([&counter]() -> int& { return counter.value; });
+        require(pool.Submit(&Counter::Add, std::ref(counter), 3).value().get() == 3, "member pointers must work with reference wrappers");
+        pool.Submit([](int& value) { ++value; }, std::ref(counter.value)).value().get();
+        auto reference = pool.Submit([&counter]() -> int& { return counter.value; }).value();
         require(&reference.get() == &counter.value && counter.value == 4, "void tasks and reference results must work");
 
         std::string source{ "owned argument" };
         pool.Pause();
-        auto copied_argument = pool.Submit([](std::string value) { return value; }, source);
+        auto copied_argument = pool.Submit([](std::string value) { return value; }, source).value();
         source.clear();
         pool.Resume();
         require(copied_argument.get() == "owned argument", "submitted lvalues must be copied before execution");
 
-        auto failure = pool.Submit([]() -> int { throw std::runtime_error{ "task failure" }; });
+        auto failure = pool.Submit([]() -> int { throw std::runtime_error{ "task failure" }; }).value();
         bool propagated{ false };
         try {
             (void)failure.get();
         } catch (std::runtime_error const& error) {
             propagated = std::string_view{ error.what() } == "task failure";
         }
-        require(propagated && pool.Submit([] { return true; }).get(), "task exceptions must reach the future without killing a worker");
+        require(propagated && pool.Submit([] { return true; }).value().get(), "task exceptions must reach the future without killing a worker");
         for (bool const stop : { false, true }) {
             auto self_wait = pool.Submit([&pool, stop] {
-                try {
-                    if (stop) {
-                        pool.Stop();
-                    } else {
-                        pool.Wait();
-                    }
-                } catch (std::logic_error const&) {
-                    return true;
-                }
-                return false;
-            });
+                                     try {
+                                         if (stop) {
+                                             pool.Stop();
+                                         } else {
+                                             pool.Wait();
+                                         }
+                                     } catch (std::logic_error const&) {
+                                         return true;
+                                     }
+                                     return false;
+                                 })
+                                 .value();
             require(self_wait.get(), "waiting for the same pool inside a task must fail without deadlocking");
         }
         pool.Wait();
@@ -141,7 +142,7 @@ namespace {
             std::atomic<int>               completed{ 0 };
             std::vector<std::future<void>> futures;
             for (int task{ 0 }; task < 20; ++task) {
-                futures.push_back(pool.Submit([&completed] { ++completed; }));
+                futures.push_back(pool.Submit([&completed] { ++completed; }).value());
             }
             auto       waiter        = std::async(std::launch::async, [&pool] { pool.Wait(); });
             bool const stayed_paused = futures.front().wait_for(5ms) == std::future_status::timeout && completed == 0;
@@ -163,7 +164,7 @@ namespace {
         std::atomic<int>               entered{ 0 };
         std::vector<std::future<void>> futures;
         for (int task{ 0 }; task < 4; ++task) {
-            futures.push_back(pool.Submit([&entered, gate] { ++entered; gate.wait(); }));
+            futures.push_back(pool.Submit([&entered, gate] { ++entered; gate.wait(); }).value());
         }
         bool const all_entered = eventually([&] { return entered == 4; });
         bool const bounded     = pool.GetCurrentThreadNum() == 4 && pool.GetIdleThreadNum() == 0;
@@ -178,11 +179,11 @@ namespace {
         require(eventually([&] { return pool.GetCurrentThreadNum() == 1; }), "idle workers must retire down to the minimum");
         pool.SetMinThreadNum(0);
         require(eventually([&] { return pool.GetCurrentThreadNum() == 0; }), "a zero minimum must allow all idle workers to retire");
-        require(pool.IsStarted() && pool.Submit([] { return 17; }).get() == 17, "a pool with no remaining workers must accept new tasks");
+        require(pool.IsStarted() && pool.Submit([] { return 17; }).value().get() == 17, "a pool with no remaining workers must accept new tasks");
 
         mcr::utils::ThreadPool dormant{ 0, 2, 10ms };
         dormant.Start();
-        require(dormant.GetCurrentThreadNum() == 0 && dormant.Submit([] { return true; }).get(), "zero-minimum startup must still schedule the first task");
+        require(dormant.GetCurrentThreadNum() == 0 && dormant.Submit([] { return true; }).value().get(), "zero-minimum startup must still schedule the first task");
 
         mcr::utils::ThreadPool long_idle{ 0, 1, std::chrono::milliseconds::max() };
         long_idle.Start(1);
@@ -201,7 +202,7 @@ namespace {
             producers.emplace_back([&, producer] {
                 for (int index{ 0 }; index < 100; ++index) {
                     int const id = producer * 100 + index;
-                    results[producer].push_back(pool.Submit([&, id] { ++counts[id]; return id; }));
+                    results[producer].push_back(pool.Submit([&, id] { ++counts[id]; return id; }).value());
                 }
             });
         }
@@ -221,31 +222,28 @@ namespace {
         std::promise<void>     release;
         auto                   gate = release.get_future().share();
         std::atomic<bool>      entered{ false };
-        auto                   active            = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; });
+        auto                   active            = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; }).value();
         bool const             active_started    = eventually([&] { return entered.load(); });
         auto                   waiter            = std::async(std::launch::async, [&pool] { pool.Wait(); });
         bool const             waited_for_active = waiter.wait_for(10ms) == std::future_status::timeout;
-        auto                   pending           = pool.Submit([] { return 99; });
+        auto                   pending           = pool.Submit([] { return 99; }).value();
         auto                   stopped           = std::async(std::launch::async, [&pool] { return pool.Stop(); });
         bool const             stopping          = eventually([&] { return !pool.IsStarted(); });
         bool                   rejected{ false };
         auto                   lifetime = std::make_shared<int>(0);
         std::weak_ptr<int>     rejected_lifetime{ lifetime };
-        try {
-            (void)pool.Submit([owned = std::make_unique<int>(1), lifetime = std::move(lifetime)] { return *owned; });
-        } catch (std::runtime_error const&) {
-            rejected = true;
-        }
-        bool const canceled         = is_canceled(pending);
-        bool const joined_active    = stopped.wait_for(10ms) == std::future_status::timeout;
-        bool const restart_rejected = pool.Start() == -1 && pool.Stop() == -1 && !pool.IsStopped();
+        auto                   rejected_submission = pool.Submit([owned = std::make_unique<int>(1), lifetime = std::move(lifetime)] { return *owned; });
+        rejected                                   = !rejected_submission && rejected_submission.error().code == mcr::ErrorCode::FAILED_INIT;
+        bool const canceled                        = is_canceled(pending);
+        bool const joined_active                   = stopped.wait_for(10ms) == std::future_status::timeout;
+        bool const restart_rejected                = pool.Start() == -1 && pool.Stop() == -1 && !pool.IsStopped();
         release.set_value();
         int const stop_result = stopped.get();
         waiter.get();
         require(active_started && waited_for_active && stopping && rejected && canceled && joined_active && restart_rejected, "Stop must cancel pending work, reject submissions, and wait for the active task");
         require(rejected_lifetime.expired(), "rejected move-only callables must release their captures");
         require(stop_result == 0 && active.get() == 23 && pool.IsStopped() && pool.GetCurrentThreadNum() == 0, "Stop must preserve the active result and join every worker");
-        require(pool.Submit([] { return 42; }).get() == 42, "Submit must restart a fully stopped pool");
+        require(pool.Submit([] { return 42; }).value().get() == 42, "Submit must restart a fully stopped pool");
         pool.Wait();
 
         std::future<int> abandoned;
@@ -254,8 +252,8 @@ namespace {
             mcr::utils::ThreadPool paused{ 1, 1 };
             paused.Start();
             paused.Pause();
-            abandoned = paused.Submit([] { return 5; });
-            (void)paused.Submit([&canceled_runs] { ++canceled_runs; });
+            abandoned = paused.Submit([] { return 5; }).value();
+            (void)paused.Submit([&canceled_runs] { ++canceled_runs; }).value();
         }
         require(is_canceled(abandoned) && canceled_runs == 0, "destruction must cancel pending tasks even when their futures were discarded");
     }

@@ -17,8 +17,8 @@ import mcr.async;
  * @return 结果正确时返回零。
  */
 auto main() -> int {
-    mcr::Async::Startup(1, 4);
-    auto result = mcr::async([](int value) { return value * 2; }, 21);
+    mcr::Async::Startup(1, 4).value();
+    auto result = mcr::async([](int value) { return value * 2; }, 21).value();
     auto answer = result.Get(); // 42
     mcr::GlobalThreadPool::GetInstance()->Wait();
     mcr::Async::Cleanup();
@@ -37,7 +37,7 @@ GlobalThreadPool 公开继承 `ThreadPool` 和 `Singleton<GlobalThreadPool>`，�
 已停止的池自动启动。参数按退化后的类型复制或移动，
 支持成员指针、仅可移动的可调用对象/参数/结果、void 和引用结果。
 需要保留参数引用时使用 `std::ref` 或 `std::cref`。
-任务异常通过 Get 取回，提交失败从 async 抛出。丢弃普通包装对象不会等待任务结束。
+`async` 返回 `Result<AsyncWrapper<T, cancellable>>`，提交被拒绝时返回 `FAILED_INIT`；任务异常通过 Get 取回。丢弃普通包装对象不会等待任务结束。
 
 `async<true>` 为包装对象创建私有共享取消标志，但与 cpr 一样，不把标志传给任务。
 因此 Cancel 只改变包装状态并禁止后续 Get/等待，排队和运行中的任务仍会执行；
@@ -66,7 +66,8 @@ Startup 必须与其他配置、启动、关闭和提交操作协调。
 成功清理后重复调用无影响；初始化之前清理抛出 `std::logic_error`，之后仍可初始化。
 进程退出时没有自动单例析构。
 
-清理后 GetInstance 返回空指针，async 和 Startup 抛出 `std::logic_error`。
+清理后 GetInstance 返回空指针，async 和 Startup 返回 `FAILED_INIT`。
+`Startup` 返回 `Result<void>`，停止状态下的无效启动参数返回 `BAD_FUNCTION_ARGUMENT`。
 已销毁单例无法重启；需要再次启动时，应对存活线程池使用 `Stop()`。
 清理必须在线程池工作线程之外执行，并先停止新提交及其他实例访问。
 借用指针不延长池的生命周期；生命周期稳定期间支持并发提交。

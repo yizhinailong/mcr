@@ -15,12 +15,13 @@ import mcr_example.support;
 auto main(int argc, char** argv) -> int {
     return example::run(argc, argv, "get_callback", [](example::Arguments const& args) {
         auto completion{ mcr::GetCallback(
-            [](mcr::Response response) {
-                return example::print_response(response);
+            [](mcr::Result<mcr::Response> response) {
+return example::print_response(response);
             },
             mcr::Url{ args.url },
             mcr::Parameters{ { "message", "hello world" } },
             mcr::UserAgent{ "mcr_example" },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }) };
-        return completion.Get(); }, example::RuntimeKind::Async);
+        if (!completion) { return example::print_error(completion.error()); }
+        return completion->Get(); }, example::RuntimeKind::Async);
 }

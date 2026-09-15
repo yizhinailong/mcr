@@ -12,7 +12,7 @@ import mcr_example.json_support;
  * @param url HTTP 请求地址。
  * @return 返回完整响应的协程任务。
  */
-auto request(std::string url) -> mcr::Task<mcr::Response> {
+auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     mcr::Json const document{
         {    "name",       "Alice" },
         { "enabled",          true },

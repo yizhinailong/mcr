@@ -12,12 +12,12 @@ import mcr.body;
 
 mcr::Body text{ "x=", "5&y=13" };
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };
-mcr::Buffer buffer{ bytes.begin(), bytes.end(), "ignored.bin" };
+auto buffer = mcr::Buffer::Create( bytes.begin(), bytes.end(), "ignored.bin" ).value();
 mcr::Body binary = buffer; // 复制三个字节并拥有存储。
-mcr::Body from_file{ mcr::File{ "request.bin" } }; // 立即读取文件。
+auto from_file = mcr::Body::FromFile( mcr::File{ "request.bin" } ).value(); // 立即读取文件。
 ```
 
-默认构造产生空正文，其他构造均保留上游的非 explicit 接口：
+默认构造产生空正文。内存来源保留非 explicit 构造，文件读取使用 `Body::FromFile` 工厂：
 
 | 输入 | 行为 |
 | --- | --- |
@@ -27,7 +27,7 @@ mcr::Body from_file{ mcr::File{ "request.bin" } }; // 立即读取文件。
 | `char const*`、`std::size_t` | 复制指定长度的可读字节 |
 | `std::initializer_list<std::string>` | 无分隔符拼接片段 |
 | `Buffer const&` | 复制 `data` 和 `datalen` 指定的字节，忽略文件名 |
-| `File const&` | 以二进制模式打开 `filepath`，读取到文件结束 |
+| `Body::FromFile(File const&)` | 以二进制模式打开 `filepath`，读取到文件结束 |
 
 显式长度保留内嵌空字节，无需结束符。零长度允许空指针，包括空 Buffer；其余输入必须是有效可读范围。
 构造后修改或销毁源字符串、缓冲区不影响正文。
@@ -35,13 +35,13 @@ mcr::Body from_file{ mcr::File{ "request.bin" } }; // 立即读取文件。
 
 ## 文件与所有权
 
-文件构造通过 `std::ifstream` 同步读取，原样使用 `File::filepath`，
+`Body::FromFile(file) -> Result<Body>` 通过 `std::ifstream` 同步读取，原样使用 `File::filepath`，
 忽略 `overriden_filename`。空文件得到空正文，二进制模式保留 Windows 上的 CR/LF 和控制字节。
 实现按固定大小的块读取到正常 EOF，不预先查询文件大小。全部正文仍驻留内存，
 并发修改文件不保证得到原子快照。
 
-打开失败抛出 `std::invalid_argument`，消息为 `Can't open the file for HTTP request body!`。
-正常 EOF 前的读取失败抛出 `std::runtime_error`，消息为
+打开失败返回 `FILE_COULDNT_READ_FILE`，消息为 `Can't open the file for HTTP request body!`。
+正常 EOF 前的读取失败返回 `READ_ERROR`，消息为
 `Can't read the file for HTTP request body!`。分配和容量错误分别传播
 `std::bad_alloc`、`std::length_error`。所有退出路径均通过 RAII 关闭文件；
 构造完成后删除或替换源文件不影响正文。
@@ -54,7 +54,7 @@ mcr::Body from_file{ mcr::File{ "request.bin" } }; // 立即读取文件。
 
 除模块、命名空间及继承的命名规范外，文件读取会检查每次读取直到 EOF。
 上游先定位文件长度、调整字符串大小，再单次读取，未检查定位和读取失败；
-此处避免将失败的大小查询转换成无符号分配量，并在读取错误时抛出，防止暴露部分正文或填充字节。
+此处避免将失败的大小查询转换成无符号分配量，并在读取错误时返回失败，防止暴露部分正文或填充字节。
 Buffer 字段已具备所需类型，无需多余转换。
 
 运行 `mcpp build` 和 `mcpp test`，验证构造所有权、Buffer 子范围与生命周期、

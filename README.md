@@ -4,7 +4,7 @@
 
 通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载。库还提供可复用的 Session、JSON 请求与响应、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
 
-[快速开始](#快速开始) · [文档索引](docs/README.md) · [可运行示例](example/README.md) · [源码结构](docs/structure.md)
+[快速开始](#快速开始) · [文档索引](docs/README.md) · [可运行示例](example/README.md) · [源码结构](docs/structure.md) · [expected 接口迁移](docs/expected_migration.md)
 
 ## 环境与依赖
 
@@ -89,11 +89,13 @@ auto main() -> int {
             mcr::Parameters{ { "message", "hello world" } },
             mcr::options::Timeout{ std::chrono::seconds{ 5 } }
         );
-        if (response.error) {
-            std::println("请求失败：{}", response.error.message);
+        if (!response) {
+            std::println("请求准备失败：{}", response.error().message);
+        } else if (response->error) {
+            std::println("传输失败：{}", response->error.message);
         } else {
-            std::println("HTTP {}：{}", response.status_code, response.text);
-            result = mcr::status::is_success(response.status_code) ? 0 : 1;
+            std::println("HTTP {}：{}", response->status_code, response->text);
+            result = mcr::status::is_success(response->status_code) ? 0 : 1;
         }
     } catch (std::exception const& error) {
         std::println("请求异常：{}", error.what());
@@ -109,11 +111,11 @@ auto main() -> int {
 
 | 场景 | 接口 | 结果 |
 | --- | --- | --- |
-| 一次同步请求 | `Get`、`Post` 等七种 HTTP 方法 | `Response` |
-| 复用连接和配置 | `Session` | `Response` |
-| 在线程池执行请求 | `GetAsync` 等 | `AsyncResponse`，通过 `Get()` 取结果 |
-| 在协程中等待请求 | `GetCoro` 等 | `Task<Response>`，支持 `co_await` 和 `sync_wait` |
-| 请求完成后执行回调 | `GetCallback` 等 | 包装回调结果的 `AsyncWrapper` |
+| 一次同步请求 | `Get`、`Post` 等七种 HTTP 方法 | `Result<Response>` |
+| 复用连接和配置 | `Session::Create()` | 创建结果及请求的 `Result<Response>` |
+| 在线程池执行请求 | `GetAsync` 等 | `Result<AsyncResponse>`，提交成功后通过 `Get()` 取请求结果 |
+| 在协程中等待请求 | `GetCoro` 等 | `Task<Result<Response>>`，支持 `co_await` 和 `sync_wait` |
+| 请求完成后执行回调 | `GetCallback` 等 | `Result<AsyncWrapper<回调返回类型, true>>` |
 | 同步并发批次 | `MultiGet` 等、`MultiPerform` | 按输入顺序排列的响应 |
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |
 | 下载到文件或回调 | `Download`、`DownloadAsync`、`DownloadCoro` | 响应元数据 |
@@ -122,7 +124,7 @@ JSON 使用 `JsonBody` 发送，通过 `Response::Json()` 或 `TryJson()` 解析
 
 使用时需要遵循以下约定：
 
-- 传输错误保存在 `Response::error`；HTTP 4xx/5xx 仍是普通响应，需要检查 `status_code`。配置失败和用户回调异常会抛出，异步请求通过结果消费接口传播异常。
+- 配置和本地操作失败通过 `Result` 返回。传输错误保存在 `Response::error`；HTTP 4xx/5xx 仍是普通响应，需要检查 `status_code`。用户回调与标准库资源异常继续传播。
 - `Body`、`JsonBody`、`Payload` 拥有数据；`BodyView` 和 Multipart 中的 `Buffer` 借用数据，底层存储必须有效到请求结束。
 - 同一个 Session 的配置与请求串行使用；Session 的异步方法需要通过 `std::shared_ptr` 管理会话。
 - 在启动工作线程前初始化 curl，完成全部请求后关闭已使用的异步运行时，再销毁剩余句柄并清理 curl。`Async::Cleanup()` 和 `Coro::Cleanup()` 的生命周期相互独立，均为永久关闭，详见 [异步运行时](docs/async.md) 和 [协程请求](docs/coro.md)。

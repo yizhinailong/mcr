@@ -48,8 +48,11 @@ auto main(int argc, char** argv) -> int {
                            mcr::options::Timeout{ std::chrono::seconds{ 10 } } }
             };
             auto pending{ mcr::MultiPostAsync(std::move(first), std::move(second)) };
-            int  result{};
-            for (auto& task : pending) {
+            if (!pending) {
+                return example::print_error(pending.error());
+            }
+            int result{};
+            for (auto& task : *pending) {
                 result |= example::print_json_response(task.Get());
             }
             return result;

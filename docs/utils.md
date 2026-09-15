@@ -22,12 +22,12 @@ import std;
 import mcr;
 
 mcr::utils::ThreadPool pool{ 1, 2 };
-auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }) };
+auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }).value() };
 std::println("{}", result.Get());
 
 mcr::utils::SecureString token{ "example-token" };
 std::filesystem::path destination{ "response.bin" };
-auto encoded = mcr::utils::url_encode("hello world");
+auto encoded = mcr::utils::url_encode("hello world").value();
 ```
 
 迁移调用时，将原 `mcr::util` 下的名称改为 `mcr::utils`，将原 `mcr` 下的

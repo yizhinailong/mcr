@@ -11,15 +11,19 @@
 import std;
 import mcr;
 
-mcr::Session session;
-session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/echo" });
-session.SetTimeout(mcr::options::Timeout{ std::chrono::seconds{ 5 } });
-session.SetBody(mcr::Body{ "hello" });
+auto session_owner = mcr::Session::Create().value();
+auto& session = *session_owner;
+session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/echo" }).value();
+session.SetTimeout(mcr::options::Timeout{ std::chrono::seconds{ 5 } }).value();
+session.SetBody(mcr::Body{ "hello" }).value();
 auto response = session.Post();
-if (response.error) {
-    throw std::runtime_error{ response.error.message };
+if (!response) {
+    std::println("操作失败：{}", response.error().message);
+} else if (response->error) {
+    std::println("传输失败：{}", response->error.message);
+} else {
+    std::println("{}: {}", response->status_code, response->text);
 }
-std::println("{}: {}", response.status_code, response.text);
 ```
 
 ## 接口范围
@@ -39,18 +43,19 @@ std::println("{}: {}", response.status_code, response.text);
 ## TLS 与代理认证
 
 ```cpp
-mcr::Session session;
-session.SetUrl(mcr::Url{ "https://localhost:8443/hello" });
+auto session_owner = mcr::Session::Create().value();
+auto& session = *session_owner;
+session.SetUrl(mcr::Url{ "https://localhost:8443/hello" }).value();
 session.SetSslOptions(mcr::options::Ssl(
     mcr::options::ssl::CaInfo{ "test-root.pem" },
     mcr::options::ssl::TLSv1_2{},
     mcr::options::ssl::MaxTLSv1_3{}
-));
-session.SetProxies(mcr::options::Proxies{ { "https", "http://127.0.0.1:8080" } });
+)).value();
+session.SetProxies(mcr::options::Proxies{ { "https", "http://127.0.0.1:8080" } }).value();
 session.SetProxyAuth(mcr::options::ProxyAuthentication{
-    { "https", mcr::options::EncodedAuthentication{ "proxy-user", "proxy-password" } }
-});
-auto response = session.Get();
+    { "https", mcr::options::EncodedAuthentication::Create( "proxy-user", "proxy-password" ).value() }
+}).value();
+auto response = session.Get().value();
 ```
 
 - 默认启用证书链和主机名校验。`SetVerifySsl` 同时切换两项；
@@ -62,7 +67,7 @@ auto response = session.Get();
   `CaBuffer` 与 `CaInfoBlob` 均通过 `CURLOPT_CAINFO_BLOB` 复制数据；
   证书和私钥 blob 也使用 curl 的复制标志，配置对象无需活到请求结束。
 - 各 TLS 后端支持的格式和功能不同。不支持的可选功能保持默认值时被容忍，
-  显式请求时由 curl 返回错误或由 setter 抛出异常。
+  显式请求时由 setter 返回失败的 `Result<void>`。
   setter 失败可能已应用前面的选项；修正后应重新设置完整配置。
 - Schannel 的 P12 文件可通过 `SslOptions::cert_file`、`cert_type = "P12"`
   和 `key_pass` 指定；内存 P12 使用 `cert_blob` 并清空 `cert_file`。
@@ -82,32 +87,34 @@ auto response = session.Get();
 ```cpp
 class RequestHeader final : public mcr::Interceptor {
 public:
-    auto Intercept(mcr::Session& session) -> mcr::Response override {
-        session.UpdateHeader(mcr::Header{ { "X-Client", "mcr" } });
+    auto Intercept(mcr::Session& session) -> mcr::Result<mcr::Response> override {
+        if (auto configured = session.UpdateHeader(mcr::Header{ { "X-Client", "mcr" } }); !configured) {
+            return std::unexpected{ std::move(configured.error()) };
+        }
         return Proceed(session);
     }
 };
 
 // session 为上面的 Session；异步请求也经过同一条拦截链。
-session.AddInterceptor(std::make_shared<RequestHeader>());
+session.AddInterceptor(std::make_shared<RequestHeader>()).value();
 ```
 
 ## 并发批量请求
 
 ```cpp
-auto first = std::make_shared<mcr::Session>();
-auto second = std::make_shared<mcr::Session>();
-first->SetUrl(mcr::Url{ "http://127.0.0.1:8080/first" });
-second->SetUrl(mcr::Url{ "http://127.0.0.1:8080/second" });
+auto first = mcr::Session::Create().value();
+auto second = mcr::Session::Create().value();
+first->SetUrl(mcr::Url{ "http://127.0.0.1:8080/first" }).value();
+second->SetUrl(mcr::Url{ "http://127.0.0.1:8080/second" }).value();
 mcr::MultiPerform multi;
-multi.AddSession(first);
-multi.AddSession(second);
-auto responses = multi.Get(); // 并发传输；结果仍依次对应 first、second。
-multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first->Get()。
+multi.AddSession(first).value();
+multi.AddSession(second).value();
+auto responses = multi.Get().value(); // 并发传输；结果仍依次对应 first、second。
+multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调用 first->Get()。
 ```
 
 - `Get` 等方法为全批次选择同一 HTTP 方法；`AddSession(session, HttpMethod::...)`
-  配合 `Perform()` 可为各 Session 指定不同方法。未指定方法时 `Perform()` 抛出异常。
+  配合 `Perform()` 可为各 Session 指定不同方法。未指定方法时 `Perform()` 返回 `BAD_FUNCTION_ARGUMENT`。
 - `Download` 接收与 Session 数量相同、顺序对应的 `WriteCallback` 或
   `std::ofstream&`（也支持 `std::ref`）。`PerformDownload` 要求方法已设为
   `DOWNLOAD_REQUEST`。空批次允许零个参数；下载与普通请求不能在同一批次混合执行。
@@ -116,17 +123,17 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
   直接启动 Session 请求；可以在传输前修改配置。推荐用 `AddSession` / `RemoveSession`
   修改成员，通过 `GetSessions()` 修改的列表会在下一次批次操作前校验并同步归属。
 - `InterceptorMulti::Intercept` 拦截整个批次，`Proceed` 重新准备并执行下游链。
-  可以修改 `GetSessions()` 中的方法，再用 `PrepareDownloadSession` 指定下载目标。
+  可以修改 `GetSessions()` 成功结果所引用的注册列表中的方法，再用 `PrepareDownloadSession` 指定下载目标。
   批量请求沿用 cpr 的行为，不执行各 Session 的单请求拦截器。
-- 网络错误保留在对应位置的 `Response::error` 中；无效注册、curl multi 错误或
-  用户回调异常会抛出。所有退出路径均解除 easy handle 的挂载，之后批次仍可复用。
+- 网络错误保留在对应位置的 `Response::error` 中；无效注册和 curl multi 错误通过 Result 返回，
+  用户回调异常继续传播。所有退出路径均解除 easy handle 的挂载，之后批次仍可复用。
   下载目标在本次调用结束时清除，再次下载必须重新提供目标。
 - 仅允许移动未执行请求的批次；移动后更新 Session 归属，移出后的对象可重新使用。
 
 ## 生命周期与错误
 
 - 同一个 Session 的配置与请求必须串行使用。异步请求需要
-  `std::make_shared<mcr::Session>()`；任务持有 Session 直到执行结束。
+  `Session::Create()` 提供的共享所有权；任务持有 Session 直到执行结束。
 - Body、JsonBody 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
   借用的数据、回调捕获对象、下载流和 ConnectionPool 必须覆盖使用它们的生命周期。
 - Content 会跨请求保留，调用 `RemoveContent()` 清除。
@@ -135,7 +142,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
   ReadCallback 独立保留，可通过 `SetReadCallback({})` 清除。
 - `SetCancellationParam()` 使用共享原子标志，设置为 true 会终止传输。
   `AsyncResponse` 本身沿用不可取消的默认 AsyncWrapper 类型。
-- curl 配置失败抛出异常；传输失败写入 `Response::error`，HTTP 4xx/5xx 保留为普通响应。
+- curl 配置失败通过 `Result` 返回；传输失败写入 `Response::error`，HTTP 4xx/5xx 保留为普通响应。
   用户回调的异常在 curl 返回之后重新抛出，异步调用通过 `Get()` 取得异常。
 - 与现有 CurlHolder 一致，调用方负责需要显式管理的 curl 全局初始化/清理；
   Session 不执行进程级清理。库中其他 curl 使用者尚未结束时不能清理 curl。
@@ -150,7 +157,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
 - 公共方法统一为 `Intercept` / `Proceed` 和 `ProxyAuthentication::Has`。
   TLS 替换、blob 复制、代理凭据解码、批次归属检查和异常恢复采用上述行为。
 - 当前 curl 8.21 依赖不再支持的 SSLv2、SSLv3、NPN 不提供选项。
-  保留 `SslFastStart` 类型，显式启用它固定抛出异常；不保留旧版 curl 的设置路径。
+  保留 `SslFastStart` 类型，显式启用它固定返回 `NOT_BUILT_IN`；不保留旧版 curl 的设置路径。
 - 参数追加到已有 query，且位于 fragment 之前。
 - 每次准备请求都清除上一请求的方法和 curl 内容配置，避免复用时残留；
   保留 Multipart 的 GET 仍使用 GET。HEAD 与 Download 忽略存储的 Content，
@@ -160,7 +167,7 @@ multi.RemoveSession(first);  // 释放归属后，可以再次直接调用 first
   SetWriteCallback 与 SetServerSentEventCallback 相互替换；空回调恢复正文缓冲。
 - 显式 Expect 请求头被保留；未提供时关闭 curl 的自动 100-continue。
 - Multipart 文本使用显式字节长度，因此保留嵌入的空字符。SSE 解析器在每次请求前重置。
-- 不忽略 MIME 文件准备错误；不存在的上传文件在准备阶段抛出异常，避免发送空文件字段。
+- 不忽略 MIME 文件准备错误；不存在的上传文件在准备阶段返回 `READ_ERROR`，避免发送空文件字段。
 - Response 在完成时保存所有元数据和证书，不持有活动句柄；后续请求不会改变旧响应。
   无证书或空 Response 的 GetCertInfos 安全返回空容器。
 - Response 的默认移动操作沿用成员的异常说明，不强制承诺 `noexcept`。

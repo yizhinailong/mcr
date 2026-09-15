@@ -24,13 +24,14 @@ auto response = mcr::Get(
     mcr::Url{ "http://127.0.0.1:8080/hello" },
     mcr::options::Verbose{ true },
     mcr::options::Timeout{ std::chrono::seconds{ 5 } }
-);
+).value();
 
-mcr::Session session;
+auto session_owner = mcr::Session::Create().value();
+auto& session = *session_owner;
 session.SetSslOptions(mcr::options::Ssl(
     mcr::options::ssl::CaInfo{ "test-root.pem" },
     mcr::options::ssl::TLSv1_2{}
-));
+)).value();
 ```
 
 常用的小型选项集中在 `src/options/transfer_options.cppm`，仅依赖标准库，
@@ -46,7 +47,7 @@ session.SetSslOptions(mcr::options::Ssl(
 这些类型原有的独立模块已合并。原先单独导入 `mcr.unix_socket`、`mcr.verbose`、
 `mcr.timeout`、`mcr.connect_timeout`、`mcr.low_speed`、`mcr.limit_rate`、
 `mcr.local_port`、`mcr.local_port_range`、`mcr.resolve` 或 `mcr.reserve_size` 的代码，
-统一改为 `import mcr.transfer_options;`。类型名称、构造方式和行为保持不变。
+统一改为 `import mcr.transfer_options;`。模块合并保留类型名称；当前的错误返回规则见 [expected 接口迁移](expected_migration.md)。
 
 其他已合并模块的导入按下表迁移；同组的多条导入合并为一条即可。
 

@@ -35,7 +35,7 @@ auto main(int argc, char** argv) -> int {
             if (auto const result = example::print_response(response); result != 0) {
                 return result;
             }
-            auto const parsed = response.TryJson();
+            auto const parsed = response->TryJson();
             if (!parsed) {
                 std::println("JSON parse failed: {}", parsed.error().message);
                 return 1;

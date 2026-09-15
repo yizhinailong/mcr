@@ -127,7 +127,7 @@ namespace {
         g_fail_after = fail_after;
         try {
             for (auto& capture : captures) {
-                futures.push_back(pool.Submit([owned = std::move(capture), &runs] { ++runs; }));
+                futures.push_back(pool.Submit([owned = std::move(capture), &runs] { ++runs; }).value());
             }
         } catch (std::bad_alloc const&) {
             failed = true;
@@ -150,7 +150,7 @@ namespace {
         }
         require(runs == 0, "failed and canceled submissions must not invoke user code");
         require(std::ranges::all_of(releases, [](int count) { return count == 1; }), "every unique capture must be released exactly once outside the pool mutex");
-        require(pool.Submit([] { return 42; }).get() == 42, "submission failure must leave the pool restartable");
+        require(pool.Submit([] { return 42; }).value().get() == 42, "submission failure must leave the pool restartable");
         return failed;
     }
 } // namespace

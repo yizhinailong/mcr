@@ -24,7 +24,7 @@ auto main(int argc, char** argv) -> int {
                 { "enabled",          true },
                 { "message", "你好，JSON!" }
             };
-            auto on_response = [](mcr::Response response) {
+            auto on_response = [](mcr::Result<mcr::Response> response) {
                 return example::print_json_response(response);
             };
             auto completion{
@@ -37,7 +37,10 @@ auto main(int argc, char** argv) -> int {
                     mcr::options::Timeout{   std::chrono::seconds{ 10 } }
                 )
             };
-            return completion.Get();
+            if (!completion) {
+                return example::print_error(completion.error());
+            }
+            return completion->Get();
         },
         example::RuntimeKind::Async
     );

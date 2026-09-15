@@ -13,15 +13,15 @@ import mcr.curlholder;
 
 mcr::Payload form{ { "name", "hello world" }, { "flag", "" } };
 form.Add(mcr::Pair{ "name", "x+y" });
-auto raw = form.GetContent(); // name=hello world&flag=&name=x+y
+auto raw = form.GetContent().value(); // name=hello world&flag=&name=x+y
 
 std::vector<mcr::Pair> pairs{ { "first", "one" }, { "last", "two" } };
 mcr::Payload from_range{ pairs.cbegin(), pairs.cend() };
 mcr::Payload empty{};
 
 // 成功初始化 curl 后执行，holder 必须先于 curl 全局清理销毁。
-mcr::curl::CurlHolder holder;
-auto encoded = form.GetContent(holder);
+auto holder = mcr::curl::CurlHolder::Create().value();
+auto encoded = form.GetContent(holder).value();
 // name=hello%20world&flag=&name=x%2By
 ```
 

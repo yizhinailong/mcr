@@ -8,6 +8,7 @@ module;
 
 export module mcr.curlmultiholder;
 
+export import mcr.error;
 import std;
 
 export namespace mcr::curl {
@@ -25,12 +26,17 @@ export namespace mcr::curl {
 
         /**
          * @brief Initialize a multi handle.
-         * @throws std::runtime_error If curl_multi_init() cannot create a handle.
+         * @return Owned handle, or FAILED_INIT if curl_multi_init() fails.
          */
-        CurlMultiHolder() : handle{ curl_multi_init() } {
-            if (!handle) {
-                throw std::runtime_error{ "mcr::curl::CurlMultiHolder: curl_multi_init failed." };
+        [[nodiscard]] static auto Create() -> Result<CurlMultiHolder> {
+            CurlMultiHolder result;
+            result.handle = curl_multi_init();
+            if (!result.handle) {
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::curl::CurlMultiHolder: curl_multi_init failed." }
+                };
             }
+            return result;
         }
 
         CurlMultiHolder(CurlMultiHolder const&)                    = delete;
@@ -64,6 +70,11 @@ export namespace mcr::curl {
         }
 
     private:
+        /**
+         * @brief Create an empty holder for factory initialization.
+         */
+        CurlMultiHolder() noexcept = default;
+
         /**
          * @brief Release an owned multi handle and clear its pointer.
          */

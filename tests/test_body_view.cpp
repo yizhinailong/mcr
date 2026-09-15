@@ -82,22 +82,22 @@ namespace {
 
     auto check_buffers_and_empty_ranges() -> bool {
         std::array<unsigned char, 4> bytes{ 0x00, 0x7f, 0x80, 0xff };
-        mcr::Buffer                  buffer{ bytes.begin(), bytes.end(), "ignored.bin" };
-        mcr::BodyView const          body = buffer;
+        auto                         buffer = mcr::Buffer::Create(bytes.begin(), bytes.end(), "ignored.bin").value();
+        mcr::BodyView const          body   = buffer;
         bool                         passed{ check(body.Str().data() == buffer.data && body.Str().size() == bytes.size() && std::memcmp(body.Str().data(), bytes.data(), bytes.size()) == 0, "Buffer conversion must borrow the original binary range without interpreting it as text") };
         buffer.data    += 1;
         buffer.datalen  = 1;
         passed         &= check(body.Str().data() == reinterpret_cast<char const*>(bytes.data()) && body.Str().size() == bytes.size(), "a view must snapshot the Buffer pointer and length rather than refer to its mutable fields");
 
         auto const after_descriptor_destruction{ [&bytes] {
-            mcr::Buffer const temporary{ bytes.begin(), bytes.end(), "temporary.bin" };
+            auto const temporary = mcr::Buffer::Create(bytes.begin(), bytes.end(), "temporary.bin").value();
             return mcr::BodyView{ temporary };
         }() };
         bytes[1]  = 0xff;
         passed   &= check(after_descriptor_destruction.Str().data() == body.Str().data() && std::memcmp(after_descriptor_destruction.Str().data(), bytes.data(), bytes.size()) == 0, "destroying a Buffer descriptor must leave views usable while the source storage remains alive");
 
         char const*         null_data{ nullptr };
-        mcr::Buffer const   empty_buffer{ null_data, null_data, "empty.bin" };
+        auto const          empty_buffer = mcr::Buffer::Create(null_data, null_data, "empty.bin").value();
         mcr::BodyView const from_empty_buffer{ empty_buffer };
         mcr::BodyView const from_empty_view{ std::string_view{} };
         mcr::BodyView const empty_c_string{ "" };

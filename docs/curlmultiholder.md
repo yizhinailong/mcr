@@ -5,7 +5,7 @@
 导入 `mcr` 或 `mcr.curlmultiholder`，使用 `mcr::curl::CurlMultiHolder`。
 其他接口与迁移规则见 [curl 后端](curl.md)。
 实现参考 cpr 的 `include/cpr/curlmultiholder.h` 和 `cpr/curlmultiholder.cpp`：
-构造调用 curl_multi_init，公开 `CURLM* handle` 用于访问 libcurl，
+`CurlMultiHolder::Create() -> Result<CurlMultiHolder>` 调用 curl_multi_init，公开 `CURLM* handle` 用于访问 libcurl，
 析构调用 curl_multi_cleanup。
 
 ```cpp
@@ -24,7 +24,7 @@ auto main() -> int {
     }
     int result{ 0 };
     try {
-        mcr::curl::CurlMultiHolder multi;
+        auto multi = mcr::curl::CurlMultiHolder::Create().value();
         int running{ 0 };
         if (curl_multi_perform(multi.handle, &running) != CURLM_OK) {
             result = 1;
@@ -46,7 +46,7 @@ auto main() -> int {
 
 与 cpr 的差异与 CurlHolder 保持一致：
 
-- 初始化失败抛出标明 curl_multi_init 的 std::runtime_error，不依赖仅调试构建有效的断言。
+- 初始化失败返回标明 curl_multi_init 的 `FAILED_INIT`，不依赖仅调试构建有效的断言。
 - 禁止复制，防止共享所有权和重复清理。
 - 移动为 noexcept，转移原句柄并保留选项及附加的 easy 句柄。
   源变为空，仍可安全销毁或赋值；移动赋值先释放目标旧句柄，自移动保持原值。

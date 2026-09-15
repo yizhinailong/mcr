@@ -25,8 +25,9 @@ auto main(int argc, char** argv) -> int {
             mcr::UserAgent{ "mcr_example" },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }} };
         auto responses{ mcr::MultiDelete(std::move(first), std::move(second)) };
+        if (!responses) { return example::print_error(responses.error()); }
         int result{};
-        for (auto const& response : responses) {
+        for (auto const& response : *responses) {
             result |= example::print_response(response);
         }
         return result; }, example::RuntimeKind::Synchronous);

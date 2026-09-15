@@ -12,11 +12,11 @@ import mcr.curlholder;
 
 mcr::Parameters query{ { "q", "hello world" }, { "flag", "" } };
 query.Add(mcr::Parameter{ "q", "x+y" });
-auto raw = query.GetContent(); // q=hello world&flag&q=x+y
+auto raw = query.GetContent().value(); // q=hello world&flag&q=x+y
 
 // 成功初始化 curl 后执行，holder 必须先于 curl 全局清理销毁。
-mcr::curl::CurlHolder holder;
-auto encoded = query.GetContent(holder);
+auto holder = mcr::curl::CurlHolder::Create().value();
+auto encoded = query.GetContent(holder).value();
 // q=hello%20world&flag&q=x%2By
 ```
 

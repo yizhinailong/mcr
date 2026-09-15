@@ -17,6 +17,9 @@ curl 与异步运行时生命周期、响应输出和错误处理。
 此目录使用自己的 `mcpp.toml`，通过 `mcr = { path = ".." }` 引用本地库。
 主项目的 `mcpp.toml` 保持库配置，根目录的 `mcpp build` 仍构建库。
 
+请求示例显式检查 `Result`，操作失败输出错误码和诊断；传输失败与 HTTP 状态分别处理。
+接口变化见 [expected 接口迁移](../docs/expected_migration.md)。
+
 ## 快速开始
 
 准备好支持 C++23 和 `import std;` 的 mcpp 工具链，以及 uv。
@@ -194,8 +197,14 @@ mcpp run get -- https://api.github.com/repos/libcpr/cpr/contributors
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | HTTP 2xx，或成功显示 `--help` |
-| `1` | HTTP 非 2xx、传输错误、JSON 解析失败或运行异常 |
+| `1` | HTTP 非 2xx、配置或本地操作失败、传输错误、JSON 解析失败或运行异常 |
 | `2` | 缺失或多余的命令行参数 |
+
+配置和本地操作失败会输出错误码及诊断。例如，下载目标的父目录不存在时：
+
+```text
+Request failed: WRITE_ERROR: mcr::Download: output stream is not writable.
+```
 
 ## 用 uv 验证全部示例
 

@@ -36,24 +36,34 @@ namespace mcr::detail {
      * @tparam Ts Option types.
      * @param session Destination session.
      * @param options Options to apply.
+     * @return Success or the first operation error.
      */
     template <typename... Ts>
-    auto set_options(Session& session, Ts&&... options) -> void {
+    auto set_options(Session& session, Ts&&... options) -> Result<void> {
         bool has_header{ false };
-        auto set = [&](auto&& argument) {
+        auto set = [&](auto&& argument) -> Result<void> {
             auto&& option{ unwrap_option(std::forward<decltype(argument)>(argument)) };
             if constexpr (std::same_as<std::remove_cvref_t<decltype(option)>, Header>) {
                 if (has_header) {
-                    session.UpdateHeader(option);
+                    if (auto status = session.UpdateHeader(option); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else {
-                    session.SetHeader(option);
+                    if (auto status = session.SetHeader(option); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                     has_header = true;
                 }
             } else {
-                session.SetOption(std::forward<decltype(option)>(option));
+                if (auto status = session.SetOption(std::forward<decltype(option)>(option)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
+            return {};
         };
-        (set(std::forward<Ts>(options)), ...);
+        Result<void> status;
+        ((status ? status = set(std::forward<Ts>(options)) : status), ...);
+        return status;
     }
 
     /**
@@ -61,10 +71,11 @@ namespace mcr::detail {
      * @tparam Tuple Tuple type.
      * @param session Destination session.
      * @param options Tuple to expand.
+     * @return Success or the first operation error.
      */
     template <typename Tuple>
-    auto apply_options(Session& session, Tuple&& options) -> void {
-        std::apply([&](auto&&... values) { set_options(session, std::forward<decltype(values)>(values)...); }, std::forward<Tuple>(options));
+    auto apply_options(Session& session, Tuple&& options) -> Result<void> {
+        return std::apply([&](auto&&... values) { return set_options(session, std::forward<decltype(values)>(values)...); }, std::forward<Tuple>(options));
     }
 
     /**
@@ -75,9 +86,15 @@ namespace mcr::detail {
      * @return Independent response.
      */
     template <auto Action, typename... Ts>
-    auto request(Ts&&... options) -> Response {
-        Session session;
-        set_options(session, std::forward<Ts>(options)...);
+    auto request(Ts&&... options) -> Result<Response> {
+        auto owned_session = Session::Create();
+        if (!owned_session) {
+            return std::unexpected{ std::move(owned_session.error()) };
+        }
+        auto& session = **owned_session;
+        if (auto status = set_options(session, std::forward<Ts>(options)...); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return std::invoke(Action, session);
     }
 
@@ -89,7 +106,7 @@ namespace mcr::detail {
      * @return Asynchronous response.
      */
     template <auto Action, typename... Ts>
-    auto request_async(Ts&&... options) -> AsyncResponse {
+    auto request_async(Ts&&... options) -> Result<AsyncResponse> {
         return mcr::async([](auto... values) { return request<Action>(std::move(values)...); }, std::forward<Ts>(options)...);
     }
 
@@ -101,9 +118,15 @@ namespace mcr::detail {
      * @return A single-consumer response task.
      */
     template <auto Prepare, typename Tuple>
-    auto request_coro(Tuple options) -> Task<Response> {
-        auto session = std::make_shared<Session>();
-        apply_options(*session, std::move(options));
+    auto request_coro(Tuple options) -> Task<Result<Response>> {
+        auto created_session = Session::Create();
+        if (!created_session) {
+            co_return std::unexpected{ std::move(created_session.error()) };
+        }
+        auto session = std::move(*created_session);
+        if (auto status = apply_options(*session, std::move(options)); !status) {
+            co_return std::unexpected{ std::move(status.error()) };
+        }
         auto token = co_await TaskStopToken{};
         co_return co_await CoroTransferAwaiter{ std::move(session), Prepare, token };
     }
@@ -133,12 +156,19 @@ namespace mcr::detail {
      * @tparam Tuple Option tuple type.
      * @param multi Destination batch.
      * @param options One request's options.
+     * @return Success or the first operation error.
      */
     template <typename Tuple>
-    auto add_request(MultiPerform& multi, Tuple&& options) -> void {
-        auto session{ std::make_shared<Session>() };
-        apply_options(*session, std::forward<Tuple>(options));
-        multi.AddSession(session);
+    auto add_request(MultiPerform& multi, Tuple&& options) -> Result<void> {
+        auto created_session = Session::Create();
+        if (!created_session) {
+            return std::unexpected{ std::move(created_session.error()) };
+        }
+        auto session = std::move(*created_session);
+        if (auto status = apply_options(*session, std::forward<Tuple>(options)); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        return multi.AddSession(session);
     }
 
     /**
@@ -149,9 +179,13 @@ namespace mcr::detail {
      * @return Responses in argument order.
      */
     template <auto Action, typename... Tuples>
-    auto multi_request(Tuples&&... options) -> std::vector<Response> {
+    auto multi_request(Tuples&&... options) -> Result<std::vector<Response>> {
         MultiPerform multi;
-        (add_request(multi, std::forward<Tuples>(options)), ...);
+        Result<void> status;
+        ((status ? status = add_request(multi, std::forward<Tuples>(options)) : status), ...);
+        if (!status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return std::invoke(Action, multi);
     }
 
@@ -163,22 +197,35 @@ namespace mcr::detail {
      * @return Response future sharing the task's cancellation flag.
      */
     template <auto Action, typename Tuple>
-    auto cancellable_request(Tuple&& options) -> utils::AsyncWrapper<Response, true> {
+    auto cancellable_request(Tuple&& options) -> Result<utils::AsyncWrapper<Result<Response>, true>> {
         auto* pool{ GlobalThreadPool::GetInstance() };
         if (!pool) {
-            throw std::logic_error{ "mcr::MultiAsync: global thread pool has been cleaned up." };
+            return std::unexpected{
+                Error{ ErrorCode::FAILED_INIT, "mcr::MultiAsync: global thread pool has been cleaned up." }
+            };
         }
         auto cancelled{ std::make_shared<std::atomic_bool>(false) };
-        auto future{ pool->Submit([cancelled, values = std::forward<Tuple>(options)]() mutable {
+        auto future{ pool->Submit([cancelled, values = std::forward<Tuple>(options)]() mutable -> Result<Response> {
             if (cancelled->load()) {
                 return Response{};
             }
-            Session session;
-            session.SetCancellationParam(cancelled);
-            apply_options(session, std::move(values));
+            auto owned_session = Session::Create();
+            if (!owned_session) {
+                return std::unexpected{ std::move(owned_session.error()) };
+            }
+            auto& session = **owned_session;
+            if (auto status = session.SetCancellationParam(cancelled); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = apply_options(session, std::move(values)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return std::invoke(Action, session);
         }) };
-        return utils::AsyncWrapper<Response, true>{ std::move(future), std::move(cancelled) };
+        if (!future) {
+            return std::unexpected{ std::move(future.error()) };
+        }
+        return utils::AsyncWrapper<Result<Response>, true>{ std::move(*future), std::move(cancelled) };
     }
 
     /**
@@ -189,10 +236,22 @@ namespace mcr::detail {
      * @return One future per request.
      */
     template <auto Action, typename... Tuples>
-    auto multi_async(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
-        std::vector<utils::AsyncWrapper<Response, true>> responses;
+    auto multi_async(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+        std::vector<utils::AsyncWrapper<Result<Response>, true>> responses;
         responses.reserve(sizeof...(Tuples));
-        (responses.push_back(cancellable_request<Action>(std::forward<Tuples>(options))), ...);
+        auto submit = [&](auto&& value) -> Result<void> {
+            auto request = cancellable_request<Action>(std::forward<decltype(value)>(value));
+            if (!request) {
+                return std::unexpected{ std::move(request.error()) };
+            }
+            responses.push_back(std::move(*request));
+            return {};
+        };
+        Result<void> status;
+        ((status ? status = submit(std::forward<Tuples>(options)) : status), ...);
+        if (!status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return responses;
     }
 } // namespace mcr::detail
@@ -206,7 +265,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Get(Ts&&... options) -> Response {
+    auto Get(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Get>(std::forward<Ts>(options)...);
     }
 
@@ -218,7 +277,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto GetAsync(Ts... options) -> AsyncResponse {
+    auto GetAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Get>(std::move(options)...);
     }
 
@@ -229,7 +288,7 @@ export namespace mcr {
      * @return Task yielding a Response; cancellation produces ABORTED_BY_CALLBACK.
      */
     template <typename... Ts>
-    [[nodiscard]] auto GetCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto GetCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PrepareGet>(std::tuple{ std::move(options)... });
     }
 
@@ -237,7 +296,7 @@ export namespace mcr {
      * @brief Submit GET followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -254,7 +313,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiGet(Tuples&&... options) -> std::vector<Response> {
+    auto MultiGet(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Get>(std::forward<Tuples>(options)...);
     }
 
@@ -265,7 +324,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiGetAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiGetAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Get>(std::forward<Tuples>(options)...);
     }
 
@@ -276,7 +335,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Post(Ts&&... options) -> Response {
+    auto Post(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Post>(std::forward<Ts>(options)...);
     }
 
@@ -288,7 +347,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto PostAsync(Ts... options) -> AsyncResponse {
+    auto PostAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Post>(std::move(options)...);
     }
 
@@ -299,7 +358,7 @@ export namespace mcr {
      * @return Task yielding a Response or propagating a preparation/callback exception.
      */
     template <typename... Ts>
-    [[nodiscard]] auto PostCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto PostCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PreparePost>(std::tuple{ std::move(options)... });
     }
 
@@ -307,7 +366,7 @@ export namespace mcr {
      * @brief Submit POST followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -324,7 +383,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiPost(Tuples&&... options) -> std::vector<Response> {
+    auto MultiPost(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Post>(std::forward<Tuples>(options)...);
     }
 
@@ -335,7 +394,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiPostAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiPostAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Post>(std::forward<Tuples>(options)...);
     }
 
@@ -346,7 +405,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Put(Ts&&... options) -> Response {
+    auto Put(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Put>(std::forward<Ts>(options)...);
     }
 
@@ -358,7 +417,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto PutAsync(Ts... options) -> AsyncResponse {
+    auto PutAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Put>(std::move(options)...);
     }
 
@@ -369,7 +428,7 @@ export namespace mcr {
      * @return Single-consumer response task.
      */
     template <typename... Ts>
-    [[nodiscard]] auto PutCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto PutCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PreparePut>(std::tuple{ std::move(options)... });
     }
 
@@ -377,7 +436,7 @@ export namespace mcr {
      * @brief Submit PUT followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -394,7 +453,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiPut(Tuples&&... options) -> std::vector<Response> {
+    auto MultiPut(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Put>(std::forward<Tuples>(options)...);
     }
 
@@ -405,7 +464,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiPutAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiPutAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Put>(std::forward<Tuples>(options)...);
     }
 
@@ -416,7 +475,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Head(Ts&&... options) -> Response {
+    auto Head(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Head>(std::forward<Ts>(options)...);
     }
 
@@ -428,7 +487,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto HeadAsync(Ts... options) -> AsyncResponse {
+    auto HeadAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Head>(std::move(options)...);
     }
 
@@ -439,7 +498,7 @@ export namespace mcr {
      * @return Single-consumer response task with an empty body.
      */
     template <typename... Ts>
-    [[nodiscard]] auto HeadCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto HeadCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PrepareHead>(std::tuple{ std::move(options)... });
     }
 
@@ -447,7 +506,7 @@ export namespace mcr {
      * @brief Submit HEAD followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -464,7 +523,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiHead(Tuples&&... options) -> std::vector<Response> {
+    auto MultiHead(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Head>(std::forward<Tuples>(options)...);
     }
 
@@ -475,7 +534,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiHeadAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiHeadAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Head>(std::forward<Tuples>(options)...);
     }
 
@@ -486,7 +545,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Delete(Ts&&... options) -> Response {
+    auto Delete(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Delete>(std::forward<Ts>(options)...);
     }
 
@@ -498,7 +557,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto DeleteAsync(Ts... options) -> AsyncResponse {
+    auto DeleteAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Delete>(std::move(options)...);
     }
 
@@ -509,7 +568,7 @@ export namespace mcr {
      * @return Single-consumer response task.
      */
     template <typename... Ts>
-    [[nodiscard]] auto DeleteCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto DeleteCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PrepareDelete>(std::tuple{ std::move(options)... });
     }
 
@@ -517,7 +576,7 @@ export namespace mcr {
      * @brief Submit DELETE followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -534,7 +593,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiDelete(Tuples&&... options) -> std::vector<Response> {
+    auto MultiDelete(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Delete>(std::forward<Tuples>(options)...);
     }
 
@@ -545,7 +604,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiDeleteAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiDeleteAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Delete>(std::forward<Tuples>(options)...);
     }
 
@@ -556,7 +615,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Options(Ts&&... options) -> Response {
+    auto Options(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Options>(std::forward<Ts>(options)...);
     }
 
@@ -568,7 +627,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto OptionsAsync(Ts... options) -> AsyncResponse {
+    auto OptionsAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Options>(std::move(options)...);
     }
 
@@ -579,7 +638,7 @@ export namespace mcr {
      * @return Single-consumer response task.
      */
     template <typename... Ts>
-    [[nodiscard]] auto OptionsCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto OptionsCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PrepareOptions>(std::tuple{ std::move(options)... });
     }
 
@@ -587,7 +646,7 @@ export namespace mcr {
      * @brief Submit OPTIONS followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -604,7 +663,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiOptions(Tuples&&... options) -> std::vector<Response> {
+    auto MultiOptions(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Options>(std::forward<Tuples>(options)...);
     }
 
@@ -615,7 +674,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiOptionsAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiOptionsAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Options>(std::forward<Tuples>(options)...);
     }
 
@@ -626,7 +685,7 @@ export namespace mcr {
      * @return Independent response snapshot.
      */
     template <typename... Ts>
-    auto Patch(Ts&&... options) -> Response {
+    auto Patch(Ts&&... options) -> Result<Response> {
         return detail::request<&Session::Patch>(std::forward<Ts>(options)...);
     }
 
@@ -638,7 +697,7 @@ export namespace mcr {
      * @note Views and explicit reference wrappers still borrow their underlying data.
      */
     template <typename... Ts>
-    auto PatchAsync(Ts... options) -> AsyncResponse {
+    auto PatchAsync(Ts... options) -> Result<AsyncResponse> {
         return detail::request_async<&Session::Patch>(std::move(options)...);
     }
 
@@ -649,7 +708,7 @@ export namespace mcr {
      * @return Single-consumer response task.
      */
     template <typename... Ts>
-    [[nodiscard]] auto PatchCoro(Ts... options) -> Task<Response> {
+    [[nodiscard]] auto PatchCoro(Ts... options) -> Task<Result<Response>> {
         return detail::request_coro<&Session::PreparePatch>(std::tuple{ std::move(options)... });
     }
 
@@ -657,7 +716,7 @@ export namespace mcr {
      * @brief Submit PATCH followed by a continuation.
      * @tparam Then Continuation type.
      * @tparam Ts Option types.
-     * @param then Callable receiving the response.
+     * @param then Callable receiving Result<Response>, including configuration failures.
      * @param options Options copied or moved into the task.
      * @return Cancellable wrapper for the continuation result.
      * @note As in cpr::async, cancellation restricts result access; it does not abort this request.
@@ -674,7 +733,7 @@ export namespace mcr {
      * @return Responses in argument order.
      */
     template <typename... Tuples>
-    auto MultiPatch(Tuples&&... options) -> std::vector<Response> {
+    auto MultiPatch(Tuples&&... options) -> Result<std::vector<Response>> {
         return detail::multi_request<&MultiPerform::Patch>(std::forward<Tuples>(options)...);
     }
 
@@ -685,7 +744,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    auto MultiPatchAsync(Tuples&&... options) -> std::vector<utils::AsyncWrapper<Response, true>> {
+    auto MultiPatchAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Patch>(std::forward<Tuples>(options)...);
     }
 
@@ -695,15 +754,22 @@ export namespace mcr {
      * @param file Open stream, normally in binary mode.
      * @param options Request options.
      * @return Metadata with an empty response body.
-     * @throws std::runtime_error If the stream is not writable before the request.
      */
     template <typename... Ts>
-    auto Download(std::ofstream& file, Ts&&... options) -> Response {
+    auto Download(std::ofstream& file, Ts&&... options) -> Result<Response> {
         if (!file.is_open() || !file.good()) {
-            throw std::runtime_error{ "mcr::Download: output stream is not writable." };
+            return std::unexpected{
+                Error{ ErrorCode::WRITE_ERROR, "mcr::Download: output stream is not writable." }
+            };
         }
-        Session session;
-        detail::set_options(session, std::forward<Ts>(options)...);
+        auto owned_session = Session::Create();
+        if (!owned_session) {
+            return std::unexpected{ std::move(owned_session.error()) };
+        }
+        auto& session = **owned_session;
+        if (auto status = detail::set_options(session, std::forward<Ts>(options)...); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return session.Download(file);
     }
 
@@ -715,9 +781,15 @@ export namespace mcr {
      * @return Metadata with an empty response body.
      */
     template <typename... Ts>
-    auto Download(WriteCallback const& write, Ts&&... options) -> Response {
-        Session session;
-        detail::set_options(session, std::forward<Ts>(options)...);
+    auto Download(WriteCallback const& write, Ts&&... options) -> Result<Response> {
+        auto owned_session = Session::Create();
+        if (!owned_session) {
+            return std::unexpected{ std::move(owned_session.error()) };
+        }
+        auto& session = **owned_session;
+        if (auto status = detail::set_options(session, std::forward<Ts>(options)...); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return session.Download(write);
     }
 
@@ -730,18 +802,25 @@ export namespace mcr {
      * @note Failed transfers may leave a partial file.
      */
     template <typename... Ts>
-    auto DownloadAsync(std::filesystem::path local_path, Ts... options) -> AsyncResponse {
-        return mcr::async([](std::filesystem::path path, auto... values) {
-            std::ofstream file{ path, std::ios::binary | std::ios::trunc };
-            auto          response{ Download(file, std::move(values)...) };
-            file.close();
-            if (file.fail()) {
-                throw std::runtime_error{ "mcr::DownloadAsync: could not finish writing the output file." };
-            }
-            return response;
-        },
-                          std::move(local_path),
-                          std::move(options)...);
+    auto DownloadAsync(std::filesystem::path local_path, Ts... options) -> Result<AsyncResponse> {
+        return mcr::async(
+            [](std::filesystem::path path, auto... values) -> Result<Response> {
+                std::ofstream file{ path, std::ios::binary | std::ios::trunc };
+                auto          response{ Download(file, std::move(values)...) };
+                if (!response) {
+                    return response;
+                }
+                file.close();
+                if (file.fail()) {
+                    return std::unexpected{
+                        Error{ ErrorCode::WRITE_ERROR, "mcr::DownloadAsync: could not finish writing the output file." }
+                    };
+                }
+                return response;
+            },
+            std::move(local_path),
+            std::move(options)...
+        );
     }
 
     /**
@@ -750,26 +829,35 @@ export namespace mcr {
      * @param local_path File opened in binary truncation mode when the task starts.
      * @param options Owned options; views and reference wrappers retain borrowed lifetimes.
      * @return Task yielding response metadata after closing the file.
-     * @throws std::runtime_error If opening or closing the file fails.
      * @note Failed or cancelled transfers may leave a partial file.
      */
     template <typename... Ts>
-    [[nodiscard]] auto DownloadCoro(std::filesystem::path local_path, Ts... options) -> Task<Response> {
+    [[nodiscard]] auto DownloadCoro(std::filesystem::path local_path, Ts... options) -> Task<Result<Response>> {
         std::ofstream file{ local_path, std::ios::binary | std::ios::trunc };
         if (!file.is_open() || !file.good()) {
-            throw std::runtime_error{ "mcr::DownloadCoro: output stream is not writable." };
+            co_return std::unexpected{
+                Error{ ErrorCode::WRITE_ERROR, "mcr::DownloadCoro: output stream is not writable." }
+            };
         }
-        auto session = std::make_shared<Session>();
-        detail::set_options(*session, std::move(options)...);
+        auto created_session = Session::Create();
+        if (!created_session) {
+            co_return std::unexpected{ std::move(created_session.error()) };
+        }
+        auto session = std::move(*created_session);
+        if (auto status = detail::set_options(*session, std::move(options)...); !status) {
+            co_return std::unexpected{ std::move(status.error()) };
+        }
         auto token    = co_await detail::TaskStopToken{};
         auto response = co_await detail::CoroTransferAwaiter{
             std::move(session),
-            [&file](Session& current) { current.PrepareDownload(file); },
+            [&file](Session& current) { return current.PrepareDownload(file); },
             token
         };
         file.close();
         if (file.fail()) {
-            throw std::runtime_error{ "mcr::DownloadCoro: could not finish writing the output file." };
+            co_return std::unexpected{
+                Error{ ErrorCode::WRITE_ERROR, "mcr::DownloadCoro: could not finish writing the output file." }
+            };
         }
         co_return response;
     }

@@ -65,22 +65,22 @@ namespace {
         for (auto const& entry : cases) {
             for (int outputs{ 0 }; outputs != 4; ++outputs) {
                 status = reason  = "old";
-                header            = utils::parse_header(entry.input, outputs & 1 ? &status : nullptr, outputs & 2 ? &reason : nullptr);
+                header           = utils::parse_header(entry.input, outputs & 1 ? &status : nullptr, outputs & 2 ? &reason : nullptr);
                 passed          &= check(header.empty() && status == (outputs & 1 ? entry.status : "old") && reason == (outputs & 2 ? entry.reason : "old"), "status extraction must honor independent optional outputs and never turn a reason colon into a header");
             }
         }
         status = reason  = "unchanged";
-        passed           &= check(utils::parse_header({}, &status, &reason).empty() && status == "unchanged" && reason == "unchanged", "empty input must preserve status outputs");
-        header            = utils::parse_header("Only: value", &status, &reason);
+        passed          &= check(utils::parse_header({}, &status, &reason).empty() && status == "unchanged" && reason == "unchanged", "empty input must preserve status outputs");
+        header           = utils::parse_header("Only: value", &status, &reason);
         passed          &= check(header.at("Only") == "value" && status == "unchanged" && reason == "unchanged", "header-only input must not invent a status");
         std::string const binary{ "xX-Binary: a\0b\r\ny", 17 };
         header  = utils::parse_header(std::string_view{ binary }.substr(1, 15));
         passed &= check(header.size() == 1 && header.at("X-Binary") == std::string{ "a\0b", 3 }, "header parsing must honor bounded views and embedded null bytes");
         std::string aliased{ "HTTP/1.1 200 A longer reason phrase\r\nOwned: preserved\r\n" };
-        header    = utils::parse_header(aliased, &aliased, &reason);
+        header   = utils::parse_header(aliased, &aliased, &reason);
         passed  &= check(aliased == "HTTP/1.1 200 A longer reason phrase" && reason == "A longer reason phrase" && header.at("Owned") == "preserved", "status output may reuse the string backing the input view");
         aliased  = "HTTP/1.1 404 Missing\r\nOwned: preserved\r\n";
-        header    = utils::parse_header(aliased, &status, &aliased);
+        header   = utils::parse_header(aliased, &status, &aliased);
         passed  &= check(aliased == "Missing" && status == "HTTP/1.1 404 Missing" && header.at("Owned") == "preserved", "reason output may reuse the string backing the input view");
         return passed;
     }
@@ -102,26 +102,26 @@ namespace {
             passed &= check(!utils::is_true(value), "truth parsing must reject other tokens, whitespace, and high-bit bytes");
         }
         passed &= check(!utils::is_true(std::string_view{ "true\0", 5 }), "truth parsing must not stop at embedded null bytes");
-        passed &= check(utils::s_timestamp_to_t("0") == 0 && utils::s_timestamp_to_t("1656908640") == 1656908640 && utils::s_timestamp_to_t(" \t+42suffix") == 42 && utils::s_timestamp_to_t(std::string_view{ "x123x" }.substr(1, 3)) == 123, "timestamps use seconds and cpr's decimal prefix and whitespace rules");
+        passed &= check(utils::s_timestamp_to_t("0").value() == 0 && utils::s_timestamp_to_t("1656908640").value() == 1656908640 && utils::s_timestamp_to_t(" \t+42suffix").value() == 42 && utils::s_timestamp_to_t(std::string_view{ "x123x" }.substr(1, 3)).value() == 123, "timestamps use seconds and cpr's decimal prefix and whitespace rules");
         auto const maximum{ (std::numeric_limits<std::time_t>::max)() };
         auto const minimum{ (std::numeric_limits<std::time_t>::min)() };
-        passed &= check(utils::s_timestamp_to_t(std::to_string(maximum)) == maximum && utils::s_timestamp_to_t(std::to_string(minimum)) == minimum, "timestamp parsing must cover the entire platform time_t range");
+        passed &= check(utils::s_timestamp_to_t(std::to_string(maximum)).value() == maximum && utils::s_timestamp_to_t(std::to_string(minimum)).value() == minimum, "timestamp parsing must cover the entire platform time_t range");
         if constexpr (std::is_signed_v<std::time_t>) {
-            passed &= check(utils::s_timestamp_to_t("-1") == -1 && throws<std::out_of_range>([&] { (void)utils::s_timestamp_to_t(std::to_string(minimum) + "0"); }), "signed timestamps must retain negative values and reject underflow");
+            passed &= check(utils::s_timestamp_to_t("-1").value() == -1 && !utils::s_timestamp_to_t(std::to_string(minimum) + "0"), "signed timestamps must retain negative values and reject underflow");
         }
-        passed &= check(throws<std::out_of_range>([&] { (void)utils::s_timestamp_to_t(std::to_string(maximum) + "0"); }), "timestamp overflow must throw");
+        passed &= check(!utils::s_timestamp_to_t(std::to_string(maximum) + "0"), "timestamp overflow must return an error");
         for (std::string_view const value : { "", " ", "invalid", "+", "--1" }) {
-            passed &= check(throws<std::invalid_argument>([&] { (void)utils::s_timestamp_to_t(value); }), "timestamps without a decimal prefix must throw");
+            passed &= check(!utils::s_timestamp_to_t(value), "timestamps without a decimal prefix must return an error");
         }
         return passed;
     }
 
     auto check_cookies() -> bool {
-        auto         empty{ utils::parse_cookies(nullptr) };
+        auto         empty{ utils::parse_cookies(nullptr).value() };
         bool         passed{ check(empty.empty() && empty.encode, "a null curl list must yield an empty collection with encoding enabled") };
         mcr::Cookies cookies;
         {
-            mcr::curl::CurlHolder owner;
+            auto owner = mcr::curl::CurlHolder::Create().value();
             for (char const* record : {
                      "127.0.0.1\tFALSE\t/\tFALSE\t1656908640\tstatus\ton",
                      ".example.test\tTrUe\t/account\tTRUE\t0\tstatus\tdebug",
@@ -135,7 +135,7 @@ namespace {
                 }
                 owner.chunk = appended;
             }
-            cookies  = utils::parse_cookies(owner.chunk);
+            cookies  = utils::parse_cookies(owner.chunk).value();
             passed  &= check(std::string_view{ owner.chunk->data }.starts_with("127.0.0.1\tFALSE"), "parsing must leave the borrowed curl list intact");
         }
         passed &= check(cookies.encode && std::ranges::distance(cookies) == 5, "cookies must own their strings after the raw list is freed");
@@ -144,11 +144,11 @@ namespace {
         passed &= check(cookies[2].GetDomain() == "#HttpOnly_.example.test" && cookies[2].GetName() == "empty" && cookies[2].GetValue().empty() && cookies[3].GetName().empty() && cookies[3].GetValue().empty() && cookies[3].GetPath().empty() && cookies[4].GetValue() == "value", "HttpOnly text, missing fields, empty values, and extra columns must follow cpr");
         for (std::string record : { "example.test", "example.test\tFALSE\t/\tFALSE\tbad\tname\tvalue" }) {
             curl_slist raw{ record.data(), nullptr };
-            passed &= check(throws<std::invalid_argument>([&] { (void)utils::parse_cookies(&raw); }), "missing and invalid expirations must throw");
+            passed &= check(!utils::parse_cookies(&raw), "missing and invalid expirations must return an error");
         }
         std::string oversized{ "example.test\tFALSE\t/\tFALSE\t999999999999999999999999\tname\tvalue" };
         curl_slist  raw{ oversized.data(), nullptr };
-        passed &= check(throws<std::out_of_range>([&] { (void)utils::parse_cookies(&raw); }), "overflowing cookie timestamps must throw");
+        passed &= check(!utils::parse_cookies(&raw), "overflowing cookie timestamps must return an error");
         return passed;
     }
 
@@ -162,19 +162,19 @@ namespace {
                                    return true;
                                },
                                 42 };
-        passed         &= check(utils::read_user_function(buffer.data(), 2, 4, &read) == 3 && std::string_view{ buffer.data(), 3 } == std::string_view{ "a\0b", 3 }, "read adapter must return a short binary read");
+        passed        &= check(utils::read_user_function(buffer.data(), 2, 4, &read) == 3 && std::string_view{ buffer.data(), 3 } == std::string_view{ "a\0b", 3 }, "read adapter must return a short binary read");
         read.callback  = [](char*, std::size_t& count, std::intptr_t) {
             count = 0;
             return true;
         };
-        passed         &= check(utils::read_user_function(buffer.data(), 1, 8, &read) == 0, "successful zero-byte reads must indicate EOF");
+        passed        &= check(utils::read_user_function(buffer.data(), 1, 8, &read) == 0, "successful zero-byte reads must indicate EOF");
         read.callback  = [](char*, std::size_t& count, std::intptr_t) {
             count = 0;
             return false;
         };
-        passed         &= check(utils::read_user_function(buffer.data(), 1, 8, &read) == CURL_READFUNC_ABORT, "a rejected read must abort even if the producer sets count to zero");
+        passed        &= check(utils::read_user_function(buffer.data(), 1, 8, &read) == CURL_READFUNC_ABORT, "a rejected read must abort even if the producer sets count to zero");
         read.callback  = {};
-        passed         &= check(utils::read_user_function(buffer.data(), 2, 4, &read) == 8, "empty read callbacks must preserve cpr's unchanged-count behavior");
+        passed        &= check(utils::read_user_function(buffer.data(), 2, 4, &read) == 8, "empty read callbacks must preserve cpr's unchanged-count behavior");
 
         std::string bytes{ "a\0b\r\nx", 6 };
         bool        accept{ true };
@@ -186,14 +186,14 @@ namespace {
         };
         mcr::HeaderCallback header{ consume, -7 };
         mcr::WriteCallback  write{ consume, -7 };
-        passed           &= check(utils::header_user_function(bytes.data(), 2, 3, &header) == 6 && utils::write_user_function(bytes.data(), 3, 2, &write) == 6, "accepted header and body chunks must return their byte counts");
+        passed          &= check(utils::header_user_function(bytes.data(), 2, 3, &header) == 6 && utils::write_user_function(bytes.data(), 3, 2, &write) == 6, "accepted header and body chunks must return their byte counts");
         accept           = false;
-        passed           &= check(utils::header_user_function(bytes.data(), 1, 6, &header) == 0 && utils::write_user_function(bytes.data(), 1, 6, &write) == 0 && calls == 4, "rejected header and body chunks must stop the transfer");
+        passed          &= check(utils::header_user_function(bytes.data(), 1, 6, &header) == 0 && utils::write_user_function(bytes.data(), 1, 6, &write) == 0 && calls == 4, "rejected header and body chunks must stop the transfer");
         header.callback  = {};
         write.callback   = {};
-        passed           &= check(utils::header_user_function(bytes.data(), 0, 6, &header) == 0 && utils::write_user_function(bytes.data(), 1, 6, &write) == 6, "empty consumers must accept chunks, including empty input");
+        passed          &= check(utils::header_user_function(bytes.data(), 0, 6, &header) == 0 && utils::write_user_function(bytes.data(), 1, 6, &write) == 6, "empty consumers must accept chunks, including empty input");
         std::string accumulated{ "prefix:" };
-        passed         &= check(utils::write_function(bytes.data(), 2, 3, &accumulated) == 6 && utils::write_function(bytes.data(), 0, 6, &accumulated) == 0 && accumulated == "prefix:" + bytes, "string writes must append binary bytes and permit empty chunks");
+        passed        &= check(utils::write_function(bytes.data(), 2, 3, &accumulated) == 6 && utils::write_function(bytes.data(), 0, 6, &accumulated) == 0 && accumulated == "prefix:" + bytes, "string writes must append binary bytes and permit empty chunks");
 
         using Counter  = mcr::CprPfArgT;
         Counter const         large{ (std::numeric_limits<Counter>::max)() };
@@ -202,14 +202,14 @@ namespace {
                                            return accept;
                                        },
                                         42 };
-        passed  &= check(utils::progress_user_function(&progress, large, 2, 3, 1) == 1, "false progress must abort instead of requesting curl's default progress meter");
+        passed &= check(utils::progress_user_function(&progress, large, 2, 3, 1) == 1, "false progress must abort instead of requesting curl's default progress meter");
         accept  = true;
-        passed  &= check(utils::progress_user_function(&progress, large, 2, 3, 1) == 0, "true progress must continue");
+        passed &= check(utils::progress_user_function(&progress, large, 2, 3, 1) == 0, "true progress must continue");
         auto                      state{ std::make_shared<std::atomic_bool>(false) };
         mcr::CancellationCallback cancellation{ std::shared_ptr{ state } };
         passed &= check(utils::progress_user_function(&cancellation, 0, 0, 0, 0) == 0, "the progress template must support cancellation callbacks");
         state->store(true);
-        passed             &= check(utils::progress_user_function(&cancellation, 0, 0, 0, 0) == 1, "shared cancellation must translate to curl abort");
+        passed            &= check(utils::progress_user_function(&cancellation, 0, 0, 0, 0) == 1, "shared cancellation must translate to curl abort");
         auto const custom  = [](Counter, Counter, Counter, Counter) {
             return false;
         };
@@ -224,7 +224,7 @@ namespace {
                                   9 };
         for (auto type : { CURLINFO_TEXT, CURLINFO_HEADER_IN, CURLINFO_HEADER_OUT, CURLINFO_DATA_IN, CURLINFO_DATA_OUT, CURLINFO_SSL_DATA_IN, CURLINFO_SSL_DATA_OUT }) {
             expected_type  = type;
-            passed         &= check(utils::debug_user_function(nullptr, type, bytes.data(), bytes.size(), &debug) == 0, "debug adapter must always return zero");
+            passed        &= check(utils::debug_user_function(nullptr, type, bytes.data(), bytes.size(), &debug) == 0, "debug adapter must always return zero");
         }
         passed         &= check(debug_calls == 7, "all debug categories must be forwarded");
         write.callback  = [](std::string_view, std::intptr_t) -> bool {
@@ -246,8 +246,8 @@ namespace {
                                           42 };
         std::string first{ "data: hel" };
         std::string second{ "lo\r\n\r\n" };
-        passed  &= check(utils::write_sse_function(first.data(), 1, first.size(), &sse) == first.size() && events.empty(), "incomplete SSE chunks must be buffered and accepted");
-        passed  &= check(utils::write_sse_function(second.data(), 2, 3, &sse) == 6 && events == std::vector<std::string>{ "hello" }, "SSE state must span curl callback invocations");
+        passed &= check(utils::write_sse_function(first.data(), 1, first.size(), &sse) == first.size() && events.empty(), "incomplete SSE chunks must be buffered and accepted");
+        passed &= check(utils::write_sse_function(second.data(), 2, 3, &sse) == 6 && events == std::vector<std::string>{ "hello" }, "SSE state must span curl callback invocations");
         accept  = false;
         std::string rejected{ "data: stop\n\ndata: later\n\n" };
         passed &= check(utils::write_sse_function(rejected.data(), 1, rejected.size(), &sse) == 0 && events == std::vector<std::string>{ "hello", "stop" }, "SSE cancellation must reject the whole chunk and suppress later events");
@@ -289,13 +289,13 @@ namespace {
     }
 
     auto check_url() -> bool {
-        bool                   passed{ check(utils::url_encode("Hello World!") == "Hello%20World%21" && utils::url_decode("Hello%20World%21") == "Hello World!", "URL convenience helpers must match cpr's ASCII examples") };
+        bool                   passed{ check(utils::url_encode("Hello World!").value() == "Hello%20World%21" && utils::url_decode("Hello%20World%21").value() == "Hello World!", "URL convenience helpers must match cpr's ASCII examples") };
         std::string_view const unicode{ "\xE4\xB8\x80\xE4\xBA\x8C\xE4\xB8\x89" };
-        passed &= check(utils::url_encode(unicode) == "%E4%B8%80%E4%BA%8C%E4%B8%89" && utils::url_decode("%E4%B8%80%E4%BA%8C%E4%B8%89") == unicode, "URL helpers must encode UTF-8 bytes");
+        passed &= check(utils::url_encode(unicode).value() == "%E4%B8%80%E4%BA%8C%E4%B8%89" && utils::url_decode("%E4%B8%80%E4%BA%8C%E4%B8%89").value() == unicode, "URL helpers must encode UTF-8 bytes");
         std::string const binary{ "a\0b", 3 };
-        passed &= check(utils::url_encode(binary) == "a%00b" && utils::url_decode("a%00b") == std::string_view{ binary }, "URL helpers must preserve binary data through percent escapes");
-        passed &= check(utils::url_encode({}).empty() && utils::url_decode({}).empty() && utils::url_encode(std::string_view{ "x a x" }.substr(1, 3)) == "%20a%20" && utils::url_decode(std::string_view{ "x%41x" }.substr(1, 3)) == "A", "URL helpers must respect empty and bounded views");
-        passed &= check(utils::url_decode("a+b%2Bc%zz%") == "a+b+c%zz%", "decoding must retain plus signs and malformed escapes as curl does");
+        passed &= check(utils::url_encode(binary).value() == "a%00b" && utils::url_decode("a%00b").value() == std::string_view{ binary }, "URL helpers must preserve binary data through percent escapes");
+        passed &= check(utils::url_encode({}).value().empty() && utils::url_decode({}).value().empty() && utils::url_encode(std::string_view{ "x a x" }.substr(1, 3)).value() == "%20a%20" && utils::url_decode(std::string_view{ "x%41x" }.substr(1, 3)).value() == "A", "URL helpers must respect empty and bounded views");
+        passed &= check(utils::url_decode("a+b%2Bc%zz%").value() == "a+b+c%zz%", "decoding must retain plus signs and malformed escapes as curl does");
         return passed;
     }
 

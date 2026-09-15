@@ -26,4 +26,13 @@ export namespace example {
         std::println("JSON: {}", parsed->dump());
         return 0;
     }
+
+    /**
+     * @brief Inspect request failures before attempting JSON parsing.
+     * @param response Request result.
+     * @return Zero for successful HTTP and JSON results, otherwise one.
+     */
+    auto print_json_response(mcr::Result<mcr::Response> const& response) -> int {
+        return response ? print_json_response(*response) : print_error(response.error());
+    }
 } // namespace example

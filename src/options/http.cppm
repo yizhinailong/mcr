@@ -4,6 +4,7 @@
  */
 export module mcr.http;
 
+export import mcr.error;
 import std;
 
 export namespace mcr::options {
@@ -90,13 +91,21 @@ export namespace mcr::options {
         /**
          * @brief Store the names of the selected built-in encodings.
          * @param methods Built-in encodings; duplicates are ignored.
-         * @throws std::out_of_range If a method is not a defined AcceptEncodingMethods value.
          * @note Mixing disabled with another method is checked by Disabled(), not during construction.
+         * @return Success or the first operation error.
          */
-        AcceptEncoding(std::initializer_list<AcceptEncodingMethods> const& methods) {
+        [[nodiscard]] static auto Create(std::initializer_list<AcceptEncodingMethods> const& methods) -> Result<AcceptEncoding> {
+            AcceptEncoding result;
             for (auto const method : methods) {
-                m_methods.insert(ACCEPT_ENCODING_METHODS_STRING_MAP.at(method));
+                auto const entry = ACCEPT_ENCODING_METHODS_STRING_MAP.find(method);
+                if (entry == ACCEPT_ENCODING_METHODS_STRING_MAP.end()) {
+                    return std::unexpected{
+                        Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::options::AcceptEncoding: unknown method." }
+                    };
+                }
+                result.m_methods.insert(entry->second);
             }
+            return result;
         }
 
         /**
@@ -127,14 +136,15 @@ export namespace mcr::options {
         /**
          * @brief Check whether automatic Accept-Encoding handling is disabled.
          * @return True if "disabled" is the only distinct name; false if it is absent.
-         * @throws std::invalid_argument If "disabled" is combined with any other distinct name.
          */
-        [[nodiscard]] auto Disabled() const -> bool {
+        [[nodiscard]] auto Disabled() const -> Result<bool> {
             if (!m_methods.contains(ACCEPT_ENCODING_METHODS_STRING_MAP.at(AcceptEncodingMethods::disabled))) {
                 return false;
             }
             if (m_methods.size() != 1) {
-                throw std::invalid_argument{ "AcceptEncoding does not accept any other values if 'disabled' is present. You set the following encodings: " + GetString() };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "AcceptEncoding does not accept any other values if 'disabled' is present. You set the following encodings: " + GetString() }
+                };
             }
             return true;
         }

@@ -13,8 +13,8 @@ static_assert(std::is_nothrow_move_constructible_v<mcr::curl::CurlHolder>);
 static_assert(std::is_nothrow_move_assignable_v<mcr::curl::CurlHolder>);
 static_assert(std::is_nothrow_destructible_v<mcr::curl::CurlHolder>);
 static_assert(std::is_same_v<decltype(mcr::curl::CurlHolder::error), std::array<char, CURL_ERROR_SIZE>>);
-static_assert(std::is_same_v<decltype(std::declval<mcr::curl::CurlHolder const&>().UrlEncode({})), mcr::utils::SecureString>);
-static_assert(std::is_same_v<decltype(std::declval<mcr::curl::CurlHolder const&>().UrlDecode({})), mcr::utils::SecureString>);
+static_assert(std::is_same_v<std::remove_cvref_t<decltype(std::declval<mcr::curl::CurlHolder const&>().UrlEncode({}).value())>, mcr::utils::SecureString>);
+static_assert(std::is_same_v<std::remove_cvref_t<decltype(std::declval<mcr::curl::CurlHolder const&>().UrlDecode({}).value())>, mcr::utils::SecureString>);
 
 namespace {
 
@@ -131,25 +131,25 @@ namespace {
     }
 
     auto check_url_conversion() -> bool {
-        mcr::curl::CurlHolder holder;
-        bool            passed{ check(holder.handle && !holder.chunk && !holder.resolve_curl_list && !holder.multipart && std::ranges::all_of(holder.error, [](char value) { return value == '\0'; }), "construction must create a handle and initialize empty resources and error storage") };
-        passed &= check(holder.UrlEncode("Hello World!") == "Hello%20World%21" && holder.UrlDecode("Hello%20World%21") == "Hello World!", "URL helpers must preserve cpr's ASCII behavior");
-        passed &= check(holder.UrlEncode("AZaz09-._~") == "AZaz09-._~", "unreserved URL characters must remain unescaped");
-        passed &= check(holder.UrlEncode("/?&=+#%") == "%2F%3F%26%3D%2B%23%25", "reserved component characters must be escaped");
-        passed &= check(holder.UrlEncode("\xE4\xB8\x80\xE4\xBA\x8C\xE4\xB8\x89") == "%E4%B8%80%E4%BA%8C%E4%B8%89", "UTF-8 input must be encoded byte by byte");
-        passed &= check(holder.UrlDecode("a+b%2B%20c") == "a+b+ c" && holder.UrlDecode("%GG%2%") == "%GG%2%", "decoding must preserve plus signs and malformed percent escapes as curl does");
+        auto holder = mcr::curl::CurlHolder::Create().value();
+        bool passed{ check(holder.handle && !holder.chunk && !holder.resolve_curl_list && !holder.multipart && std::ranges::all_of(holder.error, [](char value) { return value == '\0'; }), "construction must create a handle and initialize empty resources and error storage") };
+        passed &= check(holder.UrlEncode("Hello World!").value() == "Hello%20World%21" && holder.UrlDecode("Hello%20World%21").value() == "Hello World!", "URL helpers must preserve cpr's ASCII behavior");
+        passed &= check(holder.UrlEncode("AZaz09-._~").value() == "AZaz09-._~", "unreserved URL characters must remain unescaped");
+        passed &= check(holder.UrlEncode("/?&=+#%").value() == "%2F%3F%26%3D%2B%23%25", "reserved component characters must be escaped");
+        passed &= check(holder.UrlEncode("\xE4\xB8\x80\xE4\xBA\x8C\xE4\xB8\x89").value() == "%E4%B8%80%E4%BA%8C%E4%B8%89", "UTF-8 input must be encoded byte by byte");
+        passed &= check(holder.UrlDecode("a+b%2B%20c").value() == "a+b+ c" && holder.UrlDecode("%GG%2%").value() == "%GG%2%", "decoding must preserve plus signs and malformed percent escapes as curl does");
         std::array<char, 4> const plain{ 'a', ' ', 'b', 'x' };
         std::array<char, 4> const escaped{ '%', '4', '1', 'x' };
-        passed &= check(holder.UrlEncode({ plain.data(), 3 }) == "a%20b" && holder.UrlDecode({ escaped.data(), 3 }) == "A", "URL helpers must respect view lengths without requiring null termination");
-        passed &= check(holder.UrlEncode({}).empty() && holder.UrlDecode({}).empty() && holder.UrlEncode({ plain.data(), 0 }).empty() && holder.UrlDecode({ escaped.data(), 0 }).empty(), "empty views must not trigger curl's strlen fallback");
+        passed &= check(holder.UrlEncode({ plain.data(), 3 }).value() == "a%20b" && holder.UrlDecode({ escaped.data(), 3 }).value() == "A", "URL helpers must respect view lengths without requiring null termination");
+        passed &= check(holder.UrlEncode({}).value().empty() && holder.UrlDecode({}).value().empty() && holder.UrlEncode({ plain.data(), 0 }).value().empty() && holder.UrlDecode({ escaped.data(), 0 }).value().empty(), "empty views must not trigger curl's strlen fallback");
         std::string const binary{ "\0a\0b\0", 5 };
-        passed &= check(holder.UrlEncode(binary) == "%00a%00b%00" && view(holder.UrlDecode("%00a%00b%00")) == binary && view(holder.UrlDecode(binary)) == binary, "embedded nulls must survive encoding and decoding at every position");
+        passed &= check(holder.UrlEncode(binary).value() == "%00a%00b%00" && view(holder.UrlDecode("%00a%00b%00").value()) == binary && view(holder.UrlDecode(binary).value()) == binary, "embedded nulls must survive encoding and decoding at every position");
         std::string bytes;
         for (unsigned value{ 0 }; value < 256; ++value) {
             bytes.push_back(static_cast<char>(value));
         }
-        auto const encoded{ holder.UrlEncode(bytes) };
-        passed &= check(view(holder.UrlDecode(view(encoded))) == bytes, "all 256 byte values must round-trip through percent encoding");
+        auto const encoded{ holder.UrlEncode(bytes).value() };
+        passed &= check(view(holder.UrlDecode(view(encoded)).value()) == bytes, "all 256 byte values must round-trip through percent encoding");
         passed &= check_error_buffer(holder);
         return passed;
     }
@@ -159,7 +159,7 @@ namespace {
         int  replaced_frees{ 0 };
         bool passed{ true };
         {
-            mcr::curl::CurlHolder source;
+            auto source = mcr::curl::CurlHolder::Create().value();
             if (!attach_resources(source, source_frees)) {
                 return false;
             }
@@ -168,13 +168,13 @@ namespace {
             auto* resolve{ source.resolve_curl_list };
             auto* multipart{ source.multipart };
             source.error.front() = 'x';
-            auto const      old_error{ source.error };
+            auto const            old_error{ source.error };
             mcr::curl::CurlHolder moved{ std::move(source) };
             passed &= check(has_no_resources(source) && moved.handle == handle && moved.chunk == chunk && moved.resolve_curl_list == resolve && moved.multipart == multipart && moved.error == old_error && source_frees == 0, "move construction must transfer every resource and preserve error text without freeing the source resources");
             passed &= check_error_buffer(moved);
             passed &= check(source.error == old_error, "moved handles must not write to the source object's error buffer");
-            auto const      moved_error{ moved.error };
-            mcr::curl::CurlHolder destination;
+            auto const moved_error{ moved.error };
+            auto       destination = mcr::curl::CurlHolder::Create().value();
             if (!attach_resources(destination, replaced_frees)) {
                 return false;
             }
@@ -182,31 +182,23 @@ namespace {
             passed &= check_error_buffer(destination);
             passed &= check(moved.error == moved_error, "move assignment must rebind error storage without modifying the former holder");
             auto* self{ &destination };
-            destination  = std::move(*self);
-            passed      &= check(destination.handle == handle && destination.chunk == chunk && destination.resolve_curl_list == resolve && destination.multipart == multipart && source_frees == 0 && destination.UrlEncode("still usable") == "still%20usable", "self-move must preserve resources and usability");
-            passed      &= check(std::string_view{ destination.chunk->data } == "X-Test: owned" && std::string_view{ destination.resolve_curl_list->data } == "example.test:80:127.0.0.1", "owned lists must remain valid after moving");
+            destination                = std::move(*self);
+            passed                    &= check(destination.handle == handle && destination.chunk == chunk && destination.resolve_curl_list == resolve && destination.multipart == multipart && source_frees == 0 && destination.UrlEncode("still usable").value() == "still%20usable", "self-move must preserve resources and usability");
+            passed                    &= check(std::string_view{ destination.chunk->data } == "X-Test: owned" && std::string_view{ destination.resolve_curl_list->data } == "example.test:80:127.0.0.1", "owned lists must remain valid after moving");
 
-            for (bool const encode : { true, false }) {
-                try {
-                    if (encode) {
-                        (void)source.UrlEncode("input");
-                    } else {
-                        (void)source.UrlDecode("input");
-                    }
-                    passed &= check(false, "URL conversion on a holder without a handle must throw");
-                } catch (std::logic_error const&) {
-                }
-            }
+            auto const encode_failure  = source.UrlEncode("input");
+            auto const decode_failure  = source.UrlDecode("input");
+            passed                    &= check(!encode_failure && !decode_failure && encode_failure.error().code == mcr::ErrorCode::FAILED_INIT && decode_failure.error().code == mcr::ErrorCode::FAILED_INIT, "URL conversion requires an active handle");
             mcr::curl::CurlHolder empty{ std::move(source) };
             passed &= check(has_no_resources(empty), "moving an empty holder must remain safe");
             source  = std::move(destination);
-            passed &= check(has_no_resources(destination) && source.UrlDecode("reused%20holder") == "reused holder", "a moved-from holder must be reusable by move assignment");
+            passed &= check(has_no_resources(destination) && source.UrlDecode("reused%20holder").value() == "reused holder", "a moved-from holder must be reusable by move assignment");
         }
         passed &= check(source_frees == 1 && replaced_frees == 1, "each MIME resource must be freed exactly once across moves and destruction");
 
         int discarded_frees{ 0 };
         {
-            mcr::curl::CurlHolder source;
+            auto                  source = mcr::curl::CurlHolder::Create().value();
             mcr::curl::CurlHolder owner{ std::move(source) };
             if (!attach_resources(owner, discarded_frees)) {
                 return false;
@@ -221,20 +213,18 @@ namespace {
         bool passed{ true };
         {
             FailAllocations fail;
-            try {
-                mcr::curl::CurlHolder invalid;
-                passed &= check(false, "easy-handle initialization failure must throw instead of leaving a null handle");
-            } catch (std::runtime_error const& error) {
-                passed &= check(std::string_view{ error.what() }.contains("curl_easy_init"), "initialization failure must identify the failed operation");
+            {
+                auto const failure  = mcr::curl::CurlHolder::Create();
+                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
             }
         }
-        mcr::curl::CurlHolder holder;
-        auto const      before{ g_live_allocations.load() };
+        auto       holder = mcr::curl::CurlHolder::Create().value();
+        auto const before{ g_live_allocations.load() };
         {
             FailAllocations fail;
-            passed &= check(holder.UrlEncode("allocation required").empty() && holder.UrlDecode("allocation%20required").empty(), "curl conversion allocation failures must preserve cpr's empty-result behavior");
+            passed &= check(!holder.UrlEncode("allocation required") && !holder.UrlDecode("allocation%20required"), "curl conversion allocation failures must return errors");
         }
-        passed &= check(g_live_allocations.load() == before && holder.UrlEncode("works again") == "works%20again", "allocation failures must not leak or prevent later conversion");
+        passed &= check(g_live_allocations.load() == before && holder.UrlEncode("works again").value() == "works%20again", "allocation failures must not leak or prevent later conversion");
         return passed;
     }
 
@@ -243,8 +233,8 @@ namespace {
         for (int worker{ 0 }; worker < 8; ++worker) {
             workers.push_back(std::async(std::launch::async, [] {
                 for (int iteration{ 0 }; iteration < 8; ++iteration) {
-                    mcr::curl::CurlHolder holder;
-                    if (!holder.handle || holder.UrlEncode("thread safe") != "thread%20safe") {
+                    auto holder = mcr::curl::CurlHolder::Create().value();
+                    if (!holder.handle || holder.UrlEncode("thread safe").value() != "thread%20safe") {
                         return false;
                     }
                 }

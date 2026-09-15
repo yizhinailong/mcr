@@ -366,10 +366,10 @@ namespace {
 
     auto check_thread_pool_results() -> void {
         mcr::utils::ThreadPool pool{ 1, 1 };
-        auto                   result{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 84; }) } };
+        auto                   result{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 84; }).value() } };
         require(result.Get() == 84, "wrappers must accept futures returned by the existing thread pool");
         (void)pool.Pause();
-        auto cancelled{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 0; }) } };
+        auto cancelled{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 0; }).value() } };
         (void)pool.Stop();
         bool propagated{ false };
         try {

@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 mcr::options::Timeout const from_integer{ 1500 };
 mcr::options::Timeout timeout{ 2s };
-std::println("{} ms", timeout.Milliseconds()); // 2000 ms
+std::println("{} ms", timeout.Milliseconds().value()); // 2000 ms
 timeout.ms = 500ms;
 ```
 
@@ -26,12 +26,12 @@ timeout.ms = 500ms;
 `1999us` 变为 `1ms`，`-1999us` 变为 `-1ms`。
 调用方必须保证转换运算和毫秒表示不溢出，浮点时长还必须为有限值。
 
-`Milliseconds()` 返回 curl 所需的 `long`。超过 `LONG_MAX` 抛出
-`std::overflow_error`，低于 `LONG_MIN` 抛出 `std::underflow_error`，诊断包含原始计数。
+`Milliseconds()` 返回 `Result<long>`。超出 `long` 范围时返回
+`BAD_FUNCTION_ARGUMENT`，诊断区分上溢与下溢并包含原始计数。
 检查在读取时执行，因此也适用于通过 `ms` 修改的值；零和可表示的负值原样返回。
 
 接口参考 cpr 的 `include/cpr/timeout.h` 和 `cpr/timeout.cpp`。
-有意差异是模块、命名空间、诊断前缀 `mcr::options::Timeout`，以及整数构造参数按值传递。
+有意差异包括显式结果返回、模块、命名空间、诊断前缀 `mcr::options::Timeout`，以及整数构造参数按值传递。
 
 ## 连接超时
 

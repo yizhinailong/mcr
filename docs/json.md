@@ -36,7 +36,7 @@ mcr::Json document{
 auto response = mcr::Post(
     mcr::Url{ "http://127.0.0.1:8080/json" },
     mcr::JsonBody{ document }
-);
+).value();
 if (response.error) {
     throw std::runtime_error{ response.error.message };
 }
@@ -63,10 +63,11 @@ JSON 对象、数组、字符串、数值、布尔值和 `null` 都可以作为�
 单元素花括号构造 `Json{ value }` 遵循 nlohmann 的初始化列表规则，可能创建单元素数组。
 
 ```cpp
-mcr::Session session;
-session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/json" });
-session.SetJsonBody(mcr::JsonBody{ mcr::Json{ { "count", 3 } } });
-auto response = session.Post();
+auto session_owner = mcr::Session::Create().value();
+auto& session = *session_owner;
+session.SetUrl(mcr::Url{ "http://127.0.0.1:8080/json" }).value();
+session.SetJsonBody(mcr::JsonBody{ mcr::Json{ { "count", 3 } } }).value();
+auto response = session.Post().value();
 auto value = response.Json(); // 解析失败时抛出 JSON 异常
 ```
 

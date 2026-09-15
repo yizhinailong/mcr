@@ -88,20 +88,20 @@ namespace {
         auto const before{ g_live_allocations.load() };
         bool       passed{ true };
         {
-            mcr::curl::CurlMultiHolder source;
-            auto*                original{ source.handle };
-            int                  running{ -1 };
+            auto  source = mcr::curl::CurlMultiHolder::Create().value();
+            auto* original{ source.handle };
+            int   running{ -1 };
             passed &= check(original && curl_multi_perform(original, &running) == CURLM_OK && running == 0, "a new multi handle must support an empty perform");
             int queued{ -1 };
             passed &= check(curl_multi_info_read(original, &queued) == nullptr && queued == 0, "a new multi handle must have no completion messages");
 
             mcr::curl::CurlMultiHolder moved{ std::move(source) };
             passed &= check(!source.handle && moved.handle == original, "move construction must transfer the original handle and clear the source");
-            auto const           with_one{ g_live_allocations.load() };
-            mcr::curl::CurlMultiHolder destination;
-            passed &= check(g_live_allocations.load() > with_one, "a second multi handle must own separate allocations");
-            passed &= check(&(destination = std::move(moved)) == &destination && !moved.handle && destination.handle == original, "move assignment must transfer ownership and return the destination");
-            passed &= check(g_live_allocations.load() == with_one, "move assignment must immediately release the replaced multi handle");
+            auto const with_one{ g_live_allocations.load() };
+            auto       destination  = mcr::curl::CurlMultiHolder::Create().value();
+            passed                 &= check(g_live_allocations.load() > with_one, "a second multi handle must own separate allocations");
+            passed                 &= check(&(destination = std::move(moved)) == &destination && !moved.handle && destination.handle == original, "move assignment must transfer ownership and return the destination");
+            passed                 &= check(g_live_allocations.load() == with_one, "move assignment must immediately release the replaced multi handle");
 
             auto* self{ &destination };
             destination  = std::move(*self);
@@ -117,7 +117,7 @@ namespace {
         }
         {
             auto holder = [] {
-                mcr::curl::CurlMultiHolder source;
+                auto source = mcr::curl::CurlMultiHolder::Create().value();
                 return mcr::curl::CurlMultiHolder{ std::move(source) };
             }();
             int running{ -1 };
@@ -127,16 +127,16 @@ namespace {
     }
 
     auto check_easy_handles() -> bool {
-        mcr::curl::CurlHolder first;
-        mcr::curl::CurlHolder second;
-        bool            passed{ true };
+        auto first  = mcr::curl::CurlHolder::Create().value();
+        auto second = mcr::curl::CurlHolder::Create().value();
+        bool passed{ true };
         {
-            mcr::curl::CurlMultiHolder source;
-            mcr::curl::CurlMultiHolder destination;
+            auto source       = mcr::curl::CurlMultiHolder::Create().value();
+            auto destination  = mcr::curl::CurlMultiHolder::Create().value();
             // Malformed URLs fail before any network connection is attempted.
-            passed &= check(curl_easy_setopt(first.handle, CURLOPT_URL, "http://[") == CURLE_OK && curl_easy_setopt(second.handle, CURLOPT_URL, "http://[") == CURLE_OK, "easy-handle fixtures must accept the malformed URLs");
-            passed &= check(curl_multi_add_handle(source.handle, first.handle) == CURLM_OK, "the first easy handle must attach successfully");
-            passed &= check(curl_multi_add_handle(source.handle, second.handle) == CURLM_OK, "the second easy handle must attach successfully");
+            passed           &= check(curl_easy_setopt(first.handle, CURLOPT_URL, "http://[") == CURLE_OK && curl_easy_setopt(second.handle, CURLOPT_URL, "http://[") == CURLE_OK, "easy-handle fixtures must accept the malformed URLs");
+            passed           &= check(curl_multi_add_handle(source.handle, first.handle) == CURLM_OK, "the first easy handle must attach successfully");
+            passed           &= check(curl_multi_add_handle(source.handle, second.handle) == CURLM_OK, "the second easy handle must attach successfully");
             mcr::curl::CurlMultiHolder moved{ std::move(source) };
             destination  = std::move(moved);
             passed      &= check(curl_multi_add_handle(destination.handle, first.handle) == CURLM_ADDED_ALREADY, "attached easy handles must remain attached after both move operations");
@@ -158,11 +158,11 @@ namespace {
             passed &= check(curl_multi_remove_handle(destination.handle, first.handle) == CURLM_OK, "the first easy handle must detach successfully");
             passed &= check(curl_multi_remove_handle(destination.handle, second.handle) == CURLM_OK, "the second easy handle must detach successfully");
         }
-        passed &= check(first.UrlEncode("still alive") == "still%20alive" && second.UrlDecode("still%20alive") == "still alive", "multi cleanup must leave detached easy handles usable by their owners");
+        passed &= check(first.UrlEncode("still alive").value() == "still%20alive" && second.UrlDecode("still%20alive").value() == "still alive", "multi cleanup must leave detached easy handles usable by their owners");
         {
-            mcr::curl::CurlMultiHolder another;
-            passed &= check(curl_multi_add_handle(another.handle, first.handle) == CURLM_OK, "a detached easy handle must be reusable with another multi handle");
-            passed &= check(curl_multi_remove_handle(another.handle, first.handle) == CURLM_OK, "a reused easy handle must detach before cleanup");
+            auto another  = mcr::curl::CurlMultiHolder::Create().value();
+            passed       &= check(curl_multi_add_handle(another.handle, first.handle) == CURLM_OK, "a detached easy handle must be reusable with another multi handle");
+            passed       &= check(curl_multi_remove_handle(another.handle, first.handle) == CURLM_OK, "a reused easy handle must detach before cleanup");
         }
         return passed;
     }
@@ -172,15 +172,13 @@ namespace {
         bool       passed{ true };
         {
             FailAllocations fail;
-            try {
-                mcr::curl::CurlMultiHolder invalid;
-                passed &= check(false, "initialization failure must throw instead of exposing a null handle");
-            } catch (std::runtime_error const& error) {
-                passed &= check(std::string_view{ error.what() }.contains("curl_multi_init"), "initialization failure must identify the failed curl operation");
+            {
+                auto const failure  = mcr::curl::CurlMultiHolder::Create();
+                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
             }
         }
-        passed &= check(g_live_allocations.load() == before, "failed initialization must not leak allocations");
-        mcr::curl::CurlMultiHolder recovered;
+        passed         &= check(g_live_allocations.load() == before, "failed initialization must not leak allocations");
+        auto recovered  = mcr::curl::CurlMultiHolder::Create().value();
         return check(recovered.handle != nullptr, "construction must recover after allocation failures stop") && passed;
     }
 

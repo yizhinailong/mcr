@@ -3,6 +3,7 @@
 [项目首页](../README.md) · [可运行示例](../example/README.md)
 
 文档统一使用简体中文，保留 API 标识符、命令、协议值和真实终端输出。代码块未包含完整 `main()` 时视为用法片段；涉及 curl 的片段需在成功初始化 curl 后执行，并在清理 curl 前结束其资源生命周期。完整运行方式见项目首页和示例说明。
+简短用法片段中的 `.value()` 假定操作成功；实际应用应先检查结果再访问 `*result` 或 `result.error()`，见[错误处理](error.md)。
 
 ## 开始使用
 
@@ -13,6 +14,7 @@
 | [JSON 请求与响应](json.md) | `JsonBody`、序列化、响应解析与诊断 |
 | [异步运行时](async.md) | 全局线程池、任务提交和清理 |
 | [协程请求](coro.md) | `Task`、并发传输、取消和运行时生命周期 |
+| [expected 接口迁移](expected_migration.md) | 工厂、返回类型、错误传播和保留的异常边界 |
 | [错误处理](error.md) | `Error`、`ErrorCode` 和 `Result<T>` |
 
 ## 请求数据与响应信息

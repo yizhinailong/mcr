@@ -44,16 +44,17 @@ namespace {
         options.SetOption(mcr::options::ssl::PemCert{ "new.pem" });
         options.SetOption(mcr::options::ssl::PemKey{ "new-key.pem" });
         options.SetOption(mcr::options::ssl::CaBuffer{ "buffer" });
-        passed &= check(options.cert_blob.empty() && options.key_blob.empty() && options.key_pass.empty() && options.cert_type == "PEM" && options.ca_info_blob.empty() && options.ca_buffer == "buffer", "replacement options must clear obsolete sources and passphrases");
-        mcr::Session session;
-        session.SetOption(defaults);
-        session.SetOption(mcr::options::VerifySsl{ false });
-        session.SetVerifySsl({});
-        session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{}));
-        try {
-            session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::SslFastStart{ true }));
-            passed &= check(false, "removed TLS false-start support must not be silently accepted");
-        } catch (std::runtime_error const&) {}
+        passed              &= check(options.cert_blob.empty() && options.key_blob.empty() && options.key_pass.empty() && options.cert_type == "PEM" && options.ca_info_blob.empty() && options.ca_buffer == "buffer", "replacement options must clear obsolete sources and passphrases");
+        auto  session_owner  = mcr::Session::Create().value();
+        auto& session        = *session_owner;
+        session.SetOption(defaults).value();
+        session.SetOption(mcr::options::VerifySsl{ false }).value();
+        session.SetVerifySsl({}).value();
+        session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{})).value();
+        {
+            auto const failure  = session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::SslFastStart{ true }));
+            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::NOT_BUILT_IN, "failure must return the expected error code");
+        }
         return passed;
     }
 
@@ -153,68 +154,70 @@ namespace {
         HttpsFixture fixture;
         auto const*  version{ curl_version_info(CURLVERSION_NOW) };
         std::println("test_ssl_options: TLS backend {}", version->ssl_version ? version->ssl_version : "none");
-        mcr::Session session;
-        session.SetUrl(fixture.Url());
+        auto  session_owner = mcr::Session::Create().value();
+        auto& session       = *session_owner;
+        session.SetUrl(fixture.Url()).value();
         session.SetProxies({
-            {    "https",  "" },
-            { "no_proxy", "*" }
-        });
-        session.SetTimeout(mcr::options::Timeout{ 3000ms });
-        bool passed{ check(bool(session.Get().error), "untrusted generated certificates must be rejected by default") };
-        session.SetVerifySsl(false);
-        auto unverified{ session.Get() };
+                               {    "https",  "" },
+                               { "no_proxy", "*" }
+        })
+            .value();
+        session.SetTimeout(mcr::options::Timeout{ 3000ms }).value();
+        bool passed{ check(bool(session.Get().value().error), "untrusted generated certificates must be rejected by default") };
+        session.SetVerifySsl(false).value();
+        auto unverified{ session.Get().value() };
         if (unverified.error) {
             std::println("test_ssl_options: handshake error {}: {}", mcr::to_string(unverified.error.code), unverified.error.message);
         }
         passed &= check(unverified.text == "TLS works", "explicit VerifySsl(false) must disable both checks");
-        session.SetVerifySsl(true);
-        passed         &= check(bool(session.Get().error), "reenabling verification must reject the untrusted peer again");
+        session.SetVerifySsl(true).value();
+        passed         &= check(bool(session.Get().value().error), "reenabling verification must reject the untrusted peer again");
         // Generated certificates have no online revocation service. Keep chain and hostname
         // verification enabled while explicitly disabling revocation checks for this fixture.
         auto local_tls  = [](auto&&... options) {
             return mcr::options::Ssl(mcr::options::ssl::NoRevoke{ true }, std::forward<decltype(options)>(options)...);
         };
         auto trust{ local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{}) };
-        session.SetSslOptions(trust);
-        auto trusted{ session.Get() };
+        session.SetSslOptions(trust).value();
+        auto trusted{ session.Get().value() };
         if (trusted.error) {
             std::println("test_ssl_options: trusted handshake error {}: {}", mcr::to_string(trusted.error.code), trusted.error.message);
         }
         passed &= check(!trusted.error && trusted.text == "TLS works" && !trusted.GetCertInfos().empty(), "CA files and TLS 1.2 bounds must permit a verified connection and capture certificates");
-        session.SetUrl(fixture.Url(false, "127.0.0.1"));
-        passed &= check(bool(session.Get().error), "trusted certificates must still fail hostname mismatch");
+        session.SetUrl(fixture.Url(false, "127.0.0.1")).value();
+        passed &= check(bool(session.Get().value().error), "trusted certificates must still fail hostname mismatch");
         trust.SetOption(mcr::options::ssl::VerifyHost{ false });
-        session.SetSslOptions(trust);
-        passed &= check(session.Get().text == "TLS works", "hostname verification must be configurable independently of peer trust");
-        session.SetUrl(fixture.Url());
-        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfoBlob{ read_file(fixture.Path("ca.pem")) }));
-        passed &= check(session.Get().text == "TLS works", "CA blobs must survive destruction of temporary option storage");
-        session.SetSslOptions(mcr::options::Ssl());
-        passed &= check(bool(session.Get().error), "replacing TLS options with defaults must clear prior CA blobs");
-        session.SetSslOptions(local_tls(mcr::options::ssl::CaBuffer{ read_file(fixture.Path("ca.pem")) }, mcr::options::ssl::PinnedPublicKey{ read_file(fixture.Path("pin.txt")) }));
-        passed &= check(session.Get().text == "TLS works", "CaBuffer and a matching public-key pin must work together");
-        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::PinnedPublicKey{ "sha256//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }));
-        passed &= check(session.Get().error.code == mcr::ErrorCode::SSL_PINNEDPUBKEYNOTMATCH, "mismatched public-key pins must reject the connection");
+        session.SetSslOptions(trust).value();
+        passed &= check(session.Get().value().text == "TLS works", "hostname verification must be configurable independently of peer trust");
+        session.SetUrl(fixture.Url()).value();
+        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfoBlob{ read_file(fixture.Path("ca.pem")) })).value();
+        passed &= check(session.Get().value().text == "TLS works", "CA blobs must survive destruction of temporary option storage");
+        session.SetSslOptions(mcr::options::Ssl()).value();
+        passed &= check(bool(session.Get().value().error), "replacing TLS options with defaults must clear prior CA blobs");
+        session.SetSslOptions(local_tls(mcr::options::ssl::CaBuffer{ read_file(fixture.Path("ca.pem")) }, mcr::options::ssl::PinnedPublicKey{ read_file(fixture.Path("pin.txt")) })).value();
+        passed &= check(session.Get().value().text == "TLS works", "CaBuffer and a matching public-key pin must work together");
+        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::PinnedPublicKey{ "sha256//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" })).value();
+        passed &= check(session.Get().value().error.code == mcr::ErrorCode::SSL_PINNEDPUBKEYNOTMATCH, "mismatched public-key pins must reject the connection");
         trust   = local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") });
-        session.SetSslOptions(trust);
-        passed &= check(session.Get().text == "TLS works", "replacement TLS options must remove old public-key pins");
-        session.SetUrl(fixture.Url(true));
-        passed &= check(bool(session.Get().error), "mutual TLS must reject a request without a client certificate");
+        session.SetSslOptions(trust).value();
+        passed &= check(session.Get().value().text == "TLS works", "replacement TLS options must remove old public-key pins");
+        session.SetUrl(fixture.Url(true)).value();
+        passed &= check(bool(session.Get().value().error), "mutual TLS must reject a request without a client certificate");
         bool const schannel{ version->ssl_version && std::string_view{ version->ssl_version }.starts_with("Schannel") };
         if (schannel) {
             trust.cert_file = fixture.Path("client.p12").string();
             trust.cert_type = "P12";
             trust.key_pass  = "incorrect-password";
-            session.SetSslOptions(trust);
-            auto bad_password{ session.Get() };
+            session.SetSslOptions(trust).value();
+            auto bad_password{ session.Get().value() };
             passed         &= check(bad_password.error.code == mcr::ErrorCode::SSL_CERTPROBLEM, "an incorrect PKCS12 password must fail client credential import");
             trust.key_pass  = "fixture-password";
         } else {
             trust.SetOption(mcr::options::ssl::PemCert{ fixture.Path("client.pem") });
             trust.SetOption(mcr::options::ssl::PemKey{ fixture.Path("client-key.pem") });
         }
-        session.SetSslOptions(trust);
-        auto mutual{ session.Get() };
+        session.SetSslOptions(trust).value();
+        auto mutual{ session.Get().value() };
         // Schannel can reject curl's nonpersistent PFX private keys before starting TLS.
         // Only this exact backend failure limits the success checks; all other failures fail the test.
         // Related upstream limitations: https://github.com/curl/curl/issues/17626
@@ -235,12 +238,12 @@ namespace {
             trust.SetOption(mcr::options::ssl::PemBlob{ read_file(fixture.Path("client.pem")) });
             trust.SetOption(mcr::options::ssl::KeyBlob{ read_file(fixture.Path("client-key.pem")) });
         }
-        session.SetSslOptions(trust);
+        session.SetSslOptions(trust).value();
         trust = {};
-        auto blob_mutual{ session.Get() };
+        auto blob_mutual{ session.Get().value() };
         passed &= check(limited ? unsupported_credentials(blob_mutual) : (!blob_mutual.error && blob_mutual.text == "TLS works"), "copied certificate blobs must reach the same TLS result after source storage is destroyed");
-        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }));
-        auto cleared{ session.Get() };
+        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") })).value();
+        auto cleared{ session.Get().value() };
         passed &= check(bool(cleared.error) && !unsupported_credentials(cleared), "replacing TLS credentials must clear old certificate blobs and passwords");
         passed &= check(trusted.status_code == 200 && !trusted.GetCertInfos().empty(), "earlier certificate snapshots must survive later failed handshakes");
         if (!passed) {

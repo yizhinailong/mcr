@@ -137,18 +137,18 @@ namespace {
     }
 
     auto check_encoding() -> bool {
-        mcr::curl::CurlHolder holder;
-        mcr::Cookies    cookies{
+        auto         holder = mcr::curl::CurlHolder::Create().value();
+        mcr::Cookies cookies{
             {  "SID", "value" },
             { "lang", "en-US" }
         };
-        bool         passed{ check(cookies.GetEncoded(holder) == "SID=value; lang=en-US; ", "serialization must preserve insertion order and the trailing separator") };
+        bool         passed{ check(cookies.GetEncoded(holder).value() == "SID=value; lang=en-US; ", "serialization must preserve insertion order and the trailing separator") };
         mcr::Cookies reserved{
             { "a b", "c+d;%&" }
         };
-        passed          &= check(reserved.GetEncoded(holder) == "a%20b=c%2Bd%3B%25%26; ", "names and unquoted values must be percent-encoded by default");
+        passed          &= check(reserved.GetEncoded(holder).value() == "a%20b=c%2Bd%3B%25%26; ", "names and unquoted values must be percent-encoded by default");
         reserved.encode  = false;
-        passed          &= check(reserved.GetEncoded(holder) == "a b=c+d;%&; ", "changing encode must select raw name/value serialization");
+        passed          &= check(reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "changing encode must select raw name/value serialization");
         mcr::Cookies quoted{
             { "quoted name", "\"hello world;=+%\"" },
             {       "empty",                "\"\"" },
@@ -156,41 +156,40 @@ namespace {
             {     "leading",              "\"open" },
             {    "trailing",             "close\"" },
         };
-        passed &= check(quoted.GetEncoded(holder) == "quoted%20name=\"hello world;=+%\"; empty=\"\"; single=\"; leading=%22open; trailing=close%22; ", "quoted values must bypass encoding exactly as in cpr while names and unmatched quotes are encoded");
+        passed &= check(quoted.GetEncoded(holder).value() == "quoted%20name=\"hello world;=+%\"; empty=\"\"; single=\"; leading=%22open; trailing=close%22; ", "quoted values must bypass encoding exactly as in cpr while names and unmatched quotes are encoded");
         mcr::Cookies empty_values{
             {    "", "" },
             { "SID", "" }
         };
-        passed &= check(empty_values.GetEncoded(holder) == "=; SID=; ", "empty names and values must still serialize as cookie pairs");
+        passed &= check(empty_values.GetEncoded(holder).value() == "=; SID=; ", "empty names and values must still serialize as cookie pairs");
         mcr::Cookies metadata{
             { "SID", "first", ".example.test", true, "/a", true, sys_days{ 2040y / January / 1 } },
             { "SID", "second", "other.test", false, "/b" },
         };
-        passed &= check(metadata.GetEncoded(holder) == "SID=first; SID=second; ", "request serialization must preserve duplicate pairs and omit response metadata");
+        passed &= check(metadata.GetEncoded(holder).value() == "SID=first; SID=second; ", "request serialization must preserve duplicate pairs and omit response metadata");
         mcr::Cookies unicode{
             { "\xE9\x9B\xAA", "\xE4\xB8\x80" }
         };
-        passed &= check(unicode.GetEncoded(holder) == "%E9%9B%AA=%E4%B8%80; ", "UTF-8 names and values must be encoded byte by byte");
+        passed &= check(unicode.GetEncoded(holder).value() == "%E9%9B%AA=%E4%B8%80; ", "UTF-8 names and values must be encoded byte by byte");
         std::string const binary_name{ "n\0m", 3 };
         std::string const binary_value{ "v\0x", 3 };
         mcr::Cookies      binary{
             { binary_name, binary_value }
         };
-        passed        &= check(binary.GetEncoded(holder) == "n%00m=v%00x; ", "binary names and values must be encoded without truncation");
+        passed        &= check(binary.GetEncoded(holder).value() == "n%00m=v%00x; ", "binary names and values must be encoded without truncation");
         binary.encode  = false;
-        passed        &= check(binary.GetEncoded(holder) == binary_name + '=' + binary_value + "; ", "raw serialization must retain embedded nulls");
+        passed        &= check(binary.GetEncoded(holder).value() == binary_name + '=' + binary_value + "; ", "raw serialization must retain embedded nulls");
         std::string const quoted_binary{ "\"a\0b\"", 5 };
         mcr::Cookies      binary_quoted{
             { "binary", quoted_binary }
         };
-        passed &= check(binary_quoted.GetEncoded(holder) == "binary=" + quoted_binary + "; ", "quoted binary values must remain verbatim");
+        passed &= check(binary_quoted.GetEncoded(holder).value() == "binary=" + quoted_binary + "; ", "quoted binary values must remain verbatim");
 
         mcr::curl::CurlHolder owner{ std::move(holder) };
-        passed &= check(mcr::Cookies{}.GetEncoded(holder).empty() && reserved.GetEncoded(holder) == "a b=c+d;%&; ", "empty and raw collections must not require an active curl handle");
-        try {
-            (void)cookies.GetEncoded(holder);
-            passed &= check(false, "encoding must propagate errors from an inactive curl holder");
-        } catch (std::logic_error const&) {
+        passed &= check(mcr::Cookies{}.GetEncoded(holder).value().empty() && reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "empty and raw collections must not require an active curl handle");
+        {
+            auto const failure  = cookies.GetEncoded(holder);
+            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
         }
         return passed;
     }

@@ -15,11 +15,11 @@ import mcr;
 
 // 成功初始化 curl 后执行，全部资源必须先于 curl 全局清理销毁。
 {
-    mcr::ConnectionPool pool;
-    mcr::curl::CurlHolder first;
-    mcr::curl::CurlHolder second;
-    pool.SetupHandler(first.handle);
-    pool.SetupHandler(second.handle);
+    auto pool = mcr::ConnectionPool::Create().value();
+    auto first = mcr::curl::CurlHolder::Create().value();
+    auto second = mcr::curl::CurlHolder::Create().value();
+    pool.SetupHandler(first.handle).value();
+    pool.SetupHandler(second.handle).value();
     // 通过 libcurl 配置并顺序执行请求。
     // 离开作用域时，easy 句柄先于连接池销毁。
 }
@@ -48,13 +48,11 @@ easy 句柄不持有 C++ 连接池的所有权。
 
 - 按 curl 数据类型分别索引锁，遵循 `CURLSHOPT_LOCKFUNC` / `CURLSHOPT_UNLOCKFUNC`，
   不使用上游覆盖全部共享数据的单个互斥量。回调不允许 C++ 异常穿过 libcurl。
-- `curl_share_init()` 或 `curl_share_setopt()` 失败抛出标明操作的
-  `std::runtime_error`，自动释放部分创建的状态。不支持 TLS 会话共享属于配置错误，
+- `ConnectionPool::Create() -> Result<ConnectionPool>` 在 curl 初始化或共享配置失败时返回标明操作的 `FAILED_INIT`，自动释放部分创建的状态。不支持 TLS 会话共享属于配置错误，
   C++ 分配失败传播 `std::bad_alloc`。
-- `SetupHandler(nullptr)` 抛出 `std::invalid_argument`，设置 CURLOPT_SHARE 失败抛出
-  `std::runtime_error`；上游忽略这些 curl 错误。
+- `SetupHandler` 返回 `Result<void>`；空句柄返回 `BAD_FUNCTION_ARGUMENT`，设置 CURLOPT_SHARE 失败返回映射后的 curl 错误；上游忽略这些 curl 错误。
 - 先分配共享锁存储，再初始化 curl；配置选项前先建立 curl 所有权，以覆盖构造失败路径。
-- 私有成员采用 `m_` 命名，公开 API 名称不变。
+- 私有成员采用 `m_` 命名，创建入口和返回类型见 [expected 接口迁移](expected_migration.md)。
 
 运行 `mcpp build` 和 `mcpp test`。测试使用绑定动态回环端口的 HTTP/1.1 服务：
 三个独立请求建立三条连接，四个共享池副本的请求只建立一条。

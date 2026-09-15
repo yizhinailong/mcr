@@ -8,6 +8,7 @@ export import mcr.buffer;
 export import mcr.file;
 export import mcr.types;
 
+export import mcr.error;
 import std;
 
 export namespace mcr {
@@ -65,26 +66,31 @@ export namespace mcr {
         /**
          * @brief Read a file to EOF in binary mode and own its complete contents.
          * @param file Descriptor whose filepath is opened; the filename override is ignored.
-         * @throws std::invalid_argument If the file cannot be opened.
-         * @throws std::runtime_error If reading fails before normal EOF.
+         * @return Owned body, or FILE_COULDNT_READ_FILE / READ_ERROR on failure.
          * @throws std::bad_alloc If body storage cannot be allocated.
          * @throws std::length_error If the contents exceed string capacity.
          * @note Empty files produce an empty body. The stream is closed on success and failure.
          */
-        Body(File const& file) {
+        [[nodiscard]] static auto FromFile(File const& file) -> Result<Body> {
+            Body          result;
             std::ifstream stream{ file.filepath, std::ios::binary };
             if (!stream) {
-                throw std::invalid_argument{ "Can't open the file for HTTP request body!" };
+                return std::unexpected{
+                    Error{ ErrorCode::FILE_COULDNT_READ_FILE, "Can't open the file for HTTP request body!" }
+                };
             }
 
             std::array<char, 16 * 1024> chunk{};
             while (stream.read(chunk.data(), static_cast<std::streamsize>(chunk.size()))) {
-                m_str.append(chunk.data(), chunk.size());
+                result.m_str.append(chunk.data(), chunk.size());
             }
             if (stream.bad() || !stream.eof()) {
-                throw std::runtime_error{ "Can't read the file for HTTP request body!" };
+                return std::unexpected{
+                    Error{ ErrorCode::READ_ERROR, "Can't read the file for HTTP request body!" }
+                };
             }
-            m_str.append(chunk.data(), static_cast<std::size_t>(stream.gcount()));
+            result.m_str.append(chunk.data(), static_cast<std::size_t>(stream.gcount()));
+            return result;
         }
 
         /**

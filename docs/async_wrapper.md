@@ -12,12 +12,12 @@ import std;
 import mcr;
 
 mcr::utils::ThreadPool pool{ 1, 2 };
-auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }) };
+auto result = mcr::utils::AsyncWrapper{ pool.Submit([] { return 42; }).value() };
 result.Wait();
 std::println("{}", result.Get());
 
 auto state = std::make_shared<std::atomic_bool>(false);
-auto future = pool.Submit([state] { return state->load() ? 0 : 7; });
+auto future = pool.Submit([state] { return state->load() ? 0 : 7; }).value();
 auto cancellable = mcr::utils::AsyncWrapper{ std::move(future), std::shared_ptr{ state } };
 auto cancellation = cancellable.Cancel();
 ```

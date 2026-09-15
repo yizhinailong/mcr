@@ -17,7 +17,9 @@ auto main(int argc, char** argv) -> int {
         auto pending{ mcr::DownloadAsync(args.output,
             mcr::Url{ args.url },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }) };
-        auto const response{ pending.Get() };
+        if (!pending) { return example::print_error(pending.error()); }
+        auto const response{ pending->Get() };
+        if (!response) { return example::print_error(response.error()); }
         std::println("Downloaded bytes: {}", std::filesystem::file_size(args.output));
         return example::print_response(response); }, example::RuntimeKind::Async, true);
 }

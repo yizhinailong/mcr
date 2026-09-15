@@ -4,6 +4,7 @@
  */
 export module mcr.threadpool;
 
+export import mcr.error;
 import std;
 
 export namespace mcr::utils {
@@ -284,12 +285,11 @@ export namespace mcr::utils {
          * @tparam Args Argument types, decay-copied or moved into the task.
          * @param fn Callable invoked once with the stored arguments as rvalues.
          * @param args Arguments to store; use std::ref or std::cref to preserve references.
-         * @return A future containing the return value or the callable's exception.
-         * @throws std::runtime_error If shutdown is in progress.
+         * @return A future containing the value or callable's exception, or FAILED_INIT if shutdown is in progress.
          * @throws std::system_error If a required worker cannot be created.
          */
         template <typename Fn, typename... Args>
-        auto Submit(Fn&& fn, Args&&... args) -> std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>> {
+        auto Submit(Fn&& fn, Args&&... args) -> Result<std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>> {
             using ReturnType = std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>;
             std::packaged_task<ReturnType(bool)> task{
                 [function = std::forward<Fn>(fn), arguments = std::tuple<std::decay_t<Args>...>(std::forward<Args>(args)...)](bool cancel) mutable -> ReturnType {
@@ -306,24 +306,26 @@ export namespace mcr::utils {
             QueuedTask         queued;
             std::list<Worker>  retired;
             std::exception_ptr submission_error;
+            bool               rejected{};
             try {
                 queued = std::move(task);
                 std::scoped_lock lock{ m_mutex };
                 if (m_status == Status::STOPPING) {
-                    throw std::runtime_error{ "mcr::utils::ThreadPool: cannot submit while stopping" };
+                    rejected = true;
+                } else {
+                    collectFinished(retired);
+                    if (m_status == Status::STOPPED) {
+                        start(0);
+                    }
+                    growForTasks(m_tasks.size() + 1);
+                    // Allocate the queue slot before transferring ownership so failure leaves queued cancellable.
+                    m_tasks.emplace();
+                    m_tasks.back().swap(queued);
                 }
-                collectFinished(retired);
-                if (m_status == Status::STOPPED) {
-                    start(0);
-                }
-                growForTasks(m_tasks.size() + 1);
-                // Allocate the queue slot before transferring ownership so failure leaves queued cancellable.
-                m_tasks.emplace();
-                m_tasks.back().swap(queued);
             } catch (...) {
                 submission_error = std::current_exception();
             }
-            if (submission_error) {
+            if (submission_error || rejected) {
                 // Avoid packaged_task's abandonment path, which double-frees future_error
                 // with the current Clang/MSVC import-std toolchain. Cancel outside the catch
                 // handler to avoid nested exception handling in instrumented module builds.
@@ -332,7 +334,12 @@ export namespace mcr::utils {
                 } else {
                     task(true);
                 }
-                std::rethrow_exception(submission_error);
+                if (submission_error) {
+                    std::rethrow_exception(submission_error);
+                }
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::utils::ThreadPool: cannot submit while stopping" }
+                };
             }
             m_task_cond.notify_one();
             return future;

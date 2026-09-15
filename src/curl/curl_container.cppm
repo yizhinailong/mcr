@@ -6,6 +6,7 @@ export module mcr.curl_container;
 
 export import mcr.curlholder;
 
+export import mcr.error;
 import std;
 
 export namespace mcr {
@@ -89,12 +90,10 @@ export namespace mcr::curl {
          * @brief Serialize the elements, applying percent encoding when encode is true.
          * @param holder Curl holder used only when encoding a component.
          * @return Owned content with no question-mark prefix and cpr's ampersand separators.
-         * @throws std::logic_error If encoding a component with a moved-from holder.
-         * @throws std::length_error If an encoded component exceeds curl's int length limit.
          * @note Parameter encodes keys and nonempty values; Pair only encodes values.
-         * Curl encoding allocation failures retain CurlHolder's empty-component behavior.
+         * Curl encoding allocation failures return OUT_OF_MEMORY.
          */
-        [[nodiscard]] auto GetContent(CurlHolder const& holder) const -> std::string {
+        [[nodiscard]] auto GetContent(CurlHolder const& holder) const -> Result<std::string> {
             return getContent(encode ? &holder : nullptr);
         }
 
@@ -102,7 +101,7 @@ export namespace mcr::curl {
          * @brief Serialize keys and values verbatim, ignoring encode and requiring no curl holder.
          * @return Owned content with cpr's type-specific equals-sign and separator rules.
          */
-        [[nodiscard]] auto GetContent() const -> std::string {
+        [[nodiscard]] auto GetContent() const -> Result<std::string> {
             return getContent(nullptr);
         }
 
@@ -115,14 +114,19 @@ export namespace mcr::curl {
          * @param output Destination string.
          * @param input Component bytes, including embedded nulls.
          * @param holder Encoding helper, or null to append the input verbatim.
+         * @return Success or the first operation error.
          */
-        static auto appendComponent(std::string& output, std::string_view input, CurlHolder const* holder) -> void {
+        static auto appendComponent(std::string& output, std::string_view input, CurlHolder const* holder) -> Result<void> {
             if (holder) {
                 auto const escaped{ holder->UrlEncode(input) };
-                output.append(escaped.data(), escaped.size());
+                if (!escaped) {
+                    return std::unexpected{ escaped.error() };
+                }
+                output.append(escaped->data(), escaped->size());
             } else {
                 output.append(input);
             }
+            return {};
         }
 
         /**
@@ -130,7 +134,7 @@ export namespace mcr::curl {
          * @param holder Encoding helper, or null to disable encoding for this call.
          * @return A newly allocated string without changing stored elements.
          */
-        auto getContent(CurlHolder const* holder) const -> std::string {
+        auto getContent(CurlHolder const* holder) const -> Result<std::string> {
             std::string content;
             for (auto const& element : m_container_list) {
                 // cpr bases separators on emitted text, so leading empty parameters disappear.
@@ -138,7 +142,9 @@ export namespace mcr::curl {
                     content += '&';
                 }
                 if constexpr (std::same_as<T, Parameter>) {
-                    appendComponent(content, element.key, holder);
+                    if (auto status = appendComponent(content, element.key, holder); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                     if (element.value.empty()) {
                         continue;
                     }
@@ -146,7 +152,9 @@ export namespace mcr::curl {
                     content += element.key;
                 }
                 content += '=';
-                appendComponent(content, element.value, holder);
+                if (auto status = appendComponent(content, element.value, holder); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             return content;
         }

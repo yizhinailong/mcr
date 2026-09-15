@@ -17,19 +17,25 @@
 import std;
 import mcr;
 
-auto fetch_text(mcr::Url url) -> mcr::Task<std::string> {
+auto fetch_text(mcr::Url url) -> mcr::Task<mcr::Result<std::string>> {
     auto response = co_await mcr::GetCoro(
         std::move(url), mcr::options::Timeout{ std::chrono::seconds{ 5 } }
     );
-    if (response.error) {
-        throw std::runtime_error{ response.error.message };
+    if (!response) {
+        co_return std::unexpected{ std::move(response.error()) };
     }
-    co_return std::move(response.text);
+    if (response->error) {
+        co_return std::unexpected{ std::move(response->error) };
+    }
+    co_return std::move(response->text);
 }
 
 // 在已完成 curl 全局初始化的普通函数中：
 auto text = mcr::sync_wait(fetch_text(mcr::Url{ "https://example.com" }));
-mcr::Coro::Cleanup(); // 所有协程工作结束后，在 curl_global_cleanup() 之前调用。
+if (!text) {
+    std::println("请求失败：{}", text.error().message);
+}
+mcr::Coro::Cleanup().value(); // 所有协程工作结束后，在 curl_global_cleanup() 之前调用。
 ```
 
 HTTP 方法和选项沿用同步 API，包括 Header 合并、Body / JsonBody / Payload、
@@ -67,8 +73,8 @@ auto second = mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/second" });
 first.Start();
 second.Start();
 
-auto a = mcr::sync_wait(std::move(first));
-auto b = mcr::sync_wait(std::move(second));
+auto a = mcr::sync_wait(std::move(first)).value();
+auto b = mcr::sync_wait(std::move(second)).value();
 ```
 
 ## 网络与恢复线程
@@ -85,8 +91,8 @@ auto b = mcr::sync_wait(std::move(second));
 较长的后续计算会延迟其他协程恢复，适合交给应用自己的执行器处理；网络循环仍可推进。
 DNS 是否需要额外线程或会阻塞，取决于构建 libcurl 时选用的解析器。
 
-I/O 和后续处理线程中调用 `sync_wait` 或 `Coro::Cleanup()` 会抛出
-`std::logic_error`，避免等待自身退出。任务在初始调用线程内尚未挂起的代码，
+I/O 和后续处理线程中调用 `sync_wait` 仍抛出 `std::logic_error`；
+`Coro::Cleanup()` 返回 `RECURSIVE_API_CALL`，避免等待自身退出。任务在初始调用线程内尚未挂起的代码，
 以及已经完成任务的等待，不承诺线程切换。
 
 此运行时直接使用 libcurl 与 C++23 标准库，不依赖 Asio，也不使用
@@ -103,7 +109,7 @@ auto request = mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/stream" });
 auto cancellation = request.GetStopSource();
 request.Start();
 cancellation.request_stop();
-auto response = mcr::sync_wait(std::move(request));
+auto response = mcr::sync_wait(std::move(request)).value();
 ```
 
 启动前取消的普通 HTTP 请求不会联系服务器。运行中的请求由 I/O 线程从 multi 中
@@ -112,11 +118,12 @@ auto response = mcr::sync_wait(std::move(request));
 取消自身不会直接销毁协程帧。通用 Task 中的用户计算和外部 awaiter 仍需主动配合取消。
 
 传输失败（含超时）保留在 `Response::error` 中；HTTP 4xx / 5xx 是普通响应。
-选项配置、请求准备、用户回调和运行时异常会在 `co_await` 或 `sync_wait` 处抛出。
+HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl multi 失败通过 Result 返回；
+用户回调和标准库资源异常仍在 `co_await` 或 `sync_wait` 处传播。
 一个请求失败不会阻止其他请求完成；multi 本身的致命错误会结束运行时并通知所有待完成请求。
 
 `DownloadCoro(path, options...)` 在首次启动时以 binary / trunc 模式打开目标文件，
-请求完成后关闭文件，再返回正文为空的响应元数据。打开和关闭失败抛出异常；失败或取消
+请求完成后关闭文件，再返回正文为空的响应元数据。打开和关闭失败返回 `WRITE_ERROR`；失败或取消
 可能留下部分文件。传给 Task 的路径和选项均在调用时捕获。
 
 ## 清理
@@ -124,8 +131,8 @@ auto response = mcr::sync_wait(std::move(request));
 `mcr::Coro::Cleanup()` 停止接受新请求，取消排队和正在传输的请求，排空完成队列，
 等待 I/O 与后续处理线程退出后释放 multi handle。正常清理以
 `ABORTED_BY_CALLBACK` 结束尚未完成的传输，已经完成的请求保留其结果。
-方法可重复调用，也可以和提交、取消并发调用；开始关闭之后的新提交会抛出
-`std::logic_error`。关闭期间恢复的协程如再发起新请求，同样会收到该异常。
+方法可重复调用，也可以和提交、取消并发调用；开始关闭之后的新提交返回 `FAILED_INIT`。
+关闭期间恢复的协程如再发起新请求，同样会收到该错误。
 
 清理是永久关闭，随后 `Startup()` 或启动新的 HTTP 协程任务会失败。
 应用应先结束自己的工作链，在运行时线程之外调用清理，并在它返回之后才能执行

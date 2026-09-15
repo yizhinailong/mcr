@@ -24,7 +24,7 @@ static_assert(std::is_nothrow_copy_constructible_v<mcr::ConnectionPool>);
 static_assert(!std::is_copy_assignable_v<mcr::ConnectionPool>);
 static_assert(!std::is_move_assignable_v<mcr::ConnectionPool>);
 static_assert(std::is_nothrow_destructible_v<mcr::ConnectionPool>);
-static_assert(std::is_same_v<decltype(std::declval<mcr::ConnectionPool const&>().SetupHandler(nullptr)), void>);
+static_assert(std::is_same_v<std::remove_cvref_t<decltype(std::declval<mcr::ConnectionPool const&>().SetupHandler(nullptr).value())>, void>);
 
 namespace {
 
@@ -248,7 +248,7 @@ namespace {
     auto check_failures() -> bool {
         auto const before{ g_live_allocations.load() };
         g_allocation_attempts.store(0);
-        { mcr::ConnectionPool pool; }
+        { auto pool = mcr::ConnectionPool::Create().value(); }
         auto const allocations{ g_allocation_attempts.load() };
         bool       passed{ check(allocations > 0 && g_live_allocations.load() == before, "a pool must allocate and then release its curl state") };
         bool       saw_init_failure{ false };
@@ -256,50 +256,47 @@ namespace {
         for (std::size_t budget{ 0 }; budget < allocations; ++budget) {
             {
                 FailAfterAllocations fail{ budget };
-                try {
-                    mcr::ConnectionPool pool;
-                } catch (std::runtime_error const& error) {
-                    std::string_view message{ error.what() };
-                    saw_init_failure   |= message.contains("curl_share_init");
-                    saw_option_failure |= message.contains("CURLSHOPT_SHARE");
-                    passed             &= check(message.contains("mcr::ConnectionPool"), "curl allocation errors must identify the pool operation");
+                {
+                    auto const failure  = mcr::ConnectionPool::Create();
+                    saw_init_failure   |= !failure && failure.error().message.find("curl_share_init") != std::string::npos;
+                    saw_option_failure |= !failure && failure.error().message.find("curl_share_setopt") != std::string::npos;
+                    passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
                 }
             }
             passed &= check(g_live_allocations.load() == before, "failure at each allocation point must release partially initialized curl state");
         }
-        passed &= check(saw_init_failure && saw_option_failure, "failure injection must exercise both share initialization and cache configuration");
-        mcr::ConnectionPool recovered;
-        try {
-            recovered.SetupHandler(nullptr);
-            passed &= check(false, "a null easy handle must be rejected");
-        } catch (std::invalid_argument const&) {
+        passed         &= check(saw_init_failure && saw_option_failure, "failure injection must exercise both share initialization and cache configuration");
+        auto recovered  = mcr::ConnectionPool::Create().value();
+        {
+            auto const failure  = recovered.SetupHandler(nullptr);
+            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
         }
-        mcr::curl::CurlHolder holder;
-        recovered.SetupHandler(holder.handle);
+        auto holder = mcr::curl::CurlHolder::Create().value();
+        recovered.SetupHandler(holder.handle).value();
         return passed;
     }
 
     auto check_attached_lifetime() -> bool {
-        std::optional<mcr::ConnectionPool> original{ std::in_place };
+        std::optional<mcr::ConnectionPool> original{ mcr::ConnectionPool::Create().value() };
         mcr::ConnectionPool const          survivor{ *original };
-        mcr::curl::CurlHolder              holder;
-        original->SetupHandler(holder.handle);
+        auto                               holder = mcr::curl::CurlHolder::Create().value();
+        original->SetupHandler(holder.handle).value();
         original.reset();
-        survivor.SetupHandler(holder.handle);
+        survivor.SetupHandler(holder.handle).value();
         bool passed{ check(curl_easy_setopt(holder.handle, CURLOPT_URL, "http://[") == CURLE_OK && curl_easy_perform(holder.handle) == CURLE_URL_MALFORMAT, "a retained copy must keep callbacks valid after the original pool is destroyed") };
         {
-            mcr::ConnectionPool replacement;
-            replacement.SetupHandler(holder.handle);
+            auto replacement = mcr::ConnectionPool::Create().value();
+            replacement.SetupHandler(holder.handle).value();
             passed &= check(curl_easy_setopt(holder.handle, CURLOPT_SHARE, static_cast<CURLSH*>(nullptr)) == CURLE_OK, "an idle handle must support replacement and explicit detachment before pool destruction");
         }
-        survivor.SetupHandler(holder.handle);
+        survivor.SetupHandler(holder.handle).value();
         return passed;
     }
 
     auto request(std::string const& url, mcr::ConnectionPool const* pool, long expected_connections) -> bool {
-        mcr::curl::CurlHolder holder;
+        auto holder = mcr::curl::CurlHolder::Create().value();
         if (pool) {
-            pool->SetupHandler(holder.handle);
+            pool->SetupHandler(holder.handle).value();
         }
         std::string         body;
         curl_write_callback writer{ +[](char* bytes, std::size_t size, std::size_t count, void* userdata) noexcept -> std::size_t {
@@ -333,8 +330,8 @@ namespace {
         passed &= check(server.Connections() == 3, "three independent easy handles must open three connections");
         {
             auto survivor = [&] {
-                mcr::ConnectionPool original;
-                passed &= request(server.Url(), &original, 1);
+                auto original  = mcr::ConnectionPool::Create().value();
+                passed        &= request(server.Url(), &original, 1);
                 return mcr::ConnectionPool{ original };
             }();
             passed &= request(server.Url(), &survivor, 0);

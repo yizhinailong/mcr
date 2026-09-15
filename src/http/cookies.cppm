@@ -5,6 +5,7 @@
 export module mcr.cookies;
 
 import mcr.curlholder;
+export import mcr.error;
 import std;
 
 export namespace mcr {
@@ -186,13 +187,17 @@ export namespace mcr {
          * @note Names and unquoted values are encoded when requested. Values beginning and ending
          * with a double quote are copied verbatim, including a single double-quote character, as in cpr.
          * Domain, path, HTTPS, and expiration metadata are not included in the request header.
-         * Exceptions from CurlHolder::UrlEncode() propagate.
+         * Errors from CurlHolder::UrlEncode() propagate through the result.
          */
-        [[nodiscard]] auto GetEncoded(curl::CurlHolder const& holder) const -> std::string {
+        [[nodiscard]] auto GetEncoded(curl::CurlHolder const& holder) const -> Result<std::string> {
             std::string result;
             for (auto const& cookie : m_cookies) {
                 if (encode) {
-                    result += holder.UrlEncode(cookie.GetName());
+                    auto encoded = holder.UrlEncode(cookie.GetName());
+                    if (!encoded) {
+                        return std::unexpected{ std::move(encoded.error()) };
+                    }
+                    result += *encoded;
                 } else {
                     result += cookie.GetName();
                 }
@@ -200,7 +205,11 @@ export namespace mcr {
 
                 auto const& value{ cookie.GetValue() };
                 if (encode && !(value.starts_with('"') && value.ends_with('"'))) {
-                    result += holder.UrlEncode(value);
+                    auto encoded = holder.UrlEncode(value);
+                    if (!encoded) {
+                        return std::unexpected{ std::move(encoded.error()) };
+                    }
+                    result += *encoded;
                 } else {
                     result += value;
                 }

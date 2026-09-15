@@ -19,6 +19,7 @@ auto main(int argc, char** argv) -> int {
             mcr::Parameters{ { "message", "hello world" } },
             mcr::UserAgent{ "mcr_example" },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }) };
+        if (!pending) { return example::print_error(pending.error()); }
         std::println("Request submitted; waiting for its response.");
-        return example::print_response(pending.Get()); }, example::RuntimeKind::Async);
+        return example::print_response(pending->Get()); }, example::RuntimeKind::Async);
 }

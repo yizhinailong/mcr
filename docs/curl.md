@@ -28,8 +28,8 @@ auto main() -> int {
         return 1;
     }
     try {
-        mcr::curl::CurlHolder easy;
-        mcr::curl::CurlMultiHolder multi;
+        auto easy = mcr::curl::CurlHolder::Create().value();
+        auto multi = mcr::curl::CurlMultiHolder::Create().value();
     } catch (...) {
         curl_global_cleanup();
         return 1;

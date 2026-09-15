@@ -97,8 +97,8 @@ namespace {
         std::array<unsigned char, 4> bytes{ 0x00, 0x7f, 0x80, 0xff };
         std::filesystem::path const  filename{ std::filesystem::path{ "folder" } / "upload.bin" };
         auto                         part{ [&bytes, &filename] {
-            mcr::Buffer descriptor{ bytes.begin(), bytes.end(), std::filesystem::path{ filename } };
-            mcr::Part   result{ "buffer", descriptor, "application/octet-stream" };
+            auto      descriptor = mcr::Buffer::Create(bytes.begin(), bytes.end(), std::filesystem::path{ filename }).value();
+            mcr::Part result{ "buffer", descriptor, "application/octet-stream" };
             descriptor.data    = nullptr;
             descriptor.datalen = 0;
             return result;
@@ -111,16 +111,16 @@ namespace {
         bytes[1]    = 0xff;
         passed     &= check(moved.value == filename.string() && moved.is_buffer && moved.data == part.data && moved.datalen == part.datalen && std::memcmp(moved.data, bytes.data(), bytes.size()) == 0, "part copies and moves must own metadata independently while continuing to borrow the same bytes");
 
-        char const*       null_data{ nullptr };
-        mcr::Buffer const empty{ null_data, null_data, std::filesystem::path{} };
-        mcr::Part const   empty_part{ "empty", empty };
+        char const*     null_data{ nullptr };
+        auto const      empty = mcr::Buffer::Create(null_data, null_data, std::filesystem::path{}).value();
+        mcr::Part const empty_part{ "empty", empty };
         passed &= check(empty_part.is_buffer && !empty_part.is_file && empty_part.data == nullptr && empty_part.datalen == 0 && empty_part.value.empty() && empty_part.content_type.empty(), "empty buffers must retain buffer mode, a null/zero range, and an empty filename");
         return passed;
     }
 
     auto check_multipart_collections() -> bool {
         std::array<char, 3> bytes{ 'a', '\0', 'b' };
-        mcr::Buffer const   buffer{ bytes.begin(), bytes.end(), "bytes.bin" };
+        auto const          buffer = mcr::Buffer::Create(bytes.begin(), bytes.end(), "bytes.bin").value();
         mcr::Multipart      form{
             {   "text",                                  "hello" },
             { "number",                                        5 },

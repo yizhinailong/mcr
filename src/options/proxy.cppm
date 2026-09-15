@@ -6,6 +6,7 @@ export module mcr.proxy;
 
 import mcr.secure_string;
 import mcr.util;
+export import mcr.error;
 import std;
 
 export namespace mcr::options {
@@ -78,9 +79,22 @@ export namespace mcr::options {
          * @brief Encode and own credentials.
          * @param username Raw username.
          * @param password Raw password.
+         * @return Success or the first operation error.
          */
-        EncodedAuthentication(std::string_view username, std::string_view password)
-            : m_username{ utils::url_encode(username) }, m_password{ utils::url_encode(password) } {}
+        [[nodiscard]] static auto Create(std::string_view username, std::string_view password) -> Result<EncodedAuthentication> {
+            auto encoded_username = utils::url_encode(username);
+            if (!encoded_username) {
+                return std::unexpected{ std::move(encoded_username.error()) };
+            }
+            auto encoded_password = utils::url_encode(password);
+            if (!encoded_password) {
+                return std::unexpected{ std::move(encoded_password.error()) };
+            }
+            EncodedAuthentication result;
+            result.m_username = std::move(*encoded_username);
+            result.m_password = std::move(*encoded_password);
+            return result;
+        }
 
         virtual ~EncodedAuthentication()                                           = default;
         EncodedAuthentication(EncodedAuthentication const&)                        = default;

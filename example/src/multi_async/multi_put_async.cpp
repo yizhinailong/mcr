@@ -29,8 +29,9 @@ auto main(int argc, char** argv) -> int {
             mcr::UserAgent{ "mcr_example" },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }} };
         auto pending{ mcr::MultiPutAsync(std::move(first), std::move(second)) };
+        if (!pending) { return example::print_error(pending.error()); }
         int result{};
-        for (auto& task : pending) {
+        for (auto& task : *pending) {
             result |= example::print_response(task.Get());
         }
         return result; }, example::RuntimeKind::Async);

@@ -10,7 +10,7 @@ static_assert(std::is_convertible_v<std::string, mcr::Body>);
 static_assert(std::is_convertible_v<std::string_view, mcr::Body>);
 static_assert(std::is_convertible_v<char const*, mcr::Body>);
 static_assert(std::is_convertible_v<mcr::Buffer const&, mcr::Body>);
-static_assert(std::is_convertible_v<mcr::File const&, mcr::Body>);
+static_assert(std::same_as<decltype(mcr::Body::FromFile(std::declval<mcr::File const&>())), mcr::Result<mcr::Body>>);
 static_assert(!std::is_convertible_v<mcr::Body, std::string>);
 static_assert(std::is_nothrow_move_constructible_v<mcr::Body>);
 static_assert(std::is_nothrow_move_assignable_v<mcr::Body>);
@@ -100,21 +100,21 @@ namespace {
     auto check_buffer_ownership() -> bool {
         std::array<unsigned char, 5> bytes{ 0x01, 0x00, 0x80, 0xff, 0x02 };
         std::string const            expected{ reinterpret_cast<char const*>(bytes.data() + 1), 3 };
-        mcr::Buffer                  buffer{ bytes.begin() + 1, bytes.end() - 1, "filename is ignored" };
-        mcr::Body const              body = buffer;
+        auto                         buffer = mcr::Buffer::Create(bytes.begin() + 1, bytes.end() - 1, "filename is ignored").value();
+        mcr::Body const              body   = buffer;
         bytes.fill(0x42);
         buffer.data    = nullptr;
         buffer.datalen = 0;
         bool            passed{ check(body.Str() == expected, "Buffer construction must copy its exact binary subrange independently of later source and descriptor changes") };
         mcr::Body const from_destroyed_source{ [] {
             std::string const source{ "a\0b", 3 };
-            mcr::Buffer const descriptor{ source.begin(), source.end(), "temporary" };
+            auto const        descriptor = mcr::Buffer::Create(source.begin(), source.end(), "temporary").value();
             return mcr::Body{ descriptor };
         }() };
         passed &= check(from_destroyed_source.Str() == std::string{ "a\0b", 3 }, "the body must remain usable after both the Buffer and its backing storage are destroyed");
-        char const*       null_data{ nullptr };
-        mcr::Buffer const empty{ null_data, null_data, "empty" };
-        passed &= check(mcr::Body{ empty }.Str().empty() && mcr::Body{ buffer }.Str().empty(), "null/zero Buffer ranges must construct an empty body");
+        char const* null_data{ nullptr };
+        auto const  empty  = mcr::Buffer::Create(null_data, null_data, "empty").value();
+        passed            &= check(mcr::Body{ empty }.Str().empty() && mcr::Body{ buffer }.Str().empty(), "null/zero Buffer ranges must construct an empty body");
         return passed;
     }
 
@@ -128,32 +128,20 @@ namespace {
                 expected[index] = static_cast<char>(index % 256);
             }
             temporary.Write(expected);
-            mcr::File       descriptor{ temporary.path.string(), "this-override-is-not-a-file" };
-            mcr::Body const body  = descriptor;
-            passed               &= check(body.Str() == expected, "file construction must read every binary byte through EOF, including nulls, CR/LF, control bytes, and a partial final block");
+            mcr::File  descriptor{ temporary.path.string(), "this-override-is-not-a-file" };
+            auto const body  = mcr::Body::FromFile(descriptor).value();
+            passed          &= check(body.Str() == expected, "file construction must read every binary byte through EOF, including nulls, CR/LF, control bytes, and a partial final block");
             temporary.Write("replaced");
             passed &= check(std::filesystem::remove(temporary.path) && body.Str() == expected, "the stream must close after construction and replacing or removing the file must not affect the body");
         }
 
         auto const missing_path{ temporary.directory / "missing.bin" };
         for (auto const& path : { missing_path.string(), std::string{} }) {
-            bool rejected{ false };
-            try {
-                mcr::Body const body{ mcr::File{ path } };
-            } catch (std::invalid_argument const& error) {
-                rejected = std::string_view{ error.what() } == "Can't open the file for HTTP request body!";
-            }
-            passed &= check(rejected, "missing and empty file paths must throw cpr's invalid_argument with its open-failure message");
+            auto const body  = mcr::Body::FromFile(mcr::File{ path });
+            passed          &= check(!body && body.error().code == mcr::ErrorCode::FILE_COULDNT_READ_FILE && body.error().message == "Can't open the file for HTTP request body!", "missing and empty paths must return the open failure diagnostic");
         }
-        bool rejected_directory{ false };
-        try {
-            mcr::Body const body{ mcr::File{ temporary.directory.string() } };
-        } catch (std::invalid_argument const&) {
-            rejected_directory = true; // Some platforms refuse to open directories.
-        } catch (std::runtime_error const&) {
-            rejected_directory = true; // Others allow opening but fail while reading.
-        }
-        passed &= check(rejected_directory, "an unreadable directory must throw at open or read instead of producing a successful body");
+        auto const directory  = mcr::Body::FromFile(mcr::File{ temporary.directory.string() });
+        passed               &= check(!directory && (directory.error().code == mcr::ErrorCode::FILE_COULDNT_READ_FILE || directory.error().code == mcr::ErrorCode::READ_ERROR), "unreadable directories must fail at open or read");
         return passed;
     }
 

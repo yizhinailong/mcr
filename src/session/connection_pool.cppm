@@ -8,6 +8,7 @@ module;
 
 export module mcr.connection_pool;
 
+export import mcr.error;
 import std;
 
 export namespace mcr {
@@ -30,19 +31,32 @@ export namespace mcr {
         /**
          * @brief Create connection and TLS session caches and install lock callbacks.
          * @throws std::bad_alloc If allocating shared ownership or mutex storage fails.
-         * @throws std::runtime_error If curl initialization or share configuration fails.
+         * @return Success or the first operation error.
          */
-        ConnectionPool()
-            : m_mutexes{ std::make_shared<Mutexes>() },
-              m_curl_share{ curl_share_init(), cleanupShare } {
-            if (!m_curl_share) {
-                throw std::runtime_error{ "mcr::ConnectionPool: curl_share_init failed." };
+        [[nodiscard]] static auto Create() -> Result<ConnectionPool> {
+            ConnectionPool result;
+            if (!result.m_curl_share) {
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::ConnectionPool: curl_share_init failed." }
+                };
             }
-            checkShareResult(curl_share_setopt(m_curl_share.get(), CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT), "CURLSHOPT_SHARE(CURL_LOCK_DATA_CONNECT)");
-            checkShareResult(curl_share_setopt(m_curl_share.get(), CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION), "CURLSHOPT_SHARE(CURL_LOCK_DATA_SSL_SESSION)");
-            checkShareResult(curl_share_setopt(m_curl_share.get(), CURLSHOPT_USERDATA, static_cast<void*>(m_mutexes.get())), "CURLSHOPT_USERDATA");
-            checkShareResult(curl_share_setopt(m_curl_share.get(), CURLSHOPT_LOCKFUNC, static_cast<curl_lock_function>(lock)), "CURLSHOPT_LOCKFUNC");
-            checkShareResult(curl_share_setopt(m_curl_share.get(), CURLSHOPT_UNLOCKFUNC, static_cast<curl_unlock_function>(unlock)), "CURLSHOPT_UNLOCKFUNC");
+            auto const share = result.m_curl_share.get();
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT), "curl_share_setopt"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION), "curl_share_setopt"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_USERDATA, static_cast<void*>(result.m_mutexes.get())), "curl_share_setopt"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_LOCKFUNC, static_cast<curl_lock_function>(lock)), "curl_share_setopt"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_UNLOCKFUNC, static_cast<curl_unlock_function>(unlock)), "curl_share_setopt"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return result;
         }
 
         /**
@@ -55,21 +69,30 @@ export namespace mcr {
         /**
          * @brief Attach an idle easy handle to this pool's shared caches.
          * @param easy_handler Valid easy handle owned by the caller.
-         * @throws std::invalid_argument If easy_handler is null.
-         * @throws std::runtime_error If setting CURLOPT_SHARE fails.
          * @note The easy handle does not retain C++ ownership of the pool.
+         * @return Success or the first operation error.
          */
-        auto SetupHandler(CURL* easy_handler) const -> void {
+        auto SetupHandler(CURL* easy_handler) const -> Result<void> {
             if (!easy_handler) {
-                throw std::invalid_argument{ "mcr::ConnectionPool: SetupHandler requires a nonnull easy handle." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::ConnectionPool: SetupHandler requires a nonnull easy handle." }
+                };
             }
             auto const result{ curl_easy_setopt(easy_handler, CURLOPT_SHARE, m_curl_share.get()) };
             if (result != CURLE_OK) {
-                throw std::runtime_error{ std::format("mcr::ConnectionPool: CURLOPT_SHARE failed: {}", curl_easy_strerror(result)) };
+                return std::unexpected{
+                    Error{ static_cast<std::int32_t>(result), std::format("mcr::ConnectionPool: CURLOPT_SHARE failed: {}", curl_easy_strerror(result)) }
+                };
             }
+            return {};
         }
 
     private:
+        /**
+         * @brief Acquire resources before checked share configuration.
+         */
+        ConnectionPool() : m_mutexes{ std::make_shared<Mutexes>() }, m_curl_share{ curl_share_init(), cleanupShare } {}
+
         /**
          * @brief Lock the mutex for the data type requested by libcurl.
          */
@@ -99,12 +122,15 @@ export namespace mcr {
          * @brief Report a failed share option instead of leaving a partially configured pool.
          * @param result Result returned by curl_share_setopt.
          * @param operation Name of the option being configured.
-         * @throws std::runtime_error If result is not CURLSHE_OK.
+         * @return Success or the first operation error.
          */
-        static auto checkShareResult(CURLSHcode result, std::string_view operation) -> void {
+        static auto checkShareResult(CURLSHcode result, std::string_view operation) -> Result<void> {
             if (result != CURLSHE_OK) {
-                throw std::runtime_error{ std::format("mcr::ConnectionPool: {} failed: {}", operation, curl_share_strerror(result)) };
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, std::format("mcr::ConnectionPool: {} failed: {}", operation, curl_share_strerror(result)) }
+                };
             }
+            return {};
         }
     };
 

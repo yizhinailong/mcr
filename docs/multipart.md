@@ -11,7 +11,7 @@ import std;
 import mcr.multipart;
 
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };
-mcr::Buffer buffer{ bytes.begin(), bytes.end(), "upload.bin" };
+auto buffer = mcr::Buffer::Create( bytes.begin(), bytes.end(), "upload.bin" ).value();
 mcr::Multipart form{
     { "text", "hello" },
     { "number", 5, "application/number" },

@@ -268,7 +268,7 @@ def verify(bin_dir):
                 if example.name in FILE_DOWNLOADS:
                     bad_output = Path(temporary) / "missing-directory" / "output.bin"
                     url = f"http://127.0.0.1:{fixture.server_port}/binary"
-                    require("Example failed:" in execute(binary, [url, bad_output], 1, environment),
+                    require("Request failed: WRITE_ERROR:" in execute(binary, [url, bad_output], 1, environment),
                             f"{example.name}: file opening failure was not reported")
                 require(not fixture.take_records(), f"{example.name}: argument or file failures unexpectedly sent a request")
                 print(f"{example.name}: ok", flush=True)

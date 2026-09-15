@@ -11,7 +11,7 @@ import mcr_example.support;
  * @param url HTTP endpoint copied into this coroutine.
  * @return Task yielding the completed response.
  */
-auto request(std::string url) -> mcr::Task<mcr::Response> {
+auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     co_return co_await mcr::PatchCoro(
         mcr::Url{
             std::move(url)

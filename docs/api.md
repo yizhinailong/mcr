@@ -6,19 +6,20 @@
 `cmake/cprver.h.in`。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
 `mcr.api`、`mcr.version`。总入口也导出 SSL 上下文回调等后端接口及通用工具；
 只需要 SSL 上下文接口时，可以单独导入 `mcr.ssl_ctx`。
-HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。
+HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
+`utils::AsyncWrapper<Result<Response>>`；提交结果和请求执行结果分别检查，见[错误处理](error.md)。
 
 | 操作 | 返回值 | 执行方式 |
 | --- | --- | --- |
-| `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Response` | 临时 Session，同步请求 |
-| 各方法的 `*Async` | `AsyncResponse` | 全局线程池中的独立请求 |
-| 各方法的 `*Coro` | `mcr::Task<Response>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro.md) |
-| 各方法的 `*Callback` | `mcr::utils::AsyncWrapper<回调返回类型, true>` | 请求完成后在线程池任务中调用完成回调 |
-| `MultiGet` / `MultiPost` / `MultiPut` / `MultiHead` / `MultiDelete` / `MultiOptions` / `MultiPatch` | `std::vector<Response>` | 由 MultiPerform 并发执行，结果保持参数顺序 |
-| 各批量方法的 `Multi*Async` | `std::vector<mcr::utils::AsyncWrapper<Response, true>>` | 独立提交，可分别取消 |
-| `Download(std::ofstream&, ...)` / `Download(WriteCallback const&, ...)` | `Response` | 同步下载，正文交给指定消费者 |
-| `DownloadAsync(std::filesystem::path, ...)` | `AsyncResponse` | 在线程池中打开、下载并关闭目标文件 |
-| `DownloadCoro(std::filesystem::path, ...)` | `mcr::Task<Response>` | 启动时打开文件，经 curl multi 下载，关闭后返回元数据 |
+| `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Result<Response>` | 临时 Session，同步请求 |
+| 各方法的 `*Async` | `Result<AsyncResponse>` | 全局线程池中的独立请求 |
+| 各方法的 `*Coro` | `mcr::Task<Result<Response>>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro.md) |
+| 各方法的 `*Callback` | `Result<mcr::utils::AsyncWrapper<回调返回类型, true>>` | 请求完成后在线程池任务中调用完成回调 |
+| `MultiGet` / `MultiPost` / `MultiPut` / `MultiHead` / `MultiDelete` / `MultiOptions` / `MultiPatch` | `Result<std::vector<Response>>` | 由 MultiPerform 并发执行，结果保持参数顺序 |
+| 各批量方法的 `Multi*Async` | `Result<std::vector<mcr::utils::AsyncWrapper<Result<Response>, true>>>` | 独立提交，可分别取消 |
+| `Download(std::ofstream&, ...)` / `Download(WriteCallback const&, ...)` | `Result<Response>` | 同步下载，正文交给指定消费者 |
+| `DownloadAsync(std::filesystem::path, ...)` | `Result<AsyncResponse>` | 在线程池中打开、下载并关闭目标文件 |
+| `DownloadCoro(std::filesystem::path, ...)` | `mcr::Task<Result<Response>>` | 启动时打开文件，经 curl multi 下载，关闭后返回元数据 |
 
 ## 请求选项与结果
 
@@ -34,15 +35,15 @@ auto response = mcr::Post(
     mcr::options::Timeout{ std::chrono::seconds{ 3 } },
     mcr::Header{ { "Content-Type", "application/json" } },
     mcr::Body{ R"({"message":"hello"})" }
-);
+).value();
 
-auto pending = mcr::GetAsync(mcr::Url{ "http://127.0.0.1:8080/hello" });
-auto completed = pending.Get();
+auto pending = mcr::GetAsync(mcr::Url{ "http://127.0.0.1:8080/hello" }).value();
+auto completed = pending.Get().value();
 
 auto length = mcr::GetCallback(
-    [](mcr::Response response) { return response.text.size(); },
+    [](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  return response.text.size(); },
     mcr::Url{ "http://127.0.0.1:8080/hello" }
-);
+).value();
 std::println("{} bytes", length.Get());
 ```
 
@@ -58,7 +59,7 @@ JSON 请求可将上面的 `Header` 和 `Body` 换成 `mcr::JsonBody{ mcr::Json{
   BodyView、Multipart Buffer、ConnectionPool、回调捕获的引用及显式 reference_wrapper
   仍借用底层对象，必须覆盖实际任务的生命周期。
 - 完成回调以持有的左值调用，支持不可复制的捕获、不可复制的返回值、引用及 `void`。
-  请求准备异常、用户回调异常通过 future 的 `Get()` 传播；传输错误位于 `Response::error`。
+  请求准备失败通过 `Result<Response>` 传入完成回调；用户回调异常通过 future 的 `Get()` 传播；传输错误位于 `Response::error`。
 - 零个选项是合法调用；例如 `Get()` 返回缺少 URL 的传输错误。
   零个批量参数返回空 vector；`MultiGet(std::tuple<>{})` 则执行一个缺少 URL 的请求。
 
@@ -72,8 +73,8 @@ auto first = std::tuple{
     mcr::options::Timeout{ std::chrono::seconds{ 3 } }
 };
 auto second = std::tuple{ mcr::Url{ "http://127.0.0.1:8080/second" } };
-auto responses = mcr::MultiGet(first, second);
-auto tasks = mcr::MultiGetAsync(first, std::move(second));
+auto responses = mcr::MultiGet(first, second).value();
+auto tasks = mcr::MultiGetAsync(first, std::move(second)).value();
 auto result = tasks[0].Get();
 (void)tasks[1].Cancel();
 ```
@@ -98,12 +99,12 @@ auto result = tasks[0].Get();
 auto task = mcr::DownloadAsync(
     std::filesystem::path{ "response.bin" },
     mcr::Url{ "http://127.0.0.1:8080/binary" }
-);
-auto metadata = task.Get();
+).value();
+auto metadata = task.Get().value();
 ```
 
 `DownloadAsync` 使用全局线程池，以 binary / trunc 模式打开目标路径，覆盖已有文件。
-它在 future 就绪前检查关闭结果；文件打开或关闭失败抛出 `std::runtime_error`。
+它在 future 就绪前检查关闭结果；文件打开或关闭失败返回 `WRITE_ERROR`。
 同步流下载在请求前拒绝未打开或已失败的流，调用方负责随后 flush / close 的检查。
 失败的传输可能留下部分文件。与 cpr 的区别是统一使用线程池、显式处理文件错误，
 并在 Windows 上避免文本模式转换字节。

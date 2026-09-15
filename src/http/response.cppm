@@ -60,29 +60,35 @@ export namespace mcr {
          * @param transfer_error Transport outcome.
          * @throws std::invalid_argument If the holder or easy handle is null.
          */
-        Response(std::shared_ptr<curl::CurlHolder> curl, std::string&& body, std::string&& headers, Cookies&& received_cookies = {}, Error&& transfer_error = {})
-            : text{ std::move(body) }, cookies{ std::move(received_cookies) }, error{ std::move(transfer_error) }, raw_header{ std::move(headers) } {
+        [[nodiscard]] static auto FromCurl(std::shared_ptr<curl::CurlHolder> curl, std::string body, std::string headers, Cookies received_cookies = {}, Error transfer_error = {}) -> Result<Response> {
+            Response result;
+            result.text       = std::move(body);
+            result.cookies    = std::move(received_cookies);
+            result.error      = std::move(transfer_error);
+            result.raw_header = std::move(headers);
             if (!curl || !curl->handle) {
-                throw std::invalid_argument{ "mcr::Response requires an active curl holder." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Response requires an active curl holder." }
+                };
             }
-            header = utils::parse_header(raw_header, &status_line, &reason);
+            result.header = utils::parse_header(result.raw_header, &result.status_line, &result.reason);
             auto* handle{ curl->handle };
-            (void)curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status_code);
-            (void)curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &elapsed);
+            (void)curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &result.status_code);
+            (void)curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &result.elapsed);
             char* address{ nullptr };
             if (curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, &address) == CURLE_OK && address) {
-                url = Url{ address };
+                result.url = Url{ address };
             }
-            (void)curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD_T, &downloaded_bytes);
-            (void)curl_easy_getinfo(handle, CURLINFO_SIZE_UPLOAD_T, &uploaded_bytes);
-            (void)curl_easy_getinfo(handle, CURLINFO_REDIRECT_COUNT, &redirect_count);
+            (void)curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD_T, &result.downloaded_bytes);
+            (void)curl_easy_getinfo(handle, CURLINFO_SIZE_UPLOAD_T, &result.uploaded_bytes);
+            (void)curl_easy_getinfo(handle, CURLINFO_REDIRECT_COUNT, &result.redirect_count);
             address = nullptr;
             if (curl_easy_getinfo(handle, CURLINFO_PRIMARY_IP, &address) == CURLE_OK && address) {
-                primary_ip = address;
+                result.primary_ip = address;
             }
             long port{};
             if (curl_easy_getinfo(handle, CURLINFO_PRIMARY_PORT, &port) == CURLE_OK) {
-                primary_port = static_cast<std::uint16_t>(port);
+                result.primary_port = static_cast<std::uint16_t>(port);
             }
             curl_certinfo* certificates{ nullptr };
             if (curl_easy_getinfo(handle, CURLINFO_CERTINFO, &certificates) == CURLE_OK && certificates) {
@@ -91,9 +97,10 @@ export namespace mcr {
                     for (auto* entry{ certificates->certinfo[index] }; entry; entry = entry->next) {
                         info.emplace_back(entry->data);
                     }
-                    m_cert_infos.push_back(std::move(info));
+                    result.m_cert_infos.push_back(std::move(info));
                 }
             }
+            return result;
         }
 
         /**

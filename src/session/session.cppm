@@ -31,11 +31,12 @@ export import mcr.transfer_options;
 
 import mcr.util;
 import mcr.curlmultiholder;
+export import mcr.error;
 import std;
 
 export namespace mcr {
 
-    using AsyncResponse = utils::AsyncWrapper<Response>;                                              ///< Asynchronous transfer result.
+    using AsyncResponse = utils::AsyncWrapper<Result<Response>>;                                      ///< Asynchronous transfer result.
     using Content       = std::variant<std::monostate, Payload, Body, BodyView, Multipart, JsonBody>; ///< Persistent request content.
 
     class Session;
@@ -60,13 +61,13 @@ export namespace mcr {
             DOWNLOAD_CALLBACK_REQUEST,
             DOWNLOAD_FILE_REQUEST
         };
-        virtual ~Interceptor()                               = default;
+        virtual ~Interceptor()                                       = default;
         /**
          * @brief Modify, forward, retry, or replace a request.
          * @param session Current session.
          * @return Response to pass to the preceding interceptor.
          */
-        virtual auto Intercept(Session& session) -> Response = 0;
+        virtual auto Intercept(Session& session) -> Result<Response> = 0;
 
     protected:
         /**
@@ -74,14 +75,14 @@ export namespace mcr {
          * @param session Current session.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session) -> Response;
+        static auto Proceed(Session& session) -> Result<Response>;
         /**
          * @brief Continue using a different HTTP method.
          * @param session Current session.
          * @param method Method to execute.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session, ProceedHttpMethod method) -> Response;
+        static auto Proceed(Session& session, ProceedHttpMethod method) -> Result<Response>;
         /**
          * @brief Continue with a file download.
          * @param session Current session.
@@ -89,7 +90,7 @@ export namespace mcr {
          * @param file Borrowed stream.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Response;
+        static auto Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Result<Response>;
         /**
          * @brief Continue with a callback download.
          * @param session Current session.
@@ -97,7 +98,7 @@ export namespace mcr {
          * @param write Consumer to copy.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Response;
+        static auto Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Result<Response>;
     };
 
     /**
@@ -105,14 +106,14 @@ export namespace mcr {
      */
     class InterceptorMulti {
     public:
-        using ProceedHttpMethod                                              = Interceptor::ProceedHttpMethod; ///< Matching cpr method tags.
-        virtual ~InterceptorMulti()                                          = default;
+        using ProceedHttpMethod                                                      = Interceptor::ProceedHttpMethod; ///< Matching cpr method tags.
+        virtual ~InterceptorMulti()                                                  = default;
         /**
          * @brief Modify, forward, retry, or replace a batch.
          * @param multi Current batch.
          * @return Responses in session order.
          */
-        virtual auto Intercept(MultiPerform& multi) -> std::vector<Response> = 0;
+        virtual auto Intercept(MultiPerform& multi) -> Result<std::vector<Response>> = 0;
 
     protected:
         /**
@@ -120,21 +121,23 @@ export namespace mcr {
          * @param multi Current batch.
          * @return Downstream responses.
          */
-        static auto Proceed(MultiPerform& multi) -> std::vector<Response>;
+        static auto Proceed(MultiPerform& multi) -> Result<std::vector<Response>>;
         /**
          * @brief Select a callback download destination.
          * @param multi Current batch.
          * @param index Session index.
          * @param write Consumer to copy.
+         * @return Success or the first operation error.
          */
-        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> void;
+        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> Result<void>;
         /**
          * @brief Select a file download destination.
          * @param multi Current batch.
          * @param index Session index.
          * @param file Borrowed stream.
+         * @return Success or the first operation error.
          */
-        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> void;
+        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> Result<void>;
     };
 
     /**
@@ -143,56 +146,60 @@ export namespace mcr {
      * Async methods require std::shared_ptr ownership. Borrowed body buffers, files, callback captures,
      * and a configured ConnectionPool must outlive all transfers that use them.
      * Content persists until replaced or removed; HEAD and Download ignore it without removing it.
-     * Curl option failures throw std::runtime_error. Transfer failures are reported in Response::error.
+     * Curl option failures are returned as Error values. Transfer failures are reported in Response::error.
      * Callback exceptions are rethrown after curl returns, never through curl's C frames.
      */
     class Session : public std::enable_shared_from_this<Session> {
     private:
         friend Interceptor;
         friend MultiPerform;
-        std::vector<std::shared_ptr<Interceptor>> m_interceptors;                                 ///< Interceptors in registration order.
-        std::size_t                               m_next_interceptor{};                           ///< Next interceptor in the current nested request.
-        std::size_t                               m_request_depth{};                              ///< Number of active interceptor/request frames.
-        std::string                               m_method{ "GET" };                              ///< Last prepared method, retained by Proceed.
-        MultiPerform*                             m_multi_owner{};                                ///< Batch that currently owns this session, if any.
-        bool                                      m_multi_preparing{};                            ///< Permit the owning batch to prepare its handle.
-        bool                                      m_in_transfer{};                                ///< Reject recursive transfers from curl callbacks.
-        std::shared_ptr<curl::CurlHolder>         m_curl{ std::make_shared<curl::CurlHolder>() }; ///< Owned transfer resources.
-        Url                                       m_url;                                          ///< Base URL before adding parameters.
-        Parameters                                m_parameters;                                   ///< Persistent URL parameters.
-        Header                                    m_header;                                       ///< Persistent request headers.
-        options::Proxies                          m_proxies;                                      ///< Persistent proxy selection.
-        options::ProxyAuthentication              m_proxy_auth;                                   ///< Persistent encoded proxy credentials.
-        options::AcceptEncoding                   m_accept_encoding;                              ///< Compression preference.
-        Content                                   m_content;                                      ///< Owned or borrowed request content.
-        ReadCallback                              m_read;                                         ///< Optional upload producer.
-        HeaderCallback                            m_header_callback;                              ///< Optional header observer.
-        WriteCallback                             m_write;                                        ///< Optional response consumer.
-        ProgressCallback                          m_progress;                                     ///< Optional progress observer.
-        DebugCallback                             m_debug;                                        ///< Optional diagnostics observer.
-        ServerSentEventCallback                   m_sse;                                          ///< Optional event consumer.
-        ServerSentEventParser                     m_sse_parser;                                   ///< Parser reset before every transfer.
-        std::shared_ptr<std::atomic_bool>         m_cancellation;                                 ///< Shared cancellation flag.
-        std::string                               m_response_string;                              ///< Current buffered response body.
-        std::string                               m_header_string;                                ///< Current raw response headers.
-        std::size_t                               m_reserve_size{};                               ///< Requested body buffer reservation.
-        WriteCallback                             m_download_write;                               ///< Consumer used only for a prepared download.
-        std::ofstream*                            m_download_file{};                              ///< Borrowed file for a prepared download.
-        bool                                      m_downloading{};                                ///< Selects the current body destination.
-        std::exception_ptr                        m_callback_error;                               ///< First exception caught inside a curl callback.
+        std::vector<std::shared_ptr<Interceptor>> m_interceptors;       ///< Interceptors in registration order.
+        std::size_t                               m_next_interceptor{}; ///< Next interceptor in the current nested request.
+        std::size_t                               m_request_depth{};    ///< Number of active interceptor/request frames.
+        std::string                               m_method{ "GET" };    ///< Last prepared method, retained by Proceed.
+        MultiPerform*                             m_multi_owner{};      ///< Batch that currently owns this session, if any.
+        bool                                      m_multi_preparing{};  ///< Permit the owning batch to prepare its handle.
+        bool                                      m_in_transfer{};      ///< Reject recursive transfers from curl callbacks.
+        std::shared_ptr<curl::CurlHolder>         m_curl;               ///< Owned transfer resources.
+        Url                                       m_url;                ///< Base URL before adding parameters.
+        Parameters                                m_parameters;         ///< Persistent URL parameters.
+        Header                                    m_header;             ///< Persistent request headers.
+        options::Proxies                          m_proxies;            ///< Persistent proxy selection.
+        options::ProxyAuthentication              m_proxy_auth;         ///< Persistent encoded proxy credentials.
+        options::AcceptEncoding                   m_accept_encoding;    ///< Compression preference.
+        Content                                   m_content;            ///< Owned or borrowed request content.
+        ReadCallback                              m_read;               ///< Optional upload producer.
+        HeaderCallback                            m_header_callback;    ///< Optional header observer.
+        WriteCallback                             m_write;              ///< Optional response consumer.
+        ProgressCallback                          m_progress;           ///< Optional progress observer.
+        DebugCallback                             m_debug;              ///< Optional diagnostics observer.
+        ServerSentEventCallback                   m_sse;                ///< Optional event consumer.
+        ServerSentEventParser                     m_sse_parser;         ///< Parser reset before every transfer.
+        std::shared_ptr<std::atomic_bool>         m_cancellation;       ///< Shared cancellation flag.
+        std::string                               m_response_string;    ///< Current buffered response body.
+        std::string                               m_header_string;      ///< Current raw response headers.
+        std::size_t                               m_reserve_size{};     ///< Requested body buffer reservation.
+        WriteCallback                             m_download_write;     ///< Consumer used only for a prepared download.
+        std::ofstream*                            m_download_file{};    ///< Borrowed file for a prepared download.
+        bool                                      m_downloading{};      ///< Selects the current body destination.
+        std::exception_ptr                        m_callback_error;     ///< First exception caught inside a curl callback.
 
     public:
         /**
          * @brief Initialize cpr-compatible redirects, cookies, compression, and keepalive defaults.
+         * @return Success or the first operation error.
          */
-        Session() {
-            auto const* version{ curl_version_info(CURLVERSION_NOW) };
-            SetUserAgent(UserAgent{ std::string{ "curl/" } + version->version });
-            SetRedirect(options::Redirect{});
-            setOption(CURLOPT_COOKIEFILE, "");
-            setOption(CURLOPT_NOSIGNAL, 1L);
-            setOption(CURLOPT_TCP_KEEPALIVE, 1L);
-            setOption(CURLOPT_CERTINFO, 1L);
+        [[nodiscard]] static auto Create() -> Result<std::shared_ptr<Session>> {
+            auto holder = curl::CurlHolder::Create();
+            if (!holder) {
+                return std::unexpected{ std::move(holder.error()) };
+            }
+            // The private constructor keeps partially initialized sessions out of public code.
+            auto result = std::shared_ptr<Session>{ new Session{ std::make_shared<curl::CurlHolder>(std::move(*holder)) } };
+            if (auto status = result->initialize(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return result;
         }
 
         Session(Session const&)                    = delete;
@@ -208,35 +215,54 @@ export namespace mcr {
         /**
          * @brief Replace the base URL.
          * @param url URL to copy.
+         * @return Success or the first operation error.
          */
-        auto SetUrl(Url const& url) -> void { m_url = url; }
+        auto SetUrl(Url const& url) -> Result<void> {
+            m_url = url;
+            return {};
+        }
 
         /**
          * @brief Copy URL parameters.
          * @param parameters Replacement parameters.
+         * @return Success or the first operation error.
          */
-        auto SetParameters(Parameters const& parameters) -> void { m_parameters = parameters; }
+        auto SetParameters(Parameters const& parameters) -> Result<void> {
+            m_parameters = parameters;
+            return {};
+        }
 
         /**
          * @brief Move URL parameters.
          * @param parameters Replacement parameters.
+         * @return Success or the first operation error.
          */
-        auto SetParameters(Parameters&& parameters) -> void { m_parameters = std::move(parameters); }
+        auto SetParameters(Parameters&& parameters) -> Result<void> {
+            m_parameters = std::move(parameters);
+            return {};
+        }
 
         /**
          * @brief Replace all request headers.
          * @param header Headers to copy.
+         * @return Success or the first operation error.
          */
-        auto SetHeader(Header const& header) -> void { m_header = header; }
+        auto SetHeader(Header const& header) -> Result<void> {
+            m_header = header;
+            return {};
+        }
 
         /**
          * @brief Merge headers using case-insensitive replacement.
          * @param header Headers to add or replace.
+         * @return Success or the first operation error.
          */
-        auto UpdateHeader(Header const& header) -> void {
+        auto UpdateHeader(Header const& header) -> Result<void> {
             for (auto const& [name, value] : header) {
                 m_header[name] = value;
             }
+
+            return {};
         }
 
         /**
@@ -254,26 +280,53 @@ export namespace mcr {
         /**
          * @brief Set the total transfer timeout.
          * @param timeout Duration; zero disables the timeout.
+         * @return Success or the first operation error.
          */
-        auto SetTimeout(options::Timeout const& timeout) -> void { setOption(CURLOPT_TIMEOUT_MS, timeout.Milliseconds()); }
+        auto SetTimeout(options::Timeout const& timeout) -> Result<void> {
+            auto milliseconds = timeout.Milliseconds();
+            if (!milliseconds) {
+                return std::unexpected{ std::move(milliseconds.error()) };
+            }
+            if (auto status = setOption(CURLOPT_TIMEOUT_MS, *milliseconds); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Set the connection timeout.
          * @param timeout Connection establishment deadline.
+         * @return Success or the first operation error.
          */
-        auto SetConnectTimeout(options::ConnectTimeout const& timeout) -> void { setOption(CURLOPT_CONNECTTIMEOUT_MS, timeout.Milliseconds()); }
+        auto SetConnectTimeout(options::ConnectTimeout const& timeout) -> Result<void> {
+            auto milliseconds = timeout.Milliseconds();
+            if (!milliseconds) {
+                return std::unexpected{ std::move(milliseconds.error()) };
+            }
+            if (auto status = setOption(CURLOPT_CONNECTTIMEOUT_MS, *milliseconds); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Attach a borrowed connection pool.
          * @param pool Pool that must outlive this session's handle.
+         * @return Success or the first operation error.
          */
-        auto SetConnectionPool(ConnectionPool const& pool) -> void { pool.SetupHandler(m_curl->handle); }
+        auto SetConnectionPool(ConnectionPool const& pool) -> Result<void> {
+            if (auto status = pool.SetupHandler(m_curl->handle); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Configure HTTP credentials.
          * @param auth Owned credentials and authentication policy to copy into curl.
+         * @return Success or the first operation error.
          */
-        auto SetAuth(options::Authentication const& auth) -> void {
+        auto SetAuth(options::Authentication const& auth) -> Result<void> {
             long mode{};
             switch (auth.GetAuthMode()) {
                 case options::AuthMode::BASIC    : mode = CURLAUTH_BASIC; break;
@@ -282,100 +335,167 @@ export namespace mcr {
                 case options::AuthMode::NEGOTIATE: mode = CURLAUTH_NEGOTIATE; break;
                 case options::AuthMode::ANY      : mode = static_cast<long>(CURLAUTH_ANY); break;
                 case options::AuthMode::ANYSAFE  : mode = static_cast<long>(CURLAUTH_ANYSAFE); break;
-                default                          : throw std::invalid_argument{ "mcr::Session: unknown authentication mode." };
+                default                          : return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: unknown authentication mode." }
+ };
             }
-            setOption(CURLOPT_HTTPAUTH, mode);
-            setOption(CURLOPT_USERPWD, auth.GetAuthString());
+            if (auto status = setOption(CURLOPT_HTTPAUTH, mode); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_USERPWD, auth.GetAuthString()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Configure a bearer token.
          * @param token Token copied into curl.
+         * @return Success or the first operation error.
          */
-        auto SetBearer(options::Bearer const& token) -> void {
-            setOption(CURLOPT_HTTPAUTH, static_cast<long>(CURLAUTH_BEARER));
-            setOption(CURLOPT_XOAUTH2_BEARER, token.GetToken());
+        auto SetBearer(options::Bearer const& token) -> Result<void> {
+            if (auto status = setOption(CURLOPT_HTTPAUTH, static_cast<long>(CURLAUTH_BEARER)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_XOAUTH2_BEARER, token.GetToken()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Replace the User-Agent header.
          * @param ua User-agent text.
+         * @return Success or the first operation error.
          */
-        auto SetUserAgent(UserAgent const& ua) -> void { setOption(CURLOPT_USERAGENT, ua.CStr()); }
+        auto SetUserAgent(UserAgent const& ua) -> Result<void> {
+            if (auto status = setOption(CURLOPT_USERAGENT, ua.CStr()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Copy form content for subsequent requests.
          * @param payload URL-encoded form fields.
+         * @return Success or the first operation error.
          */
-        auto SetPayload(Payload const& payload) -> void { m_content = payload; }
+        auto SetPayload(Payload const& payload) -> Result<void> {
+            m_content = payload;
+            return {};
+        }
 
         /**
          * @brief Move form content for subsequent requests.
          * @param payload URL-encoded form fields.
+         * @return Success or the first operation error.
          */
-        auto SetPayload(Payload&& payload) -> void { m_content = std::move(payload); }
+        auto SetPayload(Payload&& payload) -> Result<void> {
+            m_content = std::move(payload);
+            return {};
+        }
 
         /**
          * @brief Copy proxy mappings.
          * @param proxies Protocol and no_proxy mappings.
+         * @return Success or the first operation error.
          */
-        auto SetProxies(options::Proxies const& proxies) -> void { m_proxies = proxies; }
+        auto SetProxies(options::Proxies const& proxies) -> Result<void> {
+            m_proxies = proxies;
+            return {};
+        }
 
         /**
          * @brief Move proxy mappings.
          * @param proxies Protocol and no_proxy mappings.
+         * @return Success or the first operation error.
          */
-        auto SetProxies(options::Proxies&& proxies) -> void { m_proxies = std::move(proxies); }
+        auto SetProxies(options::Proxies&& proxies) -> Result<void> {
+            m_proxies = std::move(proxies);
+            return {};
+        }
 
         /**
          * @brief Copy protocol-specific proxy credentials.
          * @param auth Credentials to own.
+         * @return Success or the first operation error.
          */
-        auto SetProxyAuth(options::ProxyAuthentication const& auth) -> void { m_proxy_auth = auth; }
+        auto SetProxyAuth(options::ProxyAuthentication const& auth) -> Result<void> {
+            m_proxy_auth = auth;
+            return {};
+        }
 
         /**
          * @brief Move protocol-specific proxy credentials.
          * @param auth Credentials to own.
+         * @return Success or the first operation error.
          */
-        auto SetProxyAuth(options::ProxyAuthentication&& auth) -> void { m_proxy_auth = std::move(auth); }
+        auto SetProxyAuth(options::ProxyAuthentication&& auth) -> Result<void> {
+            m_proxy_auth = std::move(auth);
+            return {};
+        }
 
         /**
          * @brief Configure certificate and hostname verification together.
          * @param verify Verification preference.
+         * @return Success or the first operation error.
          */
-        auto SetVerifySsl(options::VerifySsl const& verify) -> void {
-            setOption(CURLOPT_SSL_VERIFYPEER, verify.verify ? 1L : 0L);
-            setOption(CURLOPT_SSL_VERIFYHOST, verify.verify ? 2L : 0L);
+        auto SetVerifySsl(options::VerifySsl const& verify) -> Result<void> {
+            if (auto status = setOption(CURLOPT_SSL_VERIFYPEER, verify.verify ? 1L : 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_SSL_VERIFYHOST, verify.verify ? 2L : 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Replace the TLS configuration, copying all in-memory certificate data into curl.
          * @param options Complete configuration; empty sources clear previous credentials or trust overrides.
-         * @throws std::runtime_error If a requested feature is not supported by the linked TLS backend.
          * @note Defaults for unavailable optional features are tolerated. A failed call may apply earlier options.
+         * @return Success or the first operation error.
          */
-        auto SetSslOptions(options::SslOptions const& options) -> void;
+        auto SetSslOptions(options::SslOptions const& options) -> Result<void>;
 
         /**
          * @brief Copy multipart descriptors.
          * @param multipart Parts; buffer bytes remain borrowed.
+         * @return Success or the first operation error.
          */
-        auto SetMultipart(Multipart const& multipart) -> void { m_content = multipart; }
+        auto SetMultipart(Multipart const& multipart) -> Result<void> {
+            m_content = multipart;
+            return {};
+        }
 
         /**
          * @brief Move multipart descriptors.
          * @param multipart Parts; buffer bytes remain borrowed.
+         * @return Success or the first operation error.
          */
-        auto SetMultipart(Multipart&& multipart) -> void { m_content = std::move(multipart); }
+        auto SetMultipart(Multipart&& multipart) -> Result<void> {
+            m_content = std::move(multipart);
+            return {};
+        }
 
         /**
          * @brief Configure redirect handling.
          * @param redirect Limits, credential forwarding, and POST preservation.
+         * @return Success or the first operation error.
          */
-        auto SetRedirect(options::Redirect const& redirect) -> void {
-            setOption(CURLOPT_FOLLOWLOCATION, redirect.follow ? 1L : 0L);
-            setOption(CURLOPT_MAXREDIRS, redirect.maximum);
-            setOption(CURLOPT_UNRESTRICTED_AUTH, redirect.cont_send_cred ? 1L : 0L);
+        auto SetRedirect(options::Redirect const& redirect) -> Result<void> {
+            if (auto status = setOption(CURLOPT_FOLLOWLOCATION, redirect.follow ? 1L : 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_MAXREDIRS, redirect.maximum); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_UNRESTRICTED_AUTH, redirect.cont_send_cred ? 1L : 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             long mask{};
             if (any(redirect.post_flags & options::PostRedirectFlags::POST_301)) {
                 mask |= CURL_REDIR_POST_301;
@@ -386,137 +506,233 @@ export namespace mcr {
             if (any(redirect.post_flags & options::PostRedirectFlags::POST_303)) {
                 mask |= CURL_REDIR_POST_303;
             }
-            setOption(CURLOPT_POSTREDIR, mask);
+            if (auto status = setOption(CURLOPT_POSTREDIR, mask); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Clear the cookie engine and set explicit request cookies.
          * @param cookies Cookies to encode.
+         * @return Success or the first operation error.
          */
-        auto SetCookies(Cookies const& cookies) -> void {
-            setOption(CURLOPT_COOKIELIST, "ALL");
-            setOption(CURLOPT_COOKIE, cookies.GetEncoded(*m_curl).c_str());
+        auto SetCookies(Cookies const& cookies) -> Result<void> {
+            if (auto status = setOption(CURLOPT_COOKIELIST, "ALL"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            auto encoded = cookies.GetEncoded(*m_curl);
+            if (!encoded) {
+                return std::unexpected{ std::move(encoded.error()) };
+            }
+            if (auto status = setOption(CURLOPT_COOKIE, encoded->c_str()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Copy body bytes for subsequent requests.
          * @param body Bytes to own.
+         * @return Success or the first operation error.
          */
-        auto SetBody(Body const& body) -> void { m_content = body; }
+        auto SetBody(Body const& body) -> Result<void> {
+            m_content = body;
+            return {};
+        }
 
         /**
          * @brief Move body bytes for subsequent requests.
          * @param body Bytes to own.
+         * @return Success or the first operation error.
          */
-        auto SetBody(Body&& body) -> void { m_content = std::move(body); }
+        auto SetBody(Body&& body) -> Result<void> {
+            m_content = std::move(body);
+            return {};
+        }
 
         /**
          * @brief Borrow body bytes for subsequent requests.
          * @param body View whose bytes must outlive transfers.
+         * @return Success or the first operation error.
          */
-        auto SetBodyView(BodyView body) -> void { m_content = body; }
+        auto SetBodyView(BodyView body) -> Result<void> {
+            m_content = body;
+            return {};
+        }
 
         /**
          * @brief Copy serialized JSON for subsequent requests.
          * @param body JSON bytes to own; supplies a default Content-Type only when sent.
+         * @return Success or the first operation error.
          */
-        auto SetJsonBody(JsonBody const& body) -> void { m_content = body; }
+        auto SetJsonBody(JsonBody const& body) -> Result<void> {
+            m_content = body;
+            return {};
+        }
 
         /**
          * @brief Move serialized JSON for subsequent requests.
          * @param body JSON bytes to own; supplies a default Content-Type only when sent.
+         * @return Success or the first operation error.
          */
-        auto SetJsonBody(JsonBody&& body) -> void { m_content = std::move(body); }
+        auto SetJsonBody(JsonBody&& body) -> Result<void> {
+            m_content = std::move(body);
+            return {};
+        }
 
         /**
          * @brief Configure low-speed cancellation.
          * @param low_speed Minimum rate and observation duration.
+         * @return Success or the first operation error.
          */
-        auto SetLowSpeed(options::LowSpeed const& low_speed) -> void {
-            setOption(CURLOPT_LOW_SPEED_LIMIT, static_cast<long>(low_speed.limit));
-            setOption(CURLOPT_LOW_SPEED_TIME, static_cast<long>(low_speed.time.count()));
+        auto SetLowSpeed(options::LowSpeed const& low_speed) -> Result<void> {
+            if (auto status = setOption(CURLOPT_LOW_SPEED_LIMIT, static_cast<long>(low_speed.limit)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_LOW_SPEED_TIME, static_cast<long>(low_speed.time.count())); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Configure a Unix socket.
          * @param unix_socket Socket path copied into curl.
+         * @return Success or the first operation error.
          */
-        auto SetUnixSocket(options::UnixSocket const& unix_socket) -> void { setOption(CURLOPT_UNIX_SOCKET_PATH, unix_socket.GetUnixSocketString()); }
+        auto SetUnixSocket(options::UnixSocket const& unix_socket) -> Result<void> {
+            if (auto status = setOption(CURLOPT_UNIX_SOCKET_PATH, unix_socket.GetUnixSocketString()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Set or clear the upload producer.
          * @param read Callback used when no Content is configured.
+         * @return Success or the first operation error.
          */
-        auto SetReadCallback(ReadCallback const& read) -> void { m_read = read; }
+        auto SetReadCallback(ReadCallback const& read) -> Result<void> {
+            m_read = read;
+            return {};
+        }
 
         /**
          * @brief Set or clear a header observer; response headers are still collected.
          * @param header Observer to copy.
+         * @return Success or the first operation error.
          */
-        auto SetHeaderCallback(HeaderCallback const& header) -> void { m_header_callback = header; }
+        auto SetHeaderCallback(HeaderCallback const& header) -> Result<void> {
+            m_header_callback = header;
+            return {};
+        }
 
         /**
          * @brief Set a body consumer and clear SSE consumption.
          * @param write Consumer; an empty callback restores buffering.
+         * @return Success or the first operation error.
          */
-        auto SetWriteCallback(WriteCallback const& write) -> void {
+        auto SetWriteCallback(WriteCallback const& write) -> Result<void> {
             m_write = write;
             m_sse   = {};
+
+            return {};
         }
 
         /**
          * @brief Set or clear a progress observer.
          * @param progress Observer; false cancels the transfer.
+         * @return Success or the first operation error.
          */
-        auto SetProgressCallback(ProgressCallback const& progress) -> void { m_progress = progress; }
+        auto SetProgressCallback(ProgressCallback const& progress) -> Result<void> {
+            m_progress = progress;
+            return {};
+        }
 
         /**
          * @brief Set a diagnostic observer and enable verbose output when nonempty.
          * @param debug Observer to copy.
+         * @return Success or the first operation error.
          */
-        auto SetDebugCallback(DebugCallback const& debug) -> void {
+        auto SetDebugCallback(DebugCallback const& debug) -> Result<void> {
             m_debug = debug;
-            SetVerbose(options::Verbose{ bool(m_debug.callback) });
+            if (auto status = SetVerbose(options::Verbose{ bool(m_debug.callback) }); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Set an SSE consumer and clear raw body consumption.
          * @param sse Observer reset to a fresh stream each request.
+         * @return Success or the first operation error.
          */
-        auto SetServerSentEventCallback(ServerSentEventCallback const& sse) -> void {
+        auto SetServerSentEventCallback(ServerSentEventCallback const& sse) -> Result<void> {
             m_sse   = sse;
             m_write = {};
+
+            return {};
         }
 
         /**
          * @brief Enable or disable curl diagnostics.
          * @param verbose Logging preference.
+         * @return Success or the first operation error.
          */
-        auto SetVerbose(options::Verbose const& verbose) -> void { setOption(CURLOPT_VERBOSE, verbose.verbose ? 1L : 0L); }
+        auto SetVerbose(options::Verbose const& verbose) -> Result<void> {
+            if (auto status = setOption(CURLOPT_VERBOSE, verbose.verbose ? 1L : 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Bind an outgoing interface.
          * @param iface Empty text restores automatic selection.
+         * @return Success or the first operation error.
          */
-        auto SetInterface(options::Interface const& iface) -> void { setOption(CURLOPT_INTERFACE, iface.Str().empty() ? nullptr : iface.CStr()); }
+        auto SetInterface(options::Interface const& iface) -> Result<void> {
+            if (auto status = setOption(CURLOPT_INTERFACE, iface.Str().empty() ? nullptr : iface.CStr()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Choose the first local port.
          * @param local_port Port number.
+         * @return Success or the first operation error.
          */
-        auto SetLocalPort(options::LocalPort const& local_port) -> void { setOption(CURLOPT_LOCALPORT, static_cast<long>(static_cast<std::uint16_t>(local_port))); }
+        auto SetLocalPort(options::LocalPort const& local_port) -> Result<void> {
+            if (auto status = setOption(CURLOPT_LOCALPORT, static_cast<long>(static_cast<std::uint16_t>(local_port))); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Choose the local port search range.
          * @param local_port_range Number of ports to try.
+         * @return Success or the first operation error.
          */
-        auto SetLocalPortRange(options::LocalPortRange const& local_port_range) -> void { setOption(CURLOPT_LOCALPORTRANGE, static_cast<long>(static_cast<std::uint16_t>(local_port_range))); }
+        auto SetLocalPortRange(options::LocalPortRange const& local_port_range) -> Result<void> {
+            if (auto status = setOption(CURLOPT_LOCALPORTRANGE, static_cast<long>(static_cast<std::uint16_t>(local_port_range))); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Set the preferred HTTP version.
          * @param version Protocol preference supported by the linked curl build.
+         * @return Success or the first operation error.
          */
-        auto SetHttpVersion(options::HttpVersion const& version) -> void {
+        auto SetHttpVersion(options::HttpVersion const& version) -> Result<void> {
             long value{};
             switch (version.code) {
                 case options::HttpVersionCode::VERSION_NONE               : value = CURL_HTTP_VERSION_NONE; break;
@@ -527,69 +743,121 @@ export namespace mcr {
                 case options::HttpVersionCode::VERSION_2_0_PRIOR_KNOWLEDGE: value = CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE; break;
                 case options::HttpVersionCode::VERSION_3_0                : value = CURL_HTTP_VERSION_3; break;
                 case options::HttpVersionCode::VERSION_3_0_ONLY           : value = CURL_HTTP_VERSION_3ONLY; break;
-                default                                                   : throw std::invalid_argument{ "mcr::Session: unknown HTTP version." };
+                default                                                   : return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: unknown HTTP version." }
+ };
             }
-            setOption(CURLOPT_HTTP_VERSION, value);
+            if (auto status = setOption(CURLOPT_HTTP_VERSION, value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Request one byte range.
          * @param range Range serialized for curl.
+         * @return Success or the first operation error.
          */
-        auto SetRange(options::Range const& range) -> void { setOption(CURLOPT_RANGE, range.Str().c_str()); }
+        auto SetRange(options::Range const& range) -> Result<void> {
+            if (auto status = setOption(CURLOPT_RANGE, range.Str().c_str()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Replace hostname resolution overrides.
          * @param resolve One mapping.
+         * @return Success or the first operation error.
          */
-        auto SetResolve(options::Resolve const& resolve) -> void { SetResolves({ resolve }); }
+        auto SetResolve(options::Resolve const& resolve) -> Result<void> {
+            if (auto status = SetResolves({ resolve }); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Replace all hostname resolution overrides.
          * @param resolves Mappings; empty clears the list.
+         * @return Success or the first operation error.
          */
-        auto SetResolves(std::vector<options::Resolve> const& resolves) -> void {
+        auto SetResolves(std::vector<options::Resolve> const& resolves) -> Result<void> {
             CurlList list{ nullptr, &curl_slist_free_all };
             for (auto const& resolve : resolves) {
                 for (auto port : resolve.ports) {
-                    appendList(list, std::format("{}:{}:{}", resolve.host, port, resolve.addr));
+                    if (auto status = appendList(list, std::format("{}:{}:{}", resolve.host, port, resolve.addr)); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 }
             }
-            setOption(CURLOPT_RESOLVE, list.get());
+            if (auto status = setOption(CURLOPT_RESOLVE, list.get()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             curl_slist_free_all(std::exchange(m_curl->resolve_curl_list, list.release()));
+
+            return {};
         }
 
         /**
          * @brief Request multiple byte ranges.
          * @param multi_range Ranges serialized for curl.
+         * @return Success or the first operation error.
          */
-        auto SetMultiRange(options::MultiRange const& multi_range) -> void { setOption(CURLOPT_RANGE, multi_range.Str().c_str()); }
+        auto SetMultiRange(options::MultiRange const& multi_range) -> Result<void> {
+            if (auto status = setOption(CURLOPT_RANGE, multi_range.Str().c_str()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Set response buffer reservation.
          * @param reserve_size Minimum capacity requested before each transfer.
+         * @return Success or the first operation error.
          */
-        auto SetReserveSize(options::ReserveSize const& reserve_size) -> void { ResponseStringReserve(reserve_size.size); }
+        auto SetReserveSize(options::ReserveSize const& reserve_size) -> Result<void> {
+            if (auto status = ResponseStringReserve(reserve_size.size); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Copy compression preferences.
          * @param accept_encoding Encodings to advertise and decode.
+         * @return Success or the first operation error.
          */
-        auto SetAcceptEncoding(options::AcceptEncoding const& accept_encoding) -> void { m_accept_encoding = accept_encoding; }
+        auto SetAcceptEncoding(options::AcceptEncoding const& accept_encoding) -> Result<void> {
+            m_accept_encoding = accept_encoding;
+            return {};
+        }
 
         /**
          * @brief Move compression preferences.
          * @param accept_encoding Encodings to advertise and decode.
+         * @return Success or the first operation error.
          */
-        auto SetAcceptEncoding(options::AcceptEncoding&& accept_encoding) -> void { m_accept_encoding = std::move(accept_encoding); }
+        auto SetAcceptEncoding(options::AcceptEncoding&& accept_encoding) -> Result<void> {
+            m_accept_encoding = std::move(accept_encoding);
+            return {};
+        }
 
         /**
          * @brief Limit upload and download rates.
          * @param limit_rate Bytes per second; zero means unlimited.
+         * @return Success or the first operation error.
          */
-        auto SetLimitRate(options::LimitRate const& limit_rate) -> void {
-            setOption(CURLOPT_MAX_RECV_SPEED_LARGE, static_cast<curl_off_t>(limit_rate.downrate));
-            setOption(CURLOPT_MAX_SEND_SPEED_LARGE, static_cast<curl_off_t>(limit_rate.uprate));
+        auto SetLimitRate(options::LimitRate const& limit_rate) -> Result<void> {
+            if (auto status = setOption(CURLOPT_MAX_RECV_SPEED_LARGE, static_cast<curl_off_t>(limit_rate.downrate)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_MAX_SEND_SPEED_LARGE, static_cast<curl_off_t>(limit_rate.uprate)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
@@ -600,39 +868,55 @@ export namespace mcr {
 
         /**
          * @brief Remove stored content and detach body/MIME pointers; read callbacks remain configured.
+         * @return Success or the first operation error.
          */
-        auto RemoveContent() -> void {
-            clearCurlContent();
+        auto RemoveContent() -> Result<void> {
+            if (auto status = clearCurlContent(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_content = std::monostate{};
+
+            return {};
         }
 
         /**
          * @brief Set a cancellation flag, independently of progress callback ordering.
          * @param param Shared flag; null disables cancellation.
+         * @return Success or the first operation error.
          */
-        auto SetCancellationParam(std::shared_ptr<std::atomic_bool> param) -> void { m_cancellation = std::move(param); }
+        auto SetCancellationParam(std::shared_ptr<std::atomic_bool> param) -> Result<void> {
+            m_cancellation = std::move(param);
+            return {};
+        }
 
         /**
          * @brief Append an interceptor while idle.
          * @param interceptor Nonnull interceptor.
-         * @throws std::logic_error If a request is active.
+         * @return Success or the first operation error.
          */
-        auto AddInterceptor(std::shared_ptr<Interceptor> const& interceptor) -> void;
+        auto AddInterceptor(std::shared_ptr<Interceptor> const& interceptor) -> Result<void>;
 
         /**
          * @brief Reserve response capacity before each request.
          * @param size Zero restores ordinary dynamic allocation.
+         * @return Success or the first operation error.
          */
-        auto ResponseStringReserve(std::size_t size) -> void { m_reserve_size = size; }
+        auto ResponseStringReserve(std::size_t size) -> Result<void> {
+            m_reserve_size = size;
+            return {};
+        }
 
         /**
          * @brief Perform HEAD and obtain the server's advertised response length.
          * @return Length for a successful HTTP 200 response, or -1 if unknown or unsuccessful.
          */
-        [[nodiscard]] auto GetDownloadFileLength() -> CprOffT {
+        [[nodiscard]] auto GetDownloadFileLength() -> Result<CprOffT> {
             auto const response{ Head() };
-            CprOffT    length{ -1 };
-            if (!response.error && response.status_code == 200) {
+            if (!response) {
+                return std::unexpected{ response.error() };
+            }
+            CprOffT length{ -1 };
+            if (!response->error && response->status_code == 200) {
                 (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length);
             }
             return length;
@@ -648,10 +932,13 @@ export namespace mcr {
          * @brief Combine encoded parameters with the URL's existing query, before any fragment.
          * @return Full request URL.
          */
-        [[nodiscard]] auto GetFullRequestUrl() -> std::string {
+        [[nodiscard]] auto GetFullRequestUrl() -> Result<std::string> {
             auto       result{ m_url.Str() };
             auto const parameters{ m_parameters.GetContent(*m_curl) };
-            if (parameters.empty()) {
+            if (!parameters) {
+                return std::unexpected{ parameters.error() };
+            }
+            if (parameters->empty()) {
                 return result;
             }
             auto const             fragment{ result.find('#') };
@@ -663,19 +950,20 @@ export namespace mcr {
             } else if (!base.ends_with('?') && !base.ends_with('&')) {
                 separator = "&";
             }
-            result.insert(end, separator + parameters);
+            result.insert(end, separator + *parameters);
             return result;
         }
 
         /**
          * @brief Obtain shared ownership for asynchronous work.
          * @return Shared session.
-         * @throws std::runtime_error If not managed by shared_ptr.
          */
-        [[nodiscard]] auto GetSharedPtrFromThis() -> std::shared_ptr<Session> {
+        [[nodiscard]] auto GetSharedPtrFromThis() -> Result<std::shared_ptr<Session>> {
             auto shared{ weak_from_this().lock() };
             if (!shared) {
-                throw std::runtime_error{ "mcr::Session: asynchronous requests require std::shared_ptr ownership." };
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::Session: asynchronous requests require std::shared_ptr ownership." }
+                };
             }
             return shared;
         }
@@ -683,19 +971,29 @@ export namespace mcr {
         /**
          * @brief Prepare a GET download into a temporary consumer.
          * @param write Consumer copied for this download only.
+         * @return Success or the first operation error.
          */
-        auto PrepareDownload(WriteCallback const& write) -> void {
-            prepare("GET", true);
+        auto PrepareDownload(WriteCallback const& write) -> Result<void> {
+            if (auto status = prepare("GET", true); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_download_write = write;
+
+            return {};
         }
 
         /**
          * @brief Prepare a GET download into a borrowed binary stream.
          * @param file Stream that must outlive completion.
+         * @return Success or the first operation error.
          */
-        auto PrepareDownload(std::ofstream& file) -> void {
-            prepare("GET", true);
+        auto PrepareDownload(std::ofstream& file) -> Result<void> {
+            if (auto status = prepare("GET", true); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_download_file = &file;
+
+            return {};
         }
 
         /**
@@ -703,8 +1001,10 @@ export namespace mcr {
          * @param write Download consumer.
          * @return Transfer metadata with an empty body.
          */
-        auto Download(WriteCallback const& write) -> Response {
-            PrepareDownload(write);
+        auto Download(WriteCallback const& write) -> Result<Response> {
+            if (auto status = PrepareDownload(write); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -713,8 +1013,10 @@ export namespace mcr {
          * @param file Output stream; the caller checks later flush/close errors.
          * @return Transfer metadata with an empty body.
          */
-        auto Download(std::ofstream& file) -> Response {
-            PrepareDownload(file);
+        auto Download(std::ofstream& file) -> Result<Response> {
+            if (auto status = PrepareDownload(file); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -723,8 +1025,8 @@ export namespace mcr {
          * @param write Copied consumer.
          * @return Future retaining this session.
          */
-        auto DownloadAsync(WriteCallback const& write) -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis(), write] { return self->Download(write); });
+        auto DownloadAsync(WriteCallback const& write) -> Result<AsyncResponse> {
+            return async([self = shared_from_this(), write] { return self->Download(write); });
         }
 
         /**
@@ -732,8 +1034,8 @@ export namespace mcr {
          * @param file Stream that must outlive completion.
          * @return Future retaining this session.
          */
-        auto DownloadAsync(std::ofstream& file) -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis(), &file] { return self->Download(file); });
+        auto DownloadAsync(std::ofstream& file) -> Result<AsyncResponse> {
+            return async([self = shared_from_this(), &file] { return self->Download(file); });
         }
 
         /**
@@ -742,7 +1044,7 @@ export namespace mcr {
          * @return Independent response snapshot.
          * @throws Any exception captured from user callbacks during the transfer.
          */
-        auto Complete(CURLcode curl_error) -> Response {
+        auto Complete(CURLcode curl_error) -> Result<Response> {
             m_download_file  = nullptr;
             m_download_write = {};
             if (m_callback_error) {
@@ -750,19 +1052,24 @@ export namespace mcr {
             }
             CurlList owned_cookies{ nullptr, &curl_slist_free_all };
             // The variadic curl API requires an explicit pointer conversion.
-            checkCurl(curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, static_cast<curl_slist**>(std::out_ptr(owned_cookies))));
-            auto        cookies{ utils::parse_cookies(owned_cookies.get()) };
+            if (auto status = checkCurl(curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, static_cast<curl_slist**>(std::out_ptr(owned_cookies)))); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            auto cookies{ utils::parse_cookies(owned_cookies.get()) };
+            if (!cookies) {
+                return std::unexpected{ std::move(cookies.error()) };
+            }
             std::string error_message{ m_curl->error.data() };
             if (curl_error != CURLE_OK && error_message.empty()) {
                 error_message = curl_easy_strerror(curl_error);
             }
-            return Response{
+            return Response::FromCurl(
                 m_curl,
                 std::move(m_response_string),
                 std::move(m_header_string),
-                std::move(cookies),
+                std::move(*cookies),
                 Error{ static_cast<std::int32_t>(curl_error), std::move(error_message) }
-            };
+            );
         }
 
         /**
@@ -770,19 +1077,27 @@ export namespace mcr {
          * @param curl_error Curl transfer result.
          * @return Download metadata.
          */
-        auto CompleteDownload(CURLcode curl_error) -> Response { return Complete(curl_error); }
+        auto CompleteDownload(CURLcode curl_error) -> Result<Response> { return Complete(curl_error); }
 
         /**
          * @brief Prepare DELETE without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PrepareDelete() -> void { prepare("DELETE"); }
+        auto PrepareDelete() -> Result<void> {
+            if (auto status = prepare("DELETE"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute DELETE with the stored options.
          * @return Completed response.
          */
-        auto Delete() -> Response {
-            PrepareDelete();
+        auto Delete() -> Result<Response> {
+            if (auto status = PrepareDelete(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -790,8 +1105,8 @@ export namespace mcr {
          * @brief Execute DELETE asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto DeleteAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Delete(); });
+        auto DeleteAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Delete(); });
         }
 
         /**
@@ -802,20 +1117,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto DeleteCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Delete()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Delete()); });
         }
 
         /**
          * @brief Prepare GET without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PrepareGet() -> void { prepare("GET"); }
+        auto PrepareGet() -> Result<void> {
+            if (auto status = prepare("GET"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute GET with the stored options.
          * @return Completed response.
          */
-        auto Get() -> Response {
-            PrepareGet();
+        auto Get() -> Result<Response> {
+            if (auto status = PrepareGet(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -823,8 +1146,8 @@ export namespace mcr {
          * @brief Execute GET asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto GetAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Get(); });
+        auto GetAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Get(); });
         }
 
         /**
@@ -835,20 +1158,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto GetCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Get()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Get()); });
         }
 
         /**
          * @brief Prepare HEAD without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PrepareHead() -> void { prepare("HEAD"); }
+        auto PrepareHead() -> Result<void> {
+            if (auto status = prepare("HEAD"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute HEAD with the stored options.
          * @return Completed response.
          */
-        auto Head() -> Response {
-            PrepareHead();
+        auto Head() -> Result<Response> {
+            if (auto status = PrepareHead(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -856,8 +1187,8 @@ export namespace mcr {
          * @brief Execute HEAD asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto HeadAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Head(); });
+        auto HeadAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Head(); });
         }
 
         /**
@@ -868,20 +1199,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto HeadCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Head()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Head()); });
         }
 
         /**
          * @brief Prepare OPTIONS without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PrepareOptions() -> void { prepare("OPTIONS"); }
+        auto PrepareOptions() -> Result<void> {
+            if (auto status = prepare("OPTIONS"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute OPTIONS with the stored options.
          * @return Completed response.
          */
-        auto Options() -> Response {
-            PrepareOptions();
+        auto Options() -> Result<Response> {
+            if (auto status = PrepareOptions(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -889,8 +1228,8 @@ export namespace mcr {
          * @brief Execute OPTIONS asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto OptionsAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Options(); });
+        auto OptionsAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Options(); });
         }
 
         /**
@@ -901,20 +1240,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto OptionsCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Options()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Options()); });
         }
 
         /**
          * @brief Prepare PATCH without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PreparePatch() -> void { prepare("PATCH"); }
+        auto PreparePatch() -> Result<void> {
+            if (auto status = prepare("PATCH"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute PATCH with the stored options.
          * @return Completed response.
          */
-        auto Patch() -> Response {
-            PreparePatch();
+        auto Patch() -> Result<Response> {
+            if (auto status = PreparePatch(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -922,8 +1269,8 @@ export namespace mcr {
          * @brief Execute PATCH asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto PatchAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Patch(); });
+        auto PatchAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Patch(); });
         }
 
         /**
@@ -934,20 +1281,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto PatchCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Patch()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Patch()); });
         }
 
         /**
          * @brief Prepare POST without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PreparePost() -> void { prepare("POST"); }
+        auto PreparePost() -> Result<void> {
+            if (auto status = prepare("POST"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute POST with the stored options.
          * @return Completed response.
          */
-        auto Post() -> Response {
-            PreparePost();
+        auto Post() -> Result<Response> {
+            if (auto status = PreparePost(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -955,8 +1310,8 @@ export namespace mcr {
          * @brief Execute POST asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto PostAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Post(); });
+        auto PostAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Post(); });
         }
 
         /**
@@ -967,20 +1322,28 @@ export namespace mcr {
          */
         template <typename Then>
         auto PostCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Post()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Post()); });
         }
 
         /**
          * @brief Prepare PUT without starting network I/O.
+         * @return Success or the first operation error.
          */
-        auto PreparePut() -> void { prepare("PUT"); }
+        auto PreparePut() -> Result<void> {
+            if (auto status = prepare("PUT"); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Execute PUT with the stored options.
          * @return Completed response.
          */
-        auto Put() -> Response {
-            PreparePut();
+        auto Put() -> Result<Response> {
+            if (auto status = PreparePut(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return perform();
         }
 
@@ -988,8 +1351,8 @@ export namespace mcr {
          * @brief Execute PUT asynchronously.
          * @return Future retaining shared ownership of this session.
          */
-        auto PutAsync() -> AsyncResponse {
-            return async([self = GetSharedPtrFromThis()] { return self->Put(); });
+        auto PutAsync() -> Result<AsyncResponse> {
+            return async([self = shared_from_this()] { return self->Put(); });
         }
 
         /**
@@ -1000,309 +1363,635 @@ export namespace mcr {
          */
         template <typename Then>
         auto PutCallback(Then then) {
-            return async([self = GetSharedPtrFromThis(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Put()); });
+            return async([self = shared_from_this(), then = std::move(then)]() mutable { return std::invoke(std::move(then), self->Put()); });
         }
 
         /**
          * @brief Forward a Url option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Url const& value) -> void { SetUrl(value); }
+        auto SetOption(Url const& value) -> Result<void> {
+            if (auto status = SetUrl(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Parameters option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Parameters const& value) -> void { SetParameters(value); }
+        auto SetOption(Parameters const& value) -> Result<void> {
+            if (auto status = SetParameters(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a Parameters option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Parameters&& value) -> void { SetParameters(std::move(value)); }
+        auto SetOption(Parameters&& value) -> Result<void> {
+            if (auto status = SetParameters(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Header option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Header const& value) -> void { SetHeader(value); }
+        auto SetOption(Header const& value) -> Result<void> {
+            if (auto status = SetHeader(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Timeout option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Timeout const& value) -> void { SetTimeout(value); }
+        auto SetOption(options::Timeout const& value) -> Result<void> {
+            if (auto status = SetTimeout(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ConnectTimeout option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::ConnectTimeout const& value) -> void { SetConnectTimeout(value); }
+        auto SetOption(options::ConnectTimeout const& value) -> Result<void> {
+            if (auto status = SetConnectTimeout(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ConnectionPool option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(ConnectionPool const& value) -> void { SetConnectionPool(value); }
+        auto SetOption(ConnectionPool const& value) -> Result<void> {
+            if (auto status = SetConnectionPool(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Authentication option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Authentication const& value) -> void { SetAuth(value); }
+        auto SetOption(options::Authentication const& value) -> Result<void> {
+            if (auto status = SetAuth(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Bearer option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Bearer const& value) -> void { SetBearer(value); }
+        auto SetOption(options::Bearer const& value) -> Result<void> {
+            if (auto status = SetBearer(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a UserAgent option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(UserAgent const& value) -> void { SetUserAgent(value); }
+        auto SetOption(UserAgent const& value) -> Result<void> {
+            if (auto status = SetUserAgent(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Payload option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Payload const& value) -> void { SetPayload(value); }
+        auto SetOption(Payload const& value) -> Result<void> {
+            if (auto status = SetPayload(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a Payload option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Payload&& value) -> void { SetPayload(std::move(value)); }
+        auto SetOption(Payload&& value) -> Result<void> {
+            if (auto status = SetPayload(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Proxies option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Proxies const& value) -> void { SetProxies(value); }
+        auto SetOption(options::Proxies const& value) -> Result<void> {
+            if (auto status = SetProxies(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a Proxies option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Proxies&& value) -> void { SetProxies(std::move(value)); }
+        auto SetOption(options::Proxies&& value) -> Result<void> {
+            if (auto status = SetProxies(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Copy proxy authentication.
          * @param value Protocol credentials.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::ProxyAuthentication const& value) -> void { SetProxyAuth(value); }
+        auto SetOption(options::ProxyAuthentication const& value) -> Result<void> {
+            if (auto status = SetProxyAuth(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move proxy authentication.
          * @param value Protocol credentials.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::ProxyAuthentication&& value) -> void { SetProxyAuth(std::move(value)); }
+        auto SetOption(options::ProxyAuthentication&& value) -> Result<void> {
+            if (auto status = SetProxyAuth(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Apply combined TLS verification.
          * @param value Verification preference.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::VerifySsl const& value) -> void { SetVerifySsl(value); }
+        auto SetOption(options::VerifySsl const& value) -> Result<void> {
+            if (auto status = SetVerifySsl(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Replace TLS configuration.
          * @param value Owned TLS options.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::SslOptions const& value) -> void { SetSslOptions(value); }
+        auto SetOption(options::SslOptions const& value) -> Result<void> {
+            if (auto status = SetSslOptions(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Multipart option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Multipart const& value) -> void { SetMultipart(value); }
+        auto SetOption(Multipart const& value) -> Result<void> {
+            if (auto status = SetMultipart(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a Multipart option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Multipart&& value) -> void { SetMultipart(std::move(value)); }
+        auto SetOption(Multipart&& value) -> Result<void> {
+            if (auto status = SetMultipart(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Redirect option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Redirect const& value) -> void { SetRedirect(value); }
+        auto SetOption(options::Redirect const& value) -> Result<void> {
+            if (auto status = SetRedirect(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Cookies option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Cookies const& value) -> void { SetCookies(value); }
+        auto SetOption(Cookies const& value) -> Result<void> {
+            if (auto status = SetCookies(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Body option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Body const& value) -> void { SetBody(value); }
+        auto SetOption(Body const& value) -> Result<void> {
+            if (auto status = SetBody(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a Body option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(Body&& value) -> void { SetBody(std::move(value)); }
+        auto SetOption(Body&& value) -> Result<void> {
+            if (auto status = SetBody(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a BodyView option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(BodyView value) -> void { SetBodyView(value); }
+        auto SetOption(BodyView value) -> Result<void> {
+            if (auto status = SetBodyView(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a copied JsonBody option to its setter.
          * @param value Serialized JSON option.
+         * @return Success or the first operation error.
          */
-        auto SetOption(JsonBody const& value) -> void { SetJsonBody(value); }
+        auto SetOption(JsonBody const& value) -> Result<void> {
+            if (auto status = SetJsonBody(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a moved JsonBody option to its setter.
          * @param value Serialized JSON option.
+         * @return Success or the first operation error.
          */
-        auto SetOption(JsonBody&& value) -> void { SetJsonBody(std::move(value)); }
+        auto SetOption(JsonBody&& value) -> Result<void> {
+            if (auto status = SetJsonBody(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ReadCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(ReadCallback const& value) -> void { SetReadCallback(value); }
+        auto SetOption(ReadCallback const& value) -> Result<void> {
+            if (auto status = SetReadCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a HeaderCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(HeaderCallback const& value) -> void { SetHeaderCallback(value); }
+        auto SetOption(HeaderCallback const& value) -> Result<void> {
+            if (auto status = SetHeaderCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a WriteCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(WriteCallback const& value) -> void { SetWriteCallback(value); }
+        auto SetOption(WriteCallback const& value) -> Result<void> {
+            if (auto status = SetWriteCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ProgressCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(ProgressCallback const& value) -> void { SetProgressCallback(value); }
+        auto SetOption(ProgressCallback const& value) -> Result<void> {
+            if (auto status = SetProgressCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a DebugCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(DebugCallback const& value) -> void { SetDebugCallback(value); }
+        auto SetOption(DebugCallback const& value) -> Result<void> {
+            if (auto status = SetDebugCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ServerSentEventCallback option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(ServerSentEventCallback const& value) -> void { SetServerSentEventCallback(value); }
+        auto SetOption(ServerSentEventCallback const& value) -> Result<void> {
+            if (auto status = SetServerSentEventCallback(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a LowSpeed option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::LowSpeed const& value) -> void { SetLowSpeed(value); }
+        auto SetOption(options::LowSpeed const& value) -> Result<void> {
+            if (auto status = SetLowSpeed(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Verbose option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Verbose const& value) -> void { SetVerbose(value); }
+        auto SetOption(options::Verbose const& value) -> Result<void> {
+            if (auto status = SetVerbose(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a UnixSocket option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::UnixSocket const& value) -> void { SetUnixSocket(value); }
+        auto SetOption(options::UnixSocket const& value) -> Result<void> {
+            if (auto status = SetUnixSocket(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Interface option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Interface const& value) -> void { SetInterface(value); }
+        auto SetOption(options::Interface const& value) -> Result<void> {
+            if (auto status = SetInterface(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a LocalPort option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::LocalPort const& value) -> void { SetLocalPort(value); }
+        auto SetOption(options::LocalPort const& value) -> Result<void> {
+            if (auto status = SetLocalPort(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a LocalPortRange option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::LocalPortRange const& value) -> void { SetLocalPortRange(value); }
+        auto SetOption(options::LocalPortRange const& value) -> Result<void> {
+            if (auto status = SetLocalPortRange(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a HttpVersion option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::HttpVersion const& value) -> void { SetHttpVersion(value); }
+        auto SetOption(options::HttpVersion const& value) -> Result<void> {
+            if (auto status = SetHttpVersion(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Range option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Range const& value) -> void { SetRange(value); }
+        auto SetOption(options::Range const& value) -> Result<void> {
+            if (auto status = SetRange(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a MultiRange option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::MultiRange const& value) -> void { SetMultiRange(value); }
+        auto SetOption(options::MultiRange const& value) -> Result<void> {
+            if (auto status = SetMultiRange(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a ReserveSize option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::ReserveSize const& value) -> void { SetReserveSize(value); }
+        auto SetOption(options::ReserveSize const& value) -> Result<void> {
+            if (auto status = SetReserveSize(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a AcceptEncoding option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::AcceptEncoding const& value) -> void { SetAcceptEncoding(value); }
+        auto SetOption(options::AcceptEncoding const& value) -> Result<void> {
+            if (auto status = SetAcceptEncoding(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Move a AcceptEncoding option into this session.
          * @param value Option to transfer.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::AcceptEncoding&& value) -> void { SetAcceptEncoding(std::move(value)); }
+        auto SetOption(options::AcceptEncoding&& value) -> Result<void> {
+            if (auto status = SetAcceptEncoding(std::move(value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a LimitRate option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::LimitRate const& value) -> void { SetLimitRate(value); }
+        auto SetOption(options::LimitRate const& value) -> Result<void> {
+            if (auto status = SetLimitRate(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a Resolve option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(options::Resolve const& value) -> void { SetResolve(value); }
+        auto SetOption(options::Resolve const& value) -> Result<void> {
+            if (auto status = SetResolve(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Forward a std::vector<Resolve> option to its setter.
          * @param value Option to apply.
+         * @return Success or the first operation error.
          */
-        auto SetOption(std::vector<options::Resolve> const& value) -> void { SetResolves(value); }
+        auto SetOption(std::vector<options::Resolve> const& value) -> Result<void> {
+            if (auto status = SetResolves(value); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
     private:
+        /**
+         * @brief Retain an initialized curl holder before applying defaults.
+         */
+        explicit Session(std::shared_ptr<curl::CurlHolder> holder) noexcept : m_curl{ std::move(holder) } {}
+
+        /**
+         * @brief Apply session defaults, returning the first curl configuration failure.
+         * @return Success or the first operation error.
+         */
+        auto initialize() -> Result<void> {
+            auto const* version{ curl_version_info(CURLVERSION_NOW) };
+            if (auto status = SetUserAgent(UserAgent{ std::string{ "curl/" } + version->version }); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = SetRedirect(options::Redirect{}); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_COOKIEFILE, ""); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_NOSIGNAL, 1L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_TCP_KEEPALIVE, 1L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_CERTINFO, 1L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
+        }
+
         using CurlList = std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)>;
         using CurlMime = std::unique_ptr<curl_mime, decltype(&curl_mime_free)>;
 
         /**
-         * @brief Translate curl setup failures into exceptions.
+         * @brief Translate curl setup failures into explicit results.
          * @param code Setup result.
+         * @return Success or the first operation error.
          */
-        static auto checkCurl(CURLcode code) -> void {
+        static auto checkCurl(CURLcode code) -> Result<void> {
             if (code != CURLE_OK) {
-                throw std::runtime_error{ std::string{ "mcr::Session: " } + curl_easy_strerror(code) };
+                return std::unexpected{
+                    Error{ static_cast<std::int32_t>(code), std::string{ "mcr::Session: " } + curl_easy_strerror(code) }
+                };
             }
+
+            return {};
         }
 
         /**
@@ -1310,73 +1999,121 @@ export namespace mcr {
          * @tparam T Argument type.
          * @param option Curl option.
          * @param value Option value.
+         * @return Success or the first operation error.
          */
         template <typename T>
-        auto setOption(CURLoption option, T value) -> void { checkCurl(curl_easy_setopt(m_curl->handle, option, value)); }
+        auto setOption(CURLoption option, T value) -> Result<void> {
+            if (auto status = checkCurl(curl_easy_setopt(m_curl->handle, option, value)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Append without losing ownership on allocation failure.
          * @param list Owned list.
          * @param value Entry text.
+         * @return Success or the first operation error.
          */
-        static auto appendList(CurlList& list, std::string const& value) -> void {
+        static auto appendList(CurlList& list, std::string const& value) -> Result<void> {
             auto* next{ curl_slist_append(list.get(), value.c_str()) };
             if (!next) {
                 throw std::bad_alloc{};
             }
             (void)list.release();
             list.reset(next);
+
+            return {};
         }
 
         /**
          * @brief Detach the previous content before freeing MIME data or replacing borrowed bytes.
+         * @return Success or the first operation error.
          */
-        auto clearCurlContent() -> void {
-            setOption(CURLOPT_MIMEPOST, static_cast<curl_mime*>(nullptr));
-            setOption(CURLOPT_POSTFIELDS, static_cast<char const*>(nullptr));
-            setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(-1));
+        auto clearCurlContent() -> Result<void> {
+            if (auto status = setOption(CURLOPT_MIMEPOST, static_cast<curl_mime*>(nullptr)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_POSTFIELDS, static_cast<char const*>(nullptr)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(-1)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             curl_mime_free(std::exchange(m_curl->multipart, nullptr));
+
+            return {};
         }
 
         /**
          * @brief Rebuild headers, preserving explicit values ahead of inferred defaults.
          * @param chunked Whether an unknown-sized upload needs chunking.
          * @param json_body Whether this transfer sends a JSON body.
+         * @return Success or the first operation error.
          */
-        auto prepareHeader(bool chunked, bool json_body) -> void {
+        auto prepareHeader(bool chunked, bool json_body) -> Result<void> {
             CurlList list{ nullptr, &curl_slist_free_all };
             for (auto const& [name, value] : m_header) {
-                appendList(list, name + (value.empty() ? ";" : ": " + value));
+                if (auto status = appendList(list, name + (value.empty() ? ";" : ": " + value)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             if (json_body && !m_header.contains("Content-Type")) {
-                appendList(list, "Content-Type: application/json");
+                if (auto status = appendList(list, "Content-Type: application/json"); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             if (chunked && !m_header.contains("Transfer-Encoding")) {
-                appendList(list, "Transfer-Encoding: chunked");
+                if (auto status = appendList(list, "Transfer-Encoding: chunked"); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             if (!m_header.contains("Expect")) {
-                appendList(list, "Expect:");
+                if (auto status = appendList(list, "Expect:"); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
-            setOption(CURLOPT_HTTPHEADER, list.get());
+            if (auto status = setOption(CURLOPT_HTTPHEADER, list.get()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             curl_slist_free_all(std::exchange(m_curl->chunk, list.release()));
+
+            return {};
         }
 
         /**
          * @brief Select proxy options afresh so prior protocols and no_proxy settings cannot leak.
+         * @return Success or the first operation error.
          */
-        auto prepareProxy() -> void {
+        auto prepareProxy() -> Result<void> {
             auto protocol{ m_url.Str().substr(0, m_url.Str().find(':')) };
             std::ranges::transform(protocol, protocol.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-            setOption(CURLOPT_PROXY, m_proxies.Has(protocol) ? m_proxies[protocol].c_str() : nullptr);
+            if (auto status = setOption(CURLOPT_PROXY, m_proxies.Has(protocol) ? m_proxies[protocol].c_str() : nullptr); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (m_proxies.Has(protocol) && m_proxy_auth.Has(protocol)) {
                 // CURLOPT_PROXYUSERNAME/PASSWORD expect raw bytes, unlike credentials inside a proxy URL.
                 auto const username{ utils::url_decode(m_proxy_auth.GetUsernameUnderlying(protocol)) };
                 auto const password{ utils::url_decode(m_proxy_auth.GetPasswordUnderlying(protocol)) };
-                setOption(CURLOPT_PROXYUSERNAME, username.c_str());
-                setOption(CURLOPT_PROXYPASSWORD, password.c_str());
+                if (!username) {
+                    return std::unexpected{ username.error() };
+                }
+                if (auto status = setOption(CURLOPT_PROXYUSERNAME, username->c_str()); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
+                if (!password) {
+                    return std::unexpected{ password.error() };
+                }
+                if (auto status = setOption(CURLOPT_PROXYPASSWORD, password->c_str()); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             } else {
-                setOption(CURLOPT_PROXYUSERNAME, static_cast<char const*>(nullptr));
-                setOption(CURLOPT_PROXYPASSWORD, static_cast<char const*>(nullptr));
+                if (auto status = setOption(CURLOPT_PROXYUSERNAME, static_cast<char const*>(nullptr)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
+                if (auto status = setOption(CURLOPT_PROXYPASSWORD, static_cast<char const*>(nullptr)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             char const* no_proxy{ nullptr };
             if (m_proxies.Has("no_proxy")) {
@@ -1384,76 +2121,127 @@ export namespace mcr {
             } else if (m_proxies.Has("NO_PROXY")) {
                 no_proxy = m_proxies["NO_PROXY"].c_str();
             }
-            setOption(CURLOPT_NOPROXY, no_proxy);
+            if (auto status = setOption(CURLOPT_NOPROXY, no_proxy); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Copy MIME fields into an owned curl MIME tree.
          * @param multipart Persistent descriptors.
+         * @return Success or the first operation error.
          */
-        auto prepareMultipart(Multipart const& multipart) -> void {
+        auto prepareMultipart(Multipart const& multipart) -> Result<void> {
             CurlMime mime{ curl_mime_init(m_curl->handle), &curl_mime_free };
             if (!mime) {
                 throw std::bad_alloc{};
             }
             for (auto const& part : multipart.parts) {
-                auto add_part = [&] {
+                auto add_part = [&]() -> Result<curl_mimepart*> {
                     auto* item{ curl_mime_addpart(mime.get()) };
                     if (!item) {
                         throw std::bad_alloc{};
                     }
-                    checkCurl(curl_mime_name(item, part.name.c_str()));
+                    if (auto status = checkCurl(curl_mime_name(item, part.name.c_str())); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                     if (!part.content_type.empty()) {
-                        checkCurl(curl_mime_type(item, part.content_type.c_str()));
+                        if (auto status = checkCurl(curl_mime_type(item, part.content_type.c_str())); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
                     }
                     return item;
                 };
                 if (part.is_file) {
                     for (auto const& file : part.files) {
-                        auto* item{ add_part() };
-                        checkCurl(curl_mime_filedata(item, file.filepath.c_str()));
+                        auto item_result = add_part();
+                        if (!item_result) {
+                            return std::unexpected{ std::move(item_result.error()) };
+                        }
+                        auto* item = *item_result;
+                        if (auto status = checkCurl(curl_mime_filedata(item, file.filepath.c_str())); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
                         auto const filename{ file.HasOverridenFilename() ? file.overriden_filename : std::filesystem::path{ file.filepath }.filename().string() };
-                        checkCurl(curl_mime_filename(item, filename.c_str()));
+                        if (auto status = checkCurl(curl_mime_filename(item, filename.c_str())); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
                     }
                 } else {
-                    auto* item{ add_part() };
+                    auto item_result = add_part();
+                    if (!item_result) {
+                        return std::unexpected{ std::move(item_result.error()) };
+                    }
+                    auto* item = *item_result;
                     if (part.is_buffer) {
-                        checkCurl(curl_mime_data(item, part.datalen == 0 ? "" : part.data, part.datalen));
-                        checkCurl(curl_mime_filename(item, part.value.c_str()));
+                        if (auto status = checkCurl(curl_mime_data(item, part.datalen == 0 ? "" : part.data, part.datalen)); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
+                        if (auto status = checkCurl(curl_mime_filename(item, part.value.c_str())); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
                     } else {
-                        checkCurl(curl_mime_data(item, part.value.data(), part.value.size()));
+                        if (auto status = checkCurl(curl_mime_data(item, part.value.data(), part.value.size())); !status) {
+                            return std::unexpected{ std::move(status.error()) };
+                        }
                     }
                 }
             }
-            setOption(CURLOPT_MIMEPOST, mime.get());
+            if (auto status = setOption(CURLOPT_MIMEPOST, mime.get()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_curl->multipart = mime.release();
+
+            return {};
         }
 
         /**
          * @brief Configure a binary body with an explicit byte length.
          * @param body Body bytes.
          * @param copy Whether curl must own a copy.
+         * @return Success or the first operation error.
          */
-        auto prepareBytes(std::string_view body, bool copy) -> void {
-            setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(body.size()));
-            setOption(copy ? CURLOPT_COPYPOSTFIELDS : CURLOPT_POSTFIELDS, body.empty() ? "" : body.data());
+        auto prepareBytes(std::string_view body, bool copy) -> Result<void> {
+            if (auto status = setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(body.size())); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(copy ? CURLOPT_COPYPOSTFIELDS : CURLOPT_POSTFIELDS, body.empty() ? "" : body.data()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Reset method state and prepare a complete transfer.
          * @param method HTTP method.
          * @param download Whether to bypass stored content and body consumers.
+         * @return Success or the first operation error.
          */
-        auto prepare(std::string_view method, bool download = false) -> void {
+        auto prepare(std::string_view method, bool download = false) -> Result<void> {
             if (m_in_transfer || (m_multi_owner && !m_multi_preparing)) {
-                throw std::logic_error{ "mcr::Session: handle is in use by a transfer or MultiPerform." };
+                return std::unexpected{
+                    Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Session: handle is in use by a transfer or MultiPerform." }
+                };
             }
             m_method = method;
-            clearCurlContent();
-            setOption(CURLOPT_UPLOAD, 0L);
-            setOption(CURLOPT_NOBODY, 0L);
-            setOption(CURLOPT_HTTPGET, 1L);
-            setOption(CURLOPT_CUSTOMREQUEST, static_cast<char const*>(nullptr));
+            if (auto status = clearCurlContent(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_UPLOAD, 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_NOBODY, 0L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_HTTPGET, 1L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_CUSTOMREQUEST, static_cast<char const*>(nullptr)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_downloading    = download;
             m_download_file  = nullptr;
             m_download_write = {};
@@ -1469,58 +2257,124 @@ export namespace mcr {
             bool const read_upload{ !download && method != "HEAD" && !has_content && bool(m_read.callback) };
             if (!download && method != "HEAD") {
                 if (auto const* payload{ std::get_if<Payload>(&m_content) }) {
-                    prepareBytes(payload->GetContent(*m_curl), true);
+                    auto encoded = payload->GetContent(*m_curl);
+                    if (!encoded) {
+                        return std::unexpected{ std::move(encoded.error()) };
+                    }
+                    if (auto status = prepareBytes(*encoded, true); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (auto const* body{ std::get_if<Body>(&m_content) }) {
-                    prepareBytes(body->Str(), true);
+                    if (auto status = prepareBytes(body->Str(), true); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (auto const* json{ std::get_if<JsonBody>(&m_content) }) {
-                    prepareBytes(json->Str(), true);
+                    if (auto status = prepareBytes(json->Str(), true); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (auto const* view{ std::get_if<BodyView>(&m_content) }) {
-                    prepareBytes(view->Str(), false);
+                    if (auto status = prepareBytes(view->Str(), false); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (auto const* multipart{ std::get_if<Multipart>(&m_content) }) {
-                    prepareMultipart(*multipart);
+                    if (auto status = prepareMultipart(*multipart); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (read_upload) {
-                    setOption(CURLOPT_POST, 1L);
-                    setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_read.size));
+                    if (auto status = setOption(CURLOPT_POST, 1L); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    if (auto status = setOption(CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_read.size)); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 } else if (method == "POST" || method == "PUT" || method == "PATCH") {
-                    prepareBytes({}, false);
+                    if (auto status = prepareBytes({}, false); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                 }
             }
             if (method == "HEAD") {
-                setOption(CURLOPT_NOBODY, 1L);
+                if (auto status = setOption(CURLOPT_NOBODY, 1L); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             } else if (method != "POST" && (method != "GET" || (!download && (has_content || read_upload)))) {
-                setOption(CURLOPT_CUSTOMREQUEST, std::string{ method }.c_str());
+                if (auto status = setOption(CURLOPT_CUSTOMREQUEST, std::string{ method }.c_str()); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
             if (method == "PUT") {
-                setOption(CURLOPT_RANGE, static_cast<char const*>(nullptr));
+                if (auto status = setOption(CURLOPT_RANGE, static_cast<char const*>(nullptr)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
-            prepareHeader(read_upload && m_read.size == -1, !download && method != "HEAD" && std::holds_alternative<JsonBody>(m_content));
-            setOption(CURLOPT_URL, GetFullRequestUrl().c_str());
-            prepareProxy();
+            if (auto status = prepareHeader(read_upload && m_read.size == -1, !download && method != "HEAD" && std::holds_alternative<JsonBody>(m_content)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            auto url = GetFullRequestUrl();
+            if (!url) {
+                return std::unexpected{ std::move(url.error()) };
+            }
+            if (auto status = setOption(CURLOPT_URL, url->c_str()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = prepareProxy(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             auto const encodings{ m_accept_encoding.GetString() };
-            setOption(CURLOPT_ACCEPT_ENCODING, m_accept_encoding.Disabled() ? nullptr : encodings.c_str());
-            setOption(CURLOPT_WRITEFUNCTION, &writeCallback);
-            setOption(CURLOPT_WRITEDATA, static_cast<void*>(this));
-            setOption(CURLOPT_HEADERFUNCTION, &headerCallback);
-            setOption(CURLOPT_HEADERDATA, static_cast<void*>(this));
-            setOption(CURLOPT_READFUNCTION, &readCallback);
-            setOption(CURLOPT_READDATA, static_cast<void*>(this));
-            setOption(CURLOPT_XFERINFOFUNCTION, &progressCallback);
-            setOption(CURLOPT_XFERINFODATA, static_cast<void*>(this));
-            setOption(CURLOPT_NOPROGRESS, m_cancellation || m_progress.callback || m_debug.callback ? 0L : 1L);
-            setOption(CURLOPT_DEBUGFUNCTION, &debugCallback);
-            setOption(CURLOPT_DEBUGDATA, static_cast<void*>(this));
+            auto       disabled = m_accept_encoding.Disabled();
+            if (!disabled) {
+                return std::unexpected{ std::move(disabled.error()) };
+            }
+            if (auto status = setOption(CURLOPT_ACCEPT_ENCODING, *disabled ? nullptr : encodings.c_str()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_WRITEFUNCTION, &writeCallback); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_WRITEDATA, static_cast<void*>(this)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_HEADERFUNCTION, &headerCallback); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_HEADERDATA, static_cast<void*>(this)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_READFUNCTION, &readCallback); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_READDATA, static_cast<void*>(this)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_XFERINFOFUNCTION, &progressCallback); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_XFERINFODATA, static_cast<void*>(this)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_NOPROGRESS, m_cancellation || m_progress.callback || m_debug.callback ? 0L : 1L); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_DEBUGFUNCTION, &debugCallback); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setOption(CURLOPT_DEBUGDATA, static_cast<void*>(this)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         }
 
         /**
          * @brief Execute the prepared easy handle and snapshot its result.
          * @return Completed response.
          */
-        auto perform() -> Response;
+        auto perform() -> Result<Response>;
         /**
          * @brief Reprepare the current method and continue downstream interceptors.
          * @return Downstream response.
          */
-        auto proceed() -> Response;
+        auto proceed() -> Result<Response>;
 
         /**
          * @brief Receive body bytes without allowing C++ exceptions through curl.
@@ -1693,20 +2547,20 @@ export namespace mcr {
          * @brief Register a session in this batch.
          * @param session Nonnull, unowned session.
          * @param method Initial method.
-         * @throws std::invalid_argument If null, duplicated, or incompatible with the batch.
+         * @return Success or the first operation error.
          */
-        auto               AddSession(std::shared_ptr<Session> const& session, HttpMethod method = HttpMethod::UNDEFINED) -> void;
+        auto               AddSession(std::shared_ptr<Session> const& session, HttpMethod method = HttpMethod::UNDEFINED) -> Result<void>;
         /**
          * @brief Remove an existing registration and release its claim.
          * @param session Registered session.
-         * @throws std::invalid_argument If absent.
+         * @return Success or the first operation error.
          */
-        auto               RemoveSession(std::shared_ptr<Session> const& session) -> void;
+        auto               RemoveSession(std::shared_ptr<Session> const& session) -> Result<void>;
         /**
          * @brief Access registrations while no network transfer is active.
          * @return Ordered mutable registrations, including methods.
          */
-        [[nodiscard]] auto GetSessions() -> Sessions&;
+        [[nodiscard]] auto GetSessions() -> Result<std::reference_wrapper<Sessions>>;
 
         /**
          * @brief Inspect registrations.
@@ -1717,48 +2571,49 @@ export namespace mcr {
         /**
          * @brief Append a batch interceptor while idle.
          * @param interceptor Nonnull interceptor.
+         * @return Success or the first operation error.
          */
-        auto AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> void;
+        auto AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> Result<void>;
         /**
          * @brief Execute each session's selected HTTP method.
          * @return Responses in registration order, including transport failures.
          */
-        auto Perform() -> std::vector<Response>;
+        auto Perform() -> Result<std::vector<Response>>;
         /**
          * @brief Execute GET for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Get() -> std::vector<Response>;
+        auto Get() -> Result<std::vector<Response>>;
         /**
          * @brief Execute DELETE for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Delete() -> std::vector<Response>;
+        auto Delete() -> Result<std::vector<Response>>;
         /**
          * @brief Execute PUT for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Put() -> std::vector<Response>;
+        auto Put() -> Result<std::vector<Response>>;
         /**
          * @brief Execute HEAD for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Head() -> std::vector<Response>;
+        auto Head() -> Result<std::vector<Response>>;
         /**
          * @brief Execute OPTIONS for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Options() -> std::vector<Response>;
+        auto Options() -> Result<std::vector<Response>>;
         /**
          * @brief Execute PATCH for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Patch() -> std::vector<Response>;
+        auto Patch() -> Result<std::vector<Response>>;
         /**
          * @brief Execute POST for all registered sessions.
          * @return Responses in registration order.
          */
-        auto Post() -> std::vector<Response>;
+        auto Post() -> Result<std::vector<Response>>;
 
         /**
          * @brief Download once per registered session.
@@ -1767,9 +2622,13 @@ export namespace mcr {
          * @return Download responses.
          */
         template <typename... Args>
-        auto Download(Args&&... args) -> std::vector<Response> {
-            checkDownloadCount(sizeof...(args));
-            setHttpMethod(HttpMethod::DOWNLOAD_REQUEST);
+        auto Download(Args&&... args) -> Result<std::vector<Response>> {
+            if (auto status = checkDownloadCount(sizeof...(args)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = setHttpMethod(HttpMethod::DOWNLOAD_REQUEST); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             return PerformDownload(std::forward<Args>(args)...);
         }
 
@@ -1780,13 +2639,22 @@ export namespace mcr {
          * @return Download responses.
          */
         template <typename... Args>
-        auto PerformDownload(Args&&... args) -> std::vector<Response> {
-            checkDownloadCount(sizeof...(args));
-            validateDownloads();
+        auto PerformDownload(Args&&... args) -> Result<std::vector<Response>> {
+            if (auto status = checkDownloadCount(sizeof...(args)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            if (auto status = validateDownloads(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_downloads.clear();
             try {
-                std::size_t index{};
-                (setDownloadTarget(index++, std::forward<Args>(args)), ...);
+                std::size_t  index{};
+                Result<void> targets;
+                ((targets ? targets = setDownloadTarget(index++, std::forward<Args>(args)) : targets), ...);
+                if (!targets) {
+                    m_downloads.clear();
+                    return std::unexpected{ std::move(targets.error()) };
+                }
                 return Perform();
             } catch (...) {
                 m_downloads.clear();
@@ -1797,12 +2665,14 @@ export namespace mcr {
     private:
         /**
          * @brief Reject mutation or recursion during an attached curl transfer.
+         * @return Success or the first operation error.
          */
-        auto checkIdleTransfer() const -> void;
+        auto checkIdleTransfer() const -> Result<void>;
         /**
          * @brief Validate mutable registrations and refresh exclusive session claims.
+         * @return Success or the first operation error.
          */
-        auto synchronizeSessions() -> void;
+        auto synchronizeSessions() -> Result<void>;
         /**
          * @brief Release claims without dereferencing sessions removed through mutable access.
          */
@@ -1814,56 +2684,68 @@ export namespace mcr {
         /**
          * @brief Validate one destination per session.
          * @param count Number supplied by the caller.
+         * @return Success or the first operation error.
          */
-        auto checkDownloadCount(std::size_t count) -> void;
+        auto checkDownloadCount(std::size_t count) -> Result<void>;
         /**
          * @brief Require each registration to select DOWNLOAD_REQUEST.
+         * @return Success or the first operation error.
          */
-        auto validateDownloads() const -> void;
+        auto validateDownloads() const -> Result<void>;
         /**
          * @brief Copy a download consumer.
          * @param index Registration index.
          * @param write Download callback.
+         * @return Success or the first operation error.
          */
-        auto setDownloadTarget(std::size_t index, WriteCallback const& write) -> void;
+        auto setDownloadTarget(std::size_t index, WriteCallback const& write) -> Result<void>;
         /**
          * @brief Borrow a download stream.
          * @param index Registration index.
          * @param file Output stream.
+         * @return Success or the first operation error.
          */
-        auto setDownloadTarget(std::size_t index, std::ofstream& file) -> void;
+        auto setDownloadTarget(std::size_t index, std::ofstream& file) -> Result<void>;
 
         /**
          * @brief Unwrap a borrowed stream.
          * @param index Registration index.
          * @param file Output stream reference.
+         * @return Success or the first operation error.
          */
-        auto setDownloadTarget(std::size_t index, std::reference_wrapper<std::ofstream> file) -> void { setDownloadTarget(index, file.get()); }
+        auto setDownloadTarget(std::size_t index, std::reference_wrapper<std::ofstream> file) -> Result<void> {
+            if (auto status = setDownloadTarget(index, file.get()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+            return {};
+        }
 
         /**
          * @brief Select one method for all registrations.
          * @param method Requested HTTP method.
+         * @return Success or the first operation error.
          */
-        auto setHttpMethod(HttpMethod method) -> void;
+        auto setHttpMethod(HttpMethod method) -> Result<void>;
         /**
          * @brief Validate the whole batch, then prepare each easy handle.
+         * @return Success or the first operation error.
          */
-        auto prepareSessions() -> void;
+        auto prepareSessions() -> Result<void>;
         /**
          * @brief Enter the remaining interceptor chain or perform transfers.
          * @return Ordered responses.
          */
-        auto makeRequest() -> std::vector<Response>;
+        auto makeRequest() -> Result<std::vector<Response>>;
         /**
          * @brief Attach, drive and detach prepared handles.
          * @return Ordered transfer snapshots.
          */
-        auto runPrepared() -> std::vector<Response>;
+        auto runPrepared() -> Result<std::vector<Response>>;
         /**
          * @brief Reprepare and continue a batch from an interceptor.
          * @return Downstream responses.
          */
-        auto proceed() -> std::vector<Response>;
+        auto proceed() -> Result<std::vector<Response>>;
     };
 
 } // namespace mcr
@@ -1881,13 +2763,18 @@ namespace mcr::detail {
     };
 
     /**
-     * @brief Translate a curl multi failure into an exception.
+     * @brief Translate a curl multi failure into an explicit result.
      * @param result Curl multi operation result.
+     * @return Success or the first operation error.
      */
-    auto check_multi(CURLMcode result) -> void {
+    auto check_multi(CURLMcode result) -> Result<void> {
         if (result != CURLM_OK) {
-            throw std::runtime_error{ std::string{ "mcr::MultiPerform: " } + curl_multi_strerror(result) };
+            return std::unexpected{
+                Error{ ErrorCode::FAILED_INIT, std::string{ "mcr::MultiPerform: " } + curl_multi_strerror(result) }
+            };
         }
+
+        return {};
     }
 
     /**
@@ -1901,71 +2788,137 @@ namespace mcr::detail {
 } // namespace mcr::detail
 
 namespace mcr {
-    auto Session::SetSslOptions(options::SslOptions const& options) -> void {
+    auto Session::SetSslOptions(options::SslOptions const& options) -> Result<void> {
         // Some backends reject even the default value for unsupported optional settings.
-        auto optional_option = [this](CURLoption option, auto value, bool requested) {
+        auto optional_option = [this](CURLoption option, auto value, bool requested) -> Result<void> {
             auto const result{ curl_easy_setopt(m_curl->handle, option, value) };
             if (!requested && (result == CURLE_NOT_BUILT_IN || result == CURLE_UNKNOWN_OPTION)) {
-                return;
+                return {};
             }
-            checkCurl(result);
+            if (auto status = checkCurl(result); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         };
-        auto string_option = [&](CURLoption option, std::string_view value) {
-            optional_option(option, value.empty() ? nullptr : value.data(), !value.empty());
+        auto string_option = [&](CURLoption option, std::string_view value) -> Result<void> {
+            if (auto status = optional_option(option, value.empty() ? nullptr : value.data(), !value.empty()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         };
-        auto blob_option = [&](CURLoption option, std::string_view value) {
+        auto blob_option = [&](CURLoption option, std::string_view value) -> Result<void> {
             curl_blob blob{ const_cast<char*>(value.data()), value.size(), CURL_BLOB_COPY };
-            optional_option(option, value.empty() ? nullptr : &blob, !value.empty());
+            if (auto status = optional_option(option, value.empty() ? nullptr : &blob, !value.empty()); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+
+            return {};
         };
 
-        string_option(CURLOPT_SSLCERT, options.cert_file);
-        blob_option(CURLOPT_SSLCERT_BLOB, options.cert_file.empty() ? std::string_view{ options.cert_blob } : std::string_view{});
-        setOption(CURLOPT_SSLCERTTYPE, options.cert_type.empty() ? "PEM" : options.cert_type.c_str());
-        string_option(CURLOPT_SSLKEY, options.key_file);
-        blob_option(CURLOPT_SSLKEY_BLOB, options.key_file.empty() ? std::string_view{ options.key_blob } : std::string_view{});
-        setOption(CURLOPT_SSLKEYTYPE, options.key_type.empty() ? "PEM" : options.key_type.c_str());
-        string_option(CURLOPT_KEYPASSWD, options.key_pass);
-        string_option(CURLOPT_PINNEDPUBLICKEY, options.pinned_public_key);
-        setOption(CURLOPT_SSL_ENABLE_ALPN, options.enable_alpn ? 1L : 0L);
-        setOption(CURLOPT_SSL_VERIFYPEER, options.verify_peer ? 1L : 0L);
-        setOption(CURLOPT_SSL_VERIFYHOST, options.verify_host ? 2L : 0L);
-        optional_option(CURLOPT_SSL_VERIFYSTATUS, options.verify_status ? 1L : 0L, options.verify_status);
-        setOption(CURLOPT_SSLVERSION, options.ssl_version | options.max_version);
+        if (auto status = string_option(CURLOPT_SSLCERT, options.cert_file); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = blob_option(CURLOPT_SSLCERT_BLOB, options.cert_file.empty() ? std::string_view{ options.cert_blob } : std::string_view{}); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSLCERTTYPE, options.cert_type.empty() ? "PEM" : options.cert_type.c_str()); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_SSLKEY, options.key_file); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = blob_option(CURLOPT_SSLKEY_BLOB, options.key_file.empty() ? std::string_view{ options.key_blob } : std::string_view{}); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSLKEYTYPE, options.key_type.empty() ? "PEM" : options.key_type.c_str()); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_KEYPASSWD, options.key_pass); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_PINNEDPUBLICKEY, options.pinned_public_key); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSL_ENABLE_ALPN, options.enable_alpn ? 1L : 0L); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSL_VERIFYPEER, options.verify_peer ? 1L : 0L); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSL_VERIFYHOST, options.verify_host ? 2L : 0L); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = optional_option(CURLOPT_SSL_VERIFYSTATUS, options.verify_status ? 1L : 0L, options.verify_status); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSLVERSION, options.ssl_version | options.max_version); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         long flags{ options.ssl_no_revoke ? CURLSSLOPT_NO_REVOKE : 0L };
 #ifdef _WIN32
         flags |= CURLSSLOPT_NATIVE_CA;
 #endif
-        setOption(CURLOPT_SSL_OPTIONS, flags);
+        if (auto status = setOption(CURLOPT_SSL_OPTIONS, flags); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         if (options.ssl_fast_start) {
-            throw std::runtime_error{ "mcr::Session: TLS false start was removed in curl 8.15." };
+            return std::unexpected{
+                Error{ ErrorCode::NOT_BUILT_IN, "mcr::Session: TLS false start was removed in curl 8.15." }
+            };
         }
 
         char* default_ca{ nullptr };
         (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAINFO, &default_ca);
-        setOption(CURLOPT_CAINFO, options.ca_info.empty() ? default_ca : options.ca_info.c_str());
-        blob_option(CURLOPT_CAINFO_BLOB, options.ca_buffer.empty() ? options.ca_info_blob : options.ca_buffer);
+        if (auto status = setOption(CURLOPT_CAINFO, options.ca_info.empty() ? default_ca : options.ca_info.c_str()); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = blob_option(CURLOPT_CAINFO_BLOB, options.ca_buffer.empty() ? options.ca_info_blob : options.ca_buffer); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         char* default_path{ nullptr };
         (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAPATH, &default_path);
-        optional_option(CURLOPT_CAPATH, options.ca_path.empty() ? default_path : options.ca_path.c_str(), !options.ca_path.empty());
-        string_option(CURLOPT_CRLFILE, options.crl_file);
-        string_option(CURLOPT_SSL_CIPHER_LIST, options.ciphers);
-        string_option(CURLOPT_TLS13_CIPHERS, options.tls13_ciphers);
-        setOption(CURLOPT_SSL_SESSIONID_CACHE, options.session_id_cache ? 1L : 0L);
+        if (auto status = optional_option(CURLOPT_CAPATH, options.ca_path.empty() ? default_path : options.ca_path.c_str(), !options.ca_path.empty()); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_CRLFILE, options.crl_file); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_SSL_CIPHER_LIST, options.ciphers); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = string_option(CURLOPT_TLS13_CIPHERS, options.tls13_ciphers); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        if (auto status = setOption(CURLOPT_SSL_SESSIONID_CACHE, options.session_id_cache ? 1L : 0L); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+
+        return {};
     }
 
-    auto Session::AddInterceptor(std::shared_ptr<Interceptor> const& interceptor) -> void {
+    auto Session::AddInterceptor(std::shared_ptr<Interceptor> const& interceptor) -> Result<void> {
         if (m_request_depth || m_in_transfer) {
-            throw std::logic_error{ "mcr::Session: cannot modify an active interceptor chain." };
+            return std::unexpected{
+                Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Session: cannot modify an active interceptor chain." }
+            };
         }
         if (!interceptor) {
-            throw std::invalid_argument{ "mcr::Session: interceptor must not be null." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: interceptor must not be null." }
+            };
         }
         m_interceptors.push_back(interceptor);
+
+        return {};
     }
 
-    auto Session::perform() -> Response {
+    auto Session::perform() -> Result<Response> {
         if (m_in_transfer || m_multi_owner) {
-            throw std::logic_error{ "mcr::Session: handle is already in use." };
+            return std::unexpected{
+                Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Session: handle is already in use." }
+            };
         }
         detail::ScopeExit restore{ [this, next = m_next_interceptor, method = m_method, downloading = m_downloading, write = m_download_write, file = m_download_file]() mutable {
             m_next_interceptor = next;
@@ -1985,22 +2938,24 @@ namespace mcr {
         return Complete(curl_easy_perform(m_curl->handle));
     }
 
-    auto Session::proceed() -> Response {
+    auto Session::proceed() -> Result<Response> {
         auto       method{ m_method };
         auto       write{ m_download_write };
         auto*      file{ m_download_file };
         bool const downloading{ m_downloading };
-        prepare(method, downloading);
+        if (auto status = prepare(method, downloading); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         m_download_write = std::move(write);
         m_download_file  = file;
         return perform();
     }
 
-    auto Interceptor::Proceed(Session& session) -> Response {
+    auto Interceptor::Proceed(Session& session) -> Result<Response> {
         return session.proceed();
     }
 
-    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method) -> Response {
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method) -> Result<Response> {
         switch (method) {
             case ProceedHttpMethod::GET_REQUEST    : return session.Get();
             case ProceedHttpMethod::POST_REQUEST   : return session.Post();
@@ -2009,25 +2964,31 @@ namespace mcr {
             case ProceedHttpMethod::PATCH_REQUEST  : return session.Patch();
             case ProceedHttpMethod::HEAD_REQUEST   : return session.Head();
             case ProceedHttpMethod::OPTIONS_REQUEST: return session.Options();
-            default                                : throw std::invalid_argument{ "mcr::Interceptor: this method requires a download destination." };
+            default                                : return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: this method requires a download destination." }
+ };
         }
     }
 
-    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Response {
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Result<Response> {
         if (method != ProceedHttpMethod::DOWNLOAD_FILE_REQUEST) {
-            throw std::invalid_argument{ "mcr::Interceptor: a stream requires DOWNLOAD_FILE_REQUEST." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: a stream requires DOWNLOAD_FILE_REQUEST." }
+            };
         }
         return session.Download(file);
     }
 
-    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Response {
+    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Result<Response> {
         if (method != ProceedHttpMethod::DOWNLOAD_CALLBACK_REQUEST) {
-            throw std::invalid_argument{ "mcr::Interceptor: a callback requires DOWNLOAD_CALLBACK_REQUEST." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: a callback requires DOWNLOAD_CALLBACK_REQUEST." }
+            };
         }
         return session.Download(write);
     }
 
-    MultiPerform::MultiPerform() : m_multi{ std::make_unique<curl::CurlMultiHolder>() } {}
+    MultiPerform::MultiPerform() = default;
 
     MultiPerform::MultiPerform(MultiPerform&& other) noexcept {
         *this = std::move(other);
@@ -2053,10 +3014,14 @@ namespace mcr {
         releaseSessions();
     }
 
-    auto MultiPerform::checkIdleTransfer() const -> void {
+    auto MultiPerform::checkIdleTransfer() const -> Result<void> {
         if (m_transferring) {
-            throw std::logic_error{ "mcr::MultiPerform: cannot modify or reenter a running transfer." };
+            return std::unexpected{
+                Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::MultiPerform: cannot modify or reenter a running transfer." }
+            };
         }
+
+        return {};
     }
 
     auto MultiPerform::releaseSessions() noexcept -> void {
@@ -2076,17 +3041,23 @@ namespace mcr {
         }
     }
 
-    auto MultiPerform::synchronizeSessions() -> void {
-        checkIdleTransfer();
+    auto MultiPerform::synchronizeSessions() -> Result<void> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         std::unordered_set<Session*>        seen;
         std::vector<std::weak_ptr<Session>> claims;
         claims.reserve(m_sessions.size());
         for (auto const& [session, method] : m_sessions) {
             if (!session || !detail::valid_method(method) || !seen.insert(session.get()).second) {
-                throw std::invalid_argument{ "mcr::MultiPerform: null or duplicate session, or invalid HTTP method." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: null or duplicate session, or invalid HTTP method." }
+                };
             }
             if (session->m_in_transfer || session->m_request_depth || (session->m_multi_owner && session->m_multi_owner != this)) {
-                throw std::logic_error{ "mcr::MultiPerform: session is already in use." };
+                return std::unexpected{
+                    Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::MultiPerform: session is already in use." }
+                };
             }
             claims.push_back(session);
         }
@@ -2094,143 +3065,243 @@ namespace mcr {
         m_claimed = std::move(claims);
         rebindSessions();
         std::erase_if(m_downloads, [&](auto const& entry) { return !seen.contains(entry.first); });
+
+        return {};
     }
 
-    auto MultiPerform::AddSession(std::shared_ptr<Session> const& session, HttpMethod method) -> void {
-        synchronizeSessions();
+    auto MultiPerform::AddSession(std::shared_ptr<Session> const& session, HttpMethod method) -> Result<void> {
+        if (auto status = synchronizeSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         if (!session || !detail::valid_method(method)) {
-            throw std::invalid_argument{ "mcr::MultiPerform: invalid session or HTTP method." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: invalid session or HTTP method." }
+            };
         }
         if (session->m_multi_owner || session->m_in_transfer || session->m_request_depth) {
-            throw std::invalid_argument{ "mcr::MultiPerform: session already belongs to a request or batch." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: session already belongs to a request or batch." }
+            };
         }
         for (auto const& [existing, existing_method] : m_sessions) {
             if (existing_method != HttpMethod::UNDEFINED && method != HttpMethod::UNDEFINED &&
                 (existing_method == HttpMethod::DOWNLOAD_REQUEST) != (method == HttpMethod::DOWNLOAD_REQUEST)) {
-                throw std::invalid_argument{ "mcr::MultiPerform: cannot mix download and ordinary registrations." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: cannot mix download and ordinary registrations." }
+                };
             }
         }
         m_claimed.reserve(m_claimed.size() + 1);
         m_sessions.emplace_back(session, method);
         m_claimed.emplace_back(session);
         session->m_multi_owner = this;
+
+        return {};
     }
 
-    auto MultiPerform::RemoveSession(std::shared_ptr<Session> const& session) -> void {
-        synchronizeSessions();
+    auto MultiPerform::RemoveSession(std::shared_ptr<Session> const& session) -> Result<void> {
+        if (auto status = synchronizeSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         auto const found{ std::ranges::find_if(m_sessions, [&](auto const& entry) { return entry.first == session; }) };
         if (found == m_sessions.end()) {
-            throw std::invalid_argument{ "mcr::MultiPerform: session is not registered." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: session is not registered." }
+            };
         }
         session->m_multi_owner = nullptr;
         m_downloads.erase(session.get());
         std::erase_if(m_claimed, [&](auto const& weak) { return weak.lock() == session; });
         m_sessions.erase(found);
+
+        return {};
     }
 
-    auto MultiPerform::GetSessions() -> Sessions& {
-        checkIdleTransfer();
-        return m_sessions;
+    auto MultiPerform::GetSessions() -> Result<std::reference_wrapper<Sessions>> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+        return std::ref(m_sessions);
     }
 
-    auto MultiPerform::AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> void {
-        checkIdleTransfer();
+    auto MultiPerform::AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> Result<void> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         if (m_request_depth) {
-            throw std::logic_error{ "mcr::MultiPerform: cannot modify an active interceptor chain." };
+            return std::unexpected{
+                Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::MultiPerform: cannot modify an active interceptor chain." }
+            };
         }
         if (!interceptor) {
-            throw std::invalid_argument{ "mcr::MultiPerform: interceptor must not be null." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: interceptor must not be null." }
+            };
         }
         m_interceptors.push_back(interceptor);
+
+        return {};
     }
 
-    auto MultiPerform::checkDownloadCount(std::size_t count) -> void {
-        synchronizeSessions();
-        if (count != m_sessions.size()) {
-            throw std::invalid_argument{ "mcr::MultiPerform: provide one download destination per session." };
+    auto MultiPerform::checkDownloadCount(std::size_t count) -> Result<void> {
+        if (auto status = synchronizeSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
         }
+        if (count != m_sessions.size()) {
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: provide one download destination per session." }
+            };
+        }
+
+        return {};
     }
 
-    auto MultiPerform::validateDownloads() const -> void {
+    auto MultiPerform::validateDownloads() const -> Result<void> {
         for (auto const& [session, method] : m_sessions) {
             if (method != HttpMethod::DOWNLOAD_REQUEST) {
-                throw std::invalid_argument{ "mcr::MultiPerform: PerformDownload requires download registrations." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: PerformDownload requires download registrations." }
+                };
             }
         }
+
+        return {};
     }
 
-    auto MultiPerform::setDownloadTarget(std::size_t index, WriteCallback const& write) -> void {
-        checkIdleTransfer();
+    auto MultiPerform::setDownloadTarget(std::size_t index, WriteCallback const& write) -> Result<void> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         auto const& [session, method]{ m_sessions.at(index) };
         if (method != HttpMethod::DOWNLOAD_REQUEST) {
-            throw std::invalid_argument{ "mcr::MultiPerform: destination requires a download method." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: destination requires a download method." }
+            };
         }
         m_downloads.insert_or_assign(session.get(), write);
+
+        return {};
     }
 
-    auto MultiPerform::setDownloadTarget(std::size_t index, std::ofstream& file) -> void {
-        checkIdleTransfer();
+    auto MultiPerform::setDownloadTarget(std::size_t index, std::ofstream& file) -> Result<void> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         auto const& [session, method]{ m_sessions.at(index) };
         if (method != HttpMethod::DOWNLOAD_REQUEST) {
-            throw std::invalid_argument{ "mcr::MultiPerform: destination requires a download method." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: destination requires a download method." }
+            };
         }
         m_downloads.insert_or_assign(session.get(), std::ref(file));
+
+        return {};
     }
 
-    auto MultiPerform::setHttpMethod(HttpMethod method) -> void {
-        synchronizeSessions();
+    auto MultiPerform::setHttpMethod(HttpMethod method) -> Result<void> {
+        if (auto status = synchronizeSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         for (auto& [session, selected] : m_sessions) {
             selected = method;
         }
+
+        return {};
     }
 
-    auto MultiPerform::prepareSessions() -> void {
-        synchronizeSessions();
+    auto MultiPerform::prepareSessions() -> Result<void> {
+        if (auto status = synchronizeSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         // Validate the complete batch before preparing any handle.
         bool downloads{ false }, ordinary{ false };
         for (auto const& [session, method] : m_sessions) {
             if (method == HttpMethod::UNDEFINED) {
-                throw std::invalid_argument{ "mcr::MultiPerform: select an HTTP method before Perform." };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: select an HTTP method before Perform." }
+                };
             }
             if (method == HttpMethod::DOWNLOAD_REQUEST) {
                 downloads = true;
                 if (!m_downloads.contains(session.get())) {
-                    throw std::invalid_argument{ "mcr::MultiPerform: missing download destination." };
+                    return std::unexpected{
+                        Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: missing download destination." }
+                    };
                 }
             } else {
                 ordinary = true;
             }
         }
         if (downloads && ordinary) {
-            throw std::invalid_argument{ "mcr::MultiPerform: cannot mix download and ordinary requests." };
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: cannot mix download and ordinary requests." }
+            };
         }
         for (auto const& [session, method] : m_sessions) {
             session->m_multi_preparing = true;
             detail::ScopeExit reset{ [&] { session->m_multi_preparing = false; } };
             switch (method) {
-                case HttpMethod::GET_REQUEST    : session->PrepareGet(); break;
-                case HttpMethod::POST_REQUEST   : session->PreparePost(); break;
-                case HttpMethod::PUT_REQUEST    : session->PreparePut(); break;
-                case HttpMethod::DELETE_REQUEST : session->PrepareDelete(); break;
-                case HttpMethod::PATCH_REQUEST  : session->PreparePatch(); break;
-                case HttpMethod::HEAD_REQUEST   : session->PrepareHead(); break;
-                case HttpMethod::OPTIONS_REQUEST: session->PrepareOptions(); break;
-                case HttpMethod::DOWNLOAD_REQUEST:
-                    std::visit([&](auto& target) {
-                        if constexpr (std::same_as<std::decay_t<decltype(target)>, WriteCallback>) {
-                            session->PrepareDownload(target);
-                        } else {
-                            session->PrepareDownload(target.get());
-                        }
-                    },
-                               m_downloads.at(session.get()));
+                case HttpMethod::GET_REQUEST:
+                    if (auto status = session->PrepareGet(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
                     break;
-                default: throw std::invalid_argument{ "mcr::MultiPerform: invalid HTTP method." };
+                case HttpMethod::POST_REQUEST:
+                    if (auto status = session->PreparePost(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::PUT_REQUEST:
+                    if (auto status = session->PreparePut(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::DELETE_REQUEST:
+                    if (auto status = session->PrepareDelete(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::PATCH_REQUEST:
+                    if (auto status = session->PreparePatch(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::HEAD_REQUEST:
+                    if (auto status = session->PrepareHead(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::OPTIONS_REQUEST:
+                    if (auto status = session->PrepareOptions(); !status) {
+                        return std::unexpected{ std::move(status.error()) };
+                    }
+                    break;
+                case HttpMethod::DOWNLOAD_REQUEST: {
+                    auto prepared = std::visit([&](auto& target) -> Result<void> {
+                        if constexpr (std::same_as<std::decay_t<decltype(target)>, WriteCallback>) {
+                            return session->PrepareDownload(target);
+                        } else {
+                            return session->PrepareDownload(target.get());
+                        }
+
+                        return {};
+                    },
+                                               m_downloads.at(session.get()));
+                    if (!prepared) {
+                        return std::unexpected{ std::move(prepared.error()) };
+                    }
+                    break;
+                }
+                default: return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: invalid HTTP method." }
+ };
             }
         }
+
+        return {};
     }
 
-    auto MultiPerform::Perform() -> std::vector<Response> {
+    auto MultiPerform::Perform() -> Result<std::vector<Response>> {
         detail::ScopeExit clear{ [this] {
             if (!m_request_depth) {
                 m_downloads.clear();
@@ -2242,12 +3313,16 @@ namespace mcr {
                 }
             }
         } };
-        prepareSessions();
+        if (auto status = prepareSessions(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return makeRequest();
     }
 
-    auto MultiPerform::makeRequest() -> std::vector<Response> {
-        checkIdleTransfer();
+    auto MultiPerform::makeRequest() -> Result<std::vector<Response>> {
+        if (auto status = checkIdleTransfer(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         detail::ScopeExit restore{ [this, next = m_next_interceptor] { m_next_interceptor = next; --m_request_depth; } };
         ++m_request_depth;
         if (m_next_interceptor < m_interceptors.size()) {
@@ -2257,13 +3332,17 @@ namespace mcr {
         return runPrepared();
     }
 
-    auto MultiPerform::proceed() -> std::vector<Response> {
+    auto MultiPerform::proceed() -> Result<std::vector<Response>> {
         return Perform();
     }
 
-    auto MultiPerform::runPrepared() -> std::vector<Response> {
+    auto MultiPerform::runPrepared() -> Result<std::vector<Response>> {
         if (!m_multi) {
-            m_multi = std::make_unique<curl::CurlMultiHolder>();
+            auto holder = curl::CurlMultiHolder::Create();
+            if (!holder) {
+                return std::unexpected{ std::move(holder.error()) };
+            }
+            m_multi = std::make_unique<curl::CurlMultiHolder>(std::move(*holder));
         }
         std::vector<Session*> attached;
         attached.reserve(m_sessions.size());
@@ -2283,15 +3362,21 @@ namespace mcr {
             m_transferring = false;
         } };
         for (auto const& [session, method] : m_sessions) {
-            detail::check_multi(curl_multi_add_handle(m_multi->handle, session->m_curl->handle));
+            if (auto status = detail::check_multi(curl_multi_add_handle(m_multi->handle, session->m_curl->handle)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             attached.push_back(session.get());
             session->m_in_transfer = true;
         }
         int running{};
         do {
-            detail::check_multi(curl_multi_perform(m_multi->handle, &running));
+            if (auto status = detail::check_multi(curl_multi_perform(m_multi->handle, &running)); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (running) {
-                detail::check_multi(curl_multi_poll(m_multi->handle, nullptr, 0, 100, nullptr));
+                if (auto status = detail::check_multi(curl_multi_poll(m_multi->handle, nullptr, 0, 100, nullptr)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
             }
         } while (running);
         int queued{};
@@ -2300,61 +3385,91 @@ namespace mcr {
                 continue;
             }
             auto const position{ positions.at(message->easy_handle) };
-            completed[position] = m_sessions[position].first->Complete(message->data.result);
+            auto       response = m_sessions[position].first->Complete(message->data.result);
+            if (!response) {
+                return std::unexpected{ std::move(response.error()) };
+            }
+            completed[position] = std::move(*response);
         }
-        return completed | std::views::transform([](std::optional<Response>& response) -> Response&& {
-                   if (!response) {
-                       throw std::runtime_error{ "mcr::MultiPerform: curl did not report every transfer's completion." };
-                   }
-                   return std::move(*response);
-               }) |
-               std::ranges::to<std::vector<Response>>();
+        std::vector<Response> responses;
+        responses.reserve(completed.size());
+        for (auto& response : completed) {
+            if (!response) {
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::MultiPerform: curl did not report every transfer's completion." }
+                };
+            }
+            responses.push_back(std::move(*response));
+        }
+        return responses;
     }
 
-    auto MultiPerform::Get() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::GET_REQUEST);
+    auto MultiPerform::Get() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::GET_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Delete() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::DELETE_REQUEST);
+    auto MultiPerform::Delete() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::DELETE_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Put() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::PUT_REQUEST);
+    auto MultiPerform::Put() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::PUT_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Head() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::HEAD_REQUEST);
+    auto MultiPerform::Head() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::HEAD_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Options() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::OPTIONS_REQUEST);
+    auto MultiPerform::Options() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::OPTIONS_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Patch() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::PATCH_REQUEST);
+    auto MultiPerform::Patch() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::PATCH_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto MultiPerform::Post() -> std::vector<Response> {
-        setHttpMethod(HttpMethod::POST_REQUEST);
+    auto MultiPerform::Post() -> Result<std::vector<Response>> {
+        if (auto status = setHttpMethod(HttpMethod::POST_REQUEST); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         return Perform();
     }
 
-    auto InterceptorMulti::Proceed(MultiPerform& multi) -> std::vector<Response> {
+    auto InterceptorMulti::Proceed(MultiPerform& multi) -> Result<std::vector<Response>> {
         return multi.proceed();
     }
 
-    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> void {
-        multi.setDownloadTarget(index, write);
+    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> Result<void> {
+        if (auto status = multi.setDownloadTarget(index, write); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+
+        return {};
     }
 
-    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> void {
-        multi.setDownloadTarget(index, file);
+    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> Result<void> {
+        if (auto status = multi.setDownloadTarget(index, file); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
+
+        return {};
     }
 } // namespace mcr

@@ -18,9 +18,10 @@ auto main(int argc, char** argv) -> int {
         auto const response{ mcr::Download(file,
             mcr::Url{ args.url },
             mcr::options::Timeout{ std::chrono::seconds{ 10 } }) };
+        if (!response) { return example::print_error(response.error()); }
         file.close();
         if (file.fail()) {
-            throw std::runtime_error{ "Could not finish writing the output file." };
+            return example::print_error(mcr::Error{ mcr::ErrorCode::WRITE_ERROR, "Could not finish writing the output file." });
         }
         std::println("Downloaded bytes: {}", std::filesystem::file_size(args.output));
         return example::print_response(response); }, example::RuntimeKind::Synchronous, true);

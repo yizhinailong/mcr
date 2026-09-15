@@ -10,6 +10,7 @@ export module mcr.curlholder;
 
 export import mcr.secure_string;
 
+export import mcr.error;
 import std;
 
 export namespace mcr::curl {
@@ -32,19 +33,23 @@ export namespace mcr::curl {
 
         /**
          * @brief Initialize an easy handle and register this holder's error buffer.
-         * @throws std::runtime_error If curl_easy_init() cannot create a handle.
          * @note Initialization is serialized among CurlHolder instances, following cpr.
-         * Initialization failure is reported by an exception instead of cpr's debug-only assertion.
+         * Initialization failure is returned as FAILED_INIT.
+         * @return Success or the first operation error.
          */
-        CurlHolder() {
+        [[nodiscard]] static auto Create() -> Result<CurlHolder> {
+            CurlHolder result;
             {
                 std::lock_guard lock{ curlEasyInitMutex() };
-                handle = curl_easy_init();
+                result.handle = curl_easy_init();
             }
-            if (!handle) {
-                throw std::runtime_error{ "mcr::curl::CurlHolder: curl_easy_init failed." };
+            if (!result.handle) {
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::curl::CurlHolder: curl_easy_init failed." }
+                };
             }
-            bindErrorBuffer();
+            result.bindErrorBuffer();
+            return result;
         }
 
         CurlHolder(CurlHolder const&)                    = delete;
@@ -91,20 +96,23 @@ export namespace mcr::curl {
         /**
          * @brief Percent-encode a URL component using curl's byte-oriented escaping rules.
          * @param input Bytes to encode, including embedded nulls; need not be null-terminated.
-         * @return Encoded bytes in a SecureString, or an empty string for empty input or curl failure.
-         * @throws std::logic_error If this holder has no active handle.
-         * @throws std::length_error If the input length cannot fit curl's int argument.
+         * @return Encoded bytes in a SecureString, or an error for invalid state, excessive length, or curl allocation failure.
          * @note Empty views are handled directly so curl cannot fall back to strlen().
          * Curl's temporary allocation is freed even if constructing the result throws.
          */
-        [[nodiscard]] auto UrlEncode(std::string_view input) const -> utils::SecureString {
+        [[nodiscard]] auto UrlEncode(std::string_view input) const -> Result<utils::SecureString> {
             auto const length{ checkedLength(input) };
+            if (!length) {
+                return std::unexpected{ length.error() };
+            }
             if (input.empty()) {
                 return {};
             }
-            std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_escape(handle, input.data(), length), &curl_free };
+            std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_escape(handle, input.data(), *length), &curl_free };
             if (!output) {
-                return {};
+                return std::unexpected{
+                    Error{ ErrorCode::OUT_OF_MEMORY, "mcr::curl::CurlHolder: URL conversion failed." }
+                };
             }
             return utils::SecureString{ output.get() };
         }
@@ -112,26 +120,34 @@ export namespace mcr::curl {
         /**
          * @brief Decode percent escapes without translating plus signs into spaces.
          * @param input Bytes to decode; need not be null-terminated.
-         * @return Decoded bytes in a SecureString, or an empty string for empty input or curl failure.
-         * @throws std::logic_error If this holder has no active handle.
-         * @throws std::length_error If the input length cannot fit curl's int argument.
+         * @return Decoded bytes in a SecureString, or an error for invalid state, excessive length, or curl allocation failure.
          * @note Uses curl's output length to retain embedded nulls, unlike cpr's null-terminated copy.
          * Curl's temporary allocation is freed even if constructing the result throws.
          */
-        [[nodiscard]] auto UrlDecode(std::string_view input) const -> utils::SecureString {
+        [[nodiscard]] auto UrlDecode(std::string_view input) const -> Result<utils::SecureString> {
             auto const length{ checkedLength(input) };
+            if (!length) {
+                return std::unexpected{ length.error() };
+            }
             if (input.empty()) {
                 return {};
             }
             int                                         output_length{ 0 };
-            std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_unescape(handle, input.data(), length, &output_length), &curl_free };
+            std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_unescape(handle, input.data(), *length, &output_length), &curl_free };
             if (!output) {
-                return {};
+                return std::unexpected{
+                    Error{ ErrorCode::OUT_OF_MEMORY, "mcr::curl::CurlHolder: URL conversion failed." }
+                };
             }
             return utils::SecureString{ output.get(), static_cast<std::size_t>(output_length) };
         }
 
     private:
+        /**
+         * @brief Create an empty holder for factory initialization.
+         */
+        CurlHolder() noexcept = default;
+
         /**
          * @brief Obtain the mutex used to serialize easy-handle initialization.
          * @return A function-local mutex that avoids static initialization order dependencies.
@@ -165,15 +181,17 @@ export namespace mcr::curl {
          * @brief Validate URL conversion state and convert the input length without narrowing loss.
          * @param input Bytes supplied to a URL conversion helper.
          * @return The byte count as curl's int argument.
-         * @throws std::logic_error If no active handle is owned.
-         * @throws std::length_error If the input exceeds the maximum int value.
          */
-        auto checkedLength(std::string_view input) const -> int {
+        auto checkedLength(std::string_view input) const -> Result<int> {
             if (!handle) {
-                throw std::logic_error{ "mcr::curl::CurlHolder: URL conversion requires an active handle." };
+                return std::unexpected{
+                    Error{ ErrorCode::FAILED_INIT, "mcr::curl::CurlHolder: URL conversion requires an active handle." }
+                };
             }
             if (std::cmp_greater(input.size(), (std::numeric_limits<int>::max)())) {
-                throw std::length_error{ "mcr::curl::CurlHolder: URL input exceeds curl's int length limit." };
+                return std::unexpected{
+                    Error{ ErrorCode::TOO_LARGE, "mcr::curl::CurlHolder: URL input exceeds curl's int length limit." }
+                };
             }
             return static_cast<int>(input.size());
         }

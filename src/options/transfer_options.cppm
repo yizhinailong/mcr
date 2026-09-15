@@ -4,6 +4,7 @@
  */
 export module mcr.transfer_options;
 
+export import mcr.error;
 import std;
 
 export namespace mcr::options {
@@ -36,16 +37,19 @@ export namespace mcr::options {
         /**
          * @brief Convert the stored duration to the long argument required by curl.
          * @return The stored millisecond count without narrowing loss.
-         * @throws std::overflow_error If the count exceeds the maximum long value.
-         * @throws std::underflow_error If the count is below the minimum long value.
+         * @note Counts outside the long range return BAD_FUNCTION_ARGUMENT.
          */
-        [[nodiscard]] auto Milliseconds() const -> long {
+        [[nodiscard]] auto Milliseconds() const -> Result<long> {
             auto const count{ ms.count() };
             if (std::cmp_greater(count, (std::numeric_limits<long>::max)())) {
-                throw std::overflow_error{ std::format("mcr::options::Timeout: timeout value overflow: {} ms.", count) };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, std::format("mcr::options::Timeout: timeout value overflow: {} ms.", count) }
+                };
             }
             if (std::cmp_less(count, (std::numeric_limits<long>::min)())) {
-                throw std::underflow_error{ std::format("mcr::options::Timeout: timeout value underflow: {} ms.", count) };
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, std::format("mcr::options::Timeout: timeout value underflow: {} ms.", count) }
+                };
             }
             return static_cast<long>(count);
         }

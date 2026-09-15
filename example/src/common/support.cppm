@@ -48,9 +48,9 @@ export namespace example {
             }
             try {
                 if (m_kind == RuntimeKind::Async) {
-                    mcr::Async::Startup(2, 4);
+                    mcr::Async::Startup(2, 4).value();
                 } else if (m_kind == RuntimeKind::Coroutine) {
-                    mcr::Coro::Startup();
+                    mcr::Coro::Startup().value();
                 }
             } catch (...) {
                 curl_global_cleanup();
@@ -69,7 +69,7 @@ export namespace example {
             if (m_kind == RuntimeKind::Async) {
                 mcr::Async::Cleanup();
             } else if (m_kind == RuntimeKind::Coroutine) {
-                mcr::Coro::Cleanup();
+                (void)mcr::Coro::Cleanup();
             }
             curl_global_cleanup();
         }
@@ -92,6 +92,25 @@ export namespace example {
         }
         std::println("Text: {}", response.text);
         return mcr::status::is_success(response.status_code) ? 0 : 1;
+    }
+
+    /**
+     * @brief Print an explicit operation failure and return a failing exit code.
+     * @param error Owned library diagnostic.
+     * @return One to indicate failure.
+     */
+    auto print_error(mcr::Error const& error) -> int {
+        std::println("Request failed: {}: {}", mcr::to_string(error.code), error.message);
+        return 1;
+    }
+
+    /**
+     * @brief Print an operation result including configuration and local I/O errors.
+     * @param response Request result to inspect.
+     * @return Zero for a successful HTTP response, otherwise one.
+     */
+    auto print_response(mcr::Result<mcr::Response> const& response) -> int {
+        return response ? print_response(*response) : print_error(response.error());
     }
 
     /**
@@ -129,6 +148,8 @@ export namespace example {
             Arguments const args{ argv[1], needs_output ? std::filesystem::path{ argv[2] } : std::filesystem::path{} };
             Runtime         runtime{ kind };
             return std::invoke(std::forward<Handler>(handler), args);
+        } catch (std::bad_expected_access<mcr::Error> const& error) {
+            return print_error(error.error());
         } catch (std::exception const& error) {
             std::println("Example failed: {}", error.what());
             return 1;

@@ -15,6 +15,7 @@ export import mcr.secure_string;
 export import mcr.sse;
 export import mcr.types;
 
+export import mcr.error;
 import std;
 
 namespace mcr::utils::detail {
@@ -131,41 +132,65 @@ export namespace mcr::utils {
      * @brief Parse a decimal Unix timestamp in seconds into the platform's time_t.
      * @param timestamp Text accepting leading whitespace, a sign, and a numeric prefix, as in cpr.
      * @return The parsed value without narrowing overflow.
-     * @throws std::invalid_argument If no decimal number is present.
-     * @throws std::out_of_range If the value does not fit time_t.
      * @note Cookie expiration uses seconds, despite the reference header's "unix ms" comment.
      */
-    [[nodiscard]] auto s_timestamp_to_t(std::string_view timestamp) -> std::time_t {
-        std::string const text{ timestamp };
-        auto const        checked = [](auto value) -> std::time_t {
-            if (!std::in_range<std::time_t>(value)) {
-                throw std::out_of_range{ "mcr::utils::s_timestamp_to_t: timestamp exceeds time_t range." };
-            }
-            return static_cast<std::time_t>(value);
-        };
-        if constexpr (std::is_unsigned_v<std::time_t>) {
-            return checked(std::stoull(text));
-        } else {
-            return checked(std::stoll(text));
+    [[nodiscard]] auto s_timestamp_to_t(std::string_view timestamp) -> Result<std::time_t> {
+        while (!timestamp.empty() && std::isspace(static_cast<unsigned char>(timestamp.front()))) {
+            timestamp.remove_prefix(1);
         }
+        bool const negative{ !timestamp.empty() && timestamp.front() == '-' };
+        if (!timestamp.empty() && (timestamp.front() == '+' || negative)) {
+            timestamp.remove_prefix(1);
+        }
+        if (timestamp.empty()) {
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::utils::s_timestamp_to_t: missing timestamp." }
+            };
+        }
+        std::uintmax_t magnitude{};
+        auto const     parsed = std::from_chars(timestamp.data(), timestamp.data() + timestamp.size(), magnitude);
+        if (parsed.ec != std::errc{}) {
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::utils::s_timestamp_to_t: invalid or overflowing timestamp." }
+            };
+        }
+        auto const maximum = static_cast<std::uintmax_t>((std::numeric_limits<std::time_t>::max)());
+        if constexpr (std::is_signed_v<std::time_t>) {
+            if (magnitude > maximum + (negative ? 1U : 0U)) {
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::utils::s_timestamp_to_t: timestamp exceeds time_t range." }
+                };
+            }
+            if (negative && magnitude == maximum + 1U) {
+                return (std::numeric_limits<std::time_t>::min)();
+            }
+        } else if (magnitude > maximum) {
+            return std::unexpected{
+                Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::utils::s_timestamp_to_t: timestamp exceeds time_t range." }
+            };
+        }
+        auto const value = static_cast<std::time_t>(magnitude);
+        return negative ? static_cast<std::time_t>(-value) : value;
     }
 
     /**
      * @brief Copy curl's tab-separated Netscape cookie records into an ordered collection.
      * @param raw_cookies Borrowed list, or null for an empty collection; each node contains text.
      * @return Owned cookies retaining order, duplicate names, domain text, and encoding enabled.
-     * @throws std::invalid_argument If a record has a missing or nonnumeric expiration.
-     * @throws std::out_of_range If an expiration does not fit time_t.
      * @note Missing fields are padded with empty strings and extra fields are ignored, as in cpr.
      * The caller retains list ownership. Expirations must also fit system_clock::time_point.
      */
-    [[nodiscard]] auto parse_cookies(curl_slist const* raw_cookies) -> Cookies {
+    [[nodiscard]] auto parse_cookies(curl_slist const* raw_cookies) -> Result<Cookies> {
         constexpr std::size_t COOKIE_FIELD_COUNT{ 7 };
         Cookies               result;
         for (auto const* node{ raw_cookies }; node; node = node->next) {
             auto fields{ split(node->data, '\t') };
             fields.resize(COOKIE_FIELD_COUNT);
-            auto const expires{ std::chrono::system_clock::from_time_t(s_timestamp_to_t(fields[4])) };
+            auto timestamp = s_timestamp_to_t(fields[4]);
+            if (!timestamp) {
+                return std::unexpected{ std::move(timestamp.error()) };
+            }
+            auto const expires{ std::chrono::system_clock::from_time_t(*timestamp) };
             result.emplace_back(
                 Cookie{
                     std::move(fields[5]),
@@ -305,27 +330,29 @@ export namespace mcr::utils {
      * @brief Percent-encode a URL component using a temporary CurlHolder.
      * @param input Bytes to encode, including embedded nulls; need not be null-terminated.
      * @return Encoded secure storage, or an empty string for empty input or curl conversion failure.
-     * @throws std::runtime_error If an easy handle cannot be initialized.
-     * @throws std::length_error If the input exceeds curl's int length limit.
      * @note Reuse CurlHolder::UrlEncode() for repeated conversions to avoid handle creation overhead.
      */
-    [[nodiscard]] auto url_encode(std::string_view input) -> SecureString {
-        curl::CurlHolder const holder;
-        return holder.UrlEncode(input);
+    [[nodiscard]] auto url_encode(std::string_view input) -> Result<SecureString> {
+        auto holder = curl::CurlHolder::Create();
+        if (!holder) {
+            return std::unexpected{ std::move(holder.error()) };
+        }
+        return holder->UrlEncode(input);
     }
 
     /**
      * @brief Decode percent escapes using a temporary CurlHolder, leaving plus signs unchanged.
      * @param input Bytes to decode; need not be null-terminated.
      * @return Decoded secure storage retaining embedded nulls, or empty on empty input or curl failure.
-     * @throws std::runtime_error If an easy handle cannot be initialized.
-     * @throws std::length_error If the input exceeds curl's int length limit.
      * @note Reuse CurlHolder::UrlDecode() for repeated conversions. Curl global initialization and
      * cleanup remain the caller's responsibility, as for CurlHolder.
      */
-    [[nodiscard]] auto url_decode(std::string_view input) -> SecureString {
-        curl::CurlHolder const holder;
-        return holder.UrlDecode(input);
+    [[nodiscard]] auto url_decode(std::string_view input) -> Result<SecureString> {
+        auto holder = curl::CurlHolder::Create();
+        if (!holder) {
+            return std::unexpected{ std::move(holder.error()) };
+        }
+        return holder->UrlDecode(input);
     }
 
 } // namespace mcr::utils

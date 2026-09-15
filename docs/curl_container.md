@@ -16,11 +16,11 @@ import mcr.curl_container;
 
 mcr::curl::CurlContainer<mcr::Parameter> query{ { "q", "hello world" }, { "flag", "" } };
 query.Add(mcr::Parameter{ "q", "another value" });
-auto raw = query.GetContent(); // q=hello world&flag&q=another value
+auto raw = query.GetContent().value(); // q=hello world&flag&q=another value
 
 // 成功初始化 curl 后执行，holder 必须先于 curl 全局清理销毁。
-mcr::curl::CurlHolder holder;
-auto encoded = query.GetContent(holder);
+auto holder = mcr::curl::CurlHolder::Create().value();
+auto encoded = query.GetContent(holder).value();
 // q=hello%20world&flag&q=another%20value
 ```
 
@@ -54,7 +54,7 @@ curl 将空格编码为 %20、字面加号编码为 %2B；原始输出不规范�
 
 只有启用编码的非空容器才使用传入句柄。
 空容器或 encode 为 false 时允许移出后的句柄；其余情况沿用
-CurlHolder::UrlEncode 的异常和 curl 分配失败返回空结果的行为。
+CurlHolder::UrlEncode 的显式错误结果。两个 `GetContent()` 重载均返回 `Result<std::string>`；编码分配失败返回 `OUT_OF_MEMORY`。
 
 ## 与 cpr 的差异及验证
 

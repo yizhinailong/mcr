@@ -9,7 +9,7 @@ import std;
 import mcr.threadpool;
 
 mcr::utils::ThreadPool pool{ 1, 4 };
-auto answer = pool.Submit([](int value) { return value * 2; }, 21);
+auto answer = pool.Submit([](int value) { return value * 2; }, 21).value();
 std::println("{}", answer.get()); // 42
 pool.Wait();
 ```
@@ -21,7 +21,7 @@ pool.Wait();
 超过最小数量的空闲线程会在超时后退出；最小值为零时允许全部空闲线程退出，
 随后提交会再次启动线程。提交、启动、调整线程数或关闭时，会汇合并回收已结束的线程记录。
 
-`Submit(fn, args...)` 返回 `std::future<T>`，包括 void 和引用结果，任务异常保存在 future 中。
+`Submit(fn, args...)` 返回 `Result<std::future<T>>`，包括 void 和引用结果，任务异常保存在 future 中。
 可调用对象和参数按退化后的类型复制或移动到独立存储，并像 `std::thread` 一样以右值调用一次。
 需要引用时使用 `std::ref` 或 `std::cref`；支持成员指针及仅可移动的可调用对象和参数。
 
@@ -38,7 +38,7 @@ Stop 取消排队任务，等待已领取任务并汇合线程。
 池不能中断正在执行的任务。
 
 公开方法对配置、状态、计数和队列进行同步。
-关闭期间 Submit 抛出 `std::runtime_error`，Start 和额外的 Stop 返回 -1；
+关闭期间 Submit 返回 `FAILED_INIT`，Start 和额外的 Stop 返回 -1；
 Stop 完成后可以重启。IsStarted 在运行或暂停时为 true，
 IsStopped 在全部线程汇合后为 true，关闭过程中两者均为 false。
 

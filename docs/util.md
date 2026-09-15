@@ -53,7 +53,7 @@ API 使用 C++23 模块、`mcr::utils` 命名空间、snake_case 自由函数名
 `parse_cookies` 借用 `curl_slist const*`，空指针返回空集合。
 按顺序复制 Netscape 格式记录，保留重名和域文本（含 `#HttpOnly_`），默认 encode 为 true。
 缺失列补空，超过第七列的内容忽略。
-缺失或无效过期时间抛出 std::invalid_argument，超过 time_t 范围抛出 std::out_of_range；
+缺失、无效或超出 time_t 范围的过期时间返回 `BAD_FUNCTION_ARGUMENT`；
 时间还必须能由 `std::chrono::system_clock::time_point` 表示。
 原始列表仍归调用方所有。
 
@@ -82,8 +82,8 @@ SSE 解析状态跨块保留。
 [Session](session.md) 使用自己的回调入口捕获异常，在 curl 返回后重新抛出。
 回调和目标指针必须在调用期间有效，字节数必须能由相应类型表示。
 
-`url_encode` 和 `url_decode` 通过临时 CurlHolder 返回 SecureString，
-沿用其长度检查、保留二进制数据的解码，以及 curl 转换失败时返回空结果的规则。
+`url_encode` 和 `url_decode` 通过临时 CurlHolder 返回 `Result<SecureString>`，
+沿用其长度检查、保留二进制数据的解码，以及通过 Result 返回 curl 转换失败的规则。
 解码时加号保持字面值。重复转换可复用 CurlHolder 并调用 UrlEncode / UrlDecode。
 curl 的全局初始化和清理由调用方管理。
 
