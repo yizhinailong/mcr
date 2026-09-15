@@ -166,7 +166,17 @@ export namespace mcr::utils {
             auto fields{ split(node->data, '\t') };
             fields.resize(COOKIE_FIELD_COUNT);
             auto const expires{ std::chrono::system_clock::from_time_t(s_timestamp_to_t(fields[4])) };
-            result.emplace_back(Cookie{ std::move(fields[5]), std::move(fields[6]), std::move(fields[0]), is_true(fields[1]), std::move(fields[2]), is_true(fields[3]), expires });
+            result.emplace_back(
+                Cookie{
+                    std::move(fields[5]),
+                    std::move(fields[6]),
+                    std::move(fields[0]),
+                    is_true(fields[1]),
+                    std::move(fields[2]),
+                    is_true(fields[3]),
+                    expires,
+                }
+            );
         }
         return result;
     }
@@ -265,7 +275,13 @@ export namespace mcr::utils {
      * @return Zero to continue, or one to abort; never CURL_PROGRESSFUNC_CONTINUE.
      */
     template <typename T = ProgressCallback>
-    auto progress_user_function(T const* progress, CprPfArgT download_total, CprPfArgT download_now, CprPfArgT upload_total, CprPfArgT upload_now) -> int {
+    auto progress_user_function(
+        T const*  progress,
+        CprPfArgT download_total,
+        CprPfArgT download_now,
+        CprPfArgT upload_total,
+        CprPfArgT upload_now
+    ) -> int {
         constexpr int CANCEL_RETURN{ 1 };
         static_assert(CANCEL_RETURN != CURL_PROGRESSFUNC_CONTINUE);
         return (*progress)(download_total, download_now, upload_total, upload_now) ? 0 : CANCEL_RETURN;
