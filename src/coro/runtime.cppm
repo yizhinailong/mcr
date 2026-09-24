@@ -76,7 +76,13 @@ export namespace mcr::detail {
         CoroRuntime(CoroRuntime const&)                    = delete;
         auto operator=(CoroRuntime const&) -> CoroRuntime& = delete;
 
-        ~CoroRuntime() { (void)Cleanup(); }
+        /**
+         * @brief Destroy the runtime at exit, normally after Cleanup() has already run.
+         * @note Teardown is unconditional here because a destructor cannot report the recursive-call error.
+         */
+        ~CoroRuntime() {
+            Teardown();
+        }
 
         /**
          * @brief Reject startup after permanent cleanup.
@@ -133,22 +139,7 @@ export namespace mcr::detail {
                     Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Coro::Cleanup: must be called outside runtime threads." }
                 };
             }
-            std::lock_guard cleanup_lock{ m_cleanup_mutex };
-            {
-                std::lock_guard lock{ m_mutex };
-                m_stopping = true;
-                if (m_multi) {
-                    (void)curl_multi_wakeup(m_multi->handle);
-                }
-            }
-            if (m_io_thread.joinable()) {
-                m_io_thread.join();
-            }
-            if (m_completion_thread.joinable()) {
-                m_completion_thread.join();
-            }
-            std::lock_guard lock{ m_mutex };
-            m_multi.reset();
+            Teardown();
             return {};
         }
 
@@ -174,6 +165,29 @@ export namespace mcr::detail {
                 }
                 throw;
             }
+        }
+
+        /**
+         * @brief Cancel unfinished transfers, join threads, and release curl without reporting an outcome.
+         * @note Shared by Cleanup and the destructor; callers must already be outside runtime threads.
+         */
+        void Teardown() {
+            std::lock_guard cleanup_lock{ m_cleanup_mutex };
+            {
+                std::lock_guard lock{ m_mutex };
+                m_stopping = true;
+                if (m_multi) {
+                    (void)curl_multi_wakeup(m_multi->handle);
+                }
+            }
+            if (m_io_thread.joinable()) {
+                m_io_thread.join();
+            }
+            if (m_completion_thread.joinable()) {
+                m_completion_thread.join();
+            }
+            std::lock_guard lock{ m_mutex };
+            m_multi.reset();
         }
 
         /**
