@@ -7,7 +7,7 @@ import mcr;
 
 namespace {
 
-    void require(bool condition, std::string_view message) {
+    auto require(bool condition, std::string_view message) -> void {
         if (!condition) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -59,7 +59,7 @@ namespace {
     static_assert(std::is_same_v<decltype(TestSingleton<0>::GetInstance()), TestSingleton<0>*>);
     static_assert(std::is_same_v<decltype(TestSingleton<0>::ExitInstance()), void>);
 
-    void check_concurrent_lifecycle() {
+    auto check_concurrent_lifecycle() -> void {
         using Instance = TestSingleton<0>;
         using Other    = TestSingleton<1>;
 
@@ -107,7 +107,7 @@ namespace {
         require(Other::destructions == 1 && Other::GetInstance() == nullptr, "each type must shut down independently");
     }
 
-    void check_failed_initialization() {
+    auto check_failed_initialization() -> void {
         using Instance       = TestSingleton<2>;
         Instance::fail_first = true;
         bool threw{ false };
@@ -122,7 +122,7 @@ namespace {
         require(Instance::destructions == 1 && Instance::GetInstance() == nullptr, "a retried instance must retain normal shutdown behavior");
     }
 
-    void check_early_shutdown() {
+    auto check_early_shutdown() -> void {
         using Instance = TestSingleton<3>;
         bool threw{ false };
         try {
@@ -136,7 +136,7 @@ namespace {
         require(Instance::destructions == 1 && Instance::GetInstance() == nullptr, "rejected shutdown must not consume the one-time destruction flag");
     }
 
-    void check_private_destructor() {
+    auto check_private_destructor() -> void {
         require(PrivateSingleton::GetInstance() != nullptr, "friendship must allow a private constructor");
         PrivateSingleton::ExitInstance();
         require(PrivateSingleton::destructions == 1 && PrivateSingleton::GetInstance() == nullptr, "friendship must allow a private destructor");

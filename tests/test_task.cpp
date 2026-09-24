@@ -6,7 +6,7 @@ import std;
 import mcr.task;
 
 namespace {
-    void require(bool value, std::string_view message) {
+    auto require(bool value, std::string_view message) -> void {
         if (!value) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -34,9 +34,9 @@ namespace {
             return true;
         }
 
-        void await_resume() const noexcept {}
+        auto await_resume() const noexcept -> void {}
 
-        void Release() {
+        auto Release() -> void {
             std::coroutine_handle<> next;
             {
                 std::lock_guard lock{ mutex };

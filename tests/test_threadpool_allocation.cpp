@@ -13,7 +13,7 @@ namespace {
      * @param condition Condition to check.
      * @param message Failure diagnostic.
      */
-    void require(bool condition, std::string_view message) {
+    auto require(bool condition, std::string_view message) -> void {
         if (!condition) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -42,7 +42,7 @@ namespace {
  * @return Allocated storage.
  * @throws std::bad_alloc At the selected allocation or when allocation cannot succeed.
  */
-void* operator new(std::size_t bytes) {
+auto operator new(std::size_t bytes) -> void* {
     if (g_fail_after == 0) {
         g_fail_after = -1;
         throw std::bad_alloc{};
@@ -67,7 +67,7 @@ void* operator new(std::size_t bytes) {
  * @param bytes Requested allocation size.
  * @return Allocated storage.
  */
-void* operator new[](std::size_t bytes) {
+auto operator new[](std::size_t bytes) -> void* {
     return ::operator new(bytes);
 }
 
@@ -75,7 +75,7 @@ void* operator new[](std::size_t bytes) {
  * @brief Release storage allocated by the replacement allocator.
  * @param storage Allocation to release.
  */
-void operator delete(void* storage) noexcept {
+auto operator delete(void* storage) noexcept -> void {
     std::free(storage);
 }
 
@@ -83,7 +83,7 @@ void operator delete(void* storage) noexcept {
  * @brief Release storage when its allocation size is supplied.
  * @param storage Allocation to release.
  */
-void operator delete(void* storage, std::size_t) noexcept {
+auto operator delete(void* storage, std::size_t) noexcept -> void {
     ::operator delete(storage);
 }
 
@@ -91,7 +91,7 @@ void operator delete(void* storage, std::size_t) noexcept {
  * @brief Release array storage.
  * @param storage Allocation to release.
  */
-void operator delete[](void* storage) noexcept {
+auto operator delete[](void* storage) noexcept -> void {
     ::operator delete(storage);
 }
 
@@ -99,7 +99,7 @@ void operator delete[](void* storage) noexcept {
  * @brief Release array storage when its allocation size is supplied.
  * @param storage Allocation to release.
  */
-void operator delete[](void* storage, std::size_t) noexcept {
+auto operator delete[](void* storage, std::size_t) noexcept -> void {
     ::operator delete(storage);
 }
 

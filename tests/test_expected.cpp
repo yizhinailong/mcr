@@ -13,7 +13,7 @@ namespace {
     /**
      * @brief Fail a test while preserving an actionable diagnostic.
      */
-    void require(bool condition, std::string_view message) {
+    auto require(bool condition, std::string_view message) -> void {
         if (!condition) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -22,7 +22,7 @@ namespace {
     /**
      * @brief Check failure propagation without consuming an invalid expected value.
      */
-    void check_requests() {
+    auto check_requests() -> void {
         mcr::test::HttpServer           server;
         mcr::options::HttpVersion const invalid{ static_cast<mcr::options::HttpVersionCode>(255) };
         mcr::options::Proxies const     proxies{

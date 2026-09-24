@@ -84,7 +84,7 @@ export namespace mcr::utils {
          * @throws std::invalid_argument If the new minimum exceeds the maximum.
          * @throws std::system_error If a required worker cannot be started.
          */
-        void SetMinThreadNum(std::size_t min_threads) {
+        auto SetMinThreadNum(std::size_t min_threads) -> void {
             std::list<Worker> retired;
             std::scoped_lock  lock{ m_mutex };
             validateLimits(min_threads, m_max_thread_num);
@@ -104,7 +104,7 @@ export namespace mcr::utils {
          * @throws std::invalid_argument If the new maximum is invalid.
          * @throws std::system_error If a worker needed for queued tasks cannot be started.
          */
-        void SetMaxThreadNum(std::size_t max_threads) {
+        auto SetMaxThreadNum(std::size_t max_threads) -> void {
             std::list<Worker> retired;
             std::scoped_lock  lock{ m_mutex };
             validateLimits(m_min_thread_num, max_threads);
@@ -121,7 +121,7 @@ export namespace mcr::utils {
          * @param ms Positive idle duration.
          * @throws std::invalid_argument If ms is zero or negative.
          */
-        void SetMaxIdleTime(std::chrono::milliseconds ms) {
+        auto SetMaxIdleTime(std::chrono::milliseconds ms) -> void {
             validateIdleTime(ms);
             std::scoped_lock lock{ m_mutex };
             m_max_idle_time = ms;
@@ -273,7 +273,7 @@ export namespace mcr::utils {
          * @throws std::logic_error If called from a task running in this pool.
          * @note Paused pending work requires another caller to Resume or Stop the pool.
          */
-        void Wait() {
+        auto Wait() -> void {
             checkExternalWait();
             std::unique_lock lock{ m_mutex };
             m_done_cond.wait(lock, [this] { return m_tasks.empty() && m_active_thread_num == 0; });
@@ -349,7 +349,7 @@ export namespace mcr::utils {
         /**
          * @brief Validate the relationship between worker limits.
          */
-        static void validateLimits(std::size_t min_threads, std::size_t max_threads) {
+        static auto validateLimits(std::size_t min_threads, std::size_t max_threads) -> void {
             if (max_threads == 0 || min_threads > max_threads) {
                 throw std::invalid_argument{ "mcr::utils::ThreadPool: require 0 <= min_threads <= max_threads and max_threads > 0" };
             }
@@ -358,7 +358,7 @@ export namespace mcr::utils {
         /**
          * @brief Reject idle durations that would cause immediate repeated wakeups.
          */
-        static void validateIdleTime(std::chrono::milliseconds ms) {
+        static auto validateIdleTime(std::chrono::milliseconds ms) -> void {
             if (ms <= std::chrono::milliseconds::zero()) {
                 throw std::invalid_argument{ "mcr::utils::ThreadPool: max idle time must be positive" };
             }
@@ -367,7 +367,7 @@ export namespace mcr::utils {
         /**
          * @brief Prevent a worker from waiting for its own completion.
          */
-        void checkExternalWait() const {
+        auto checkExternalWait() const -> void {
             if (s_current_pool == this) {
                 throw std::logic_error{ "mcr::utils::ThreadPool: a worker cannot Wait or Stop its own pool" };
             }
@@ -383,7 +383,7 @@ export namespace mcr::utils {
         /**
          * @brief Start workers while holding m_mutex, retaining a valid state on creation failure.
          */
-        void start(std::size_t start_threads) {
+        auto start(std::size_t start_threads) -> void {
             m_status = Status::RUNNING;
             try {
                 auto const count = std::clamp(start_threads, m_min_thread_num, m_max_thread_num);
@@ -401,7 +401,7 @@ export namespace mcr::utils {
         /**
          * @brief Add workers for pending work while holding m_mutex and respecting the maximum.
          */
-        void growForTasks(std::size_t pending_tasks) {
+        auto growForTasks(std::size_t pending_tasks) -> void {
             while (m_current_thread_num < m_max_thread_num && pending_tasks > m_current_thread_num - m_active_thread_num) {
                 createThread();
             }
@@ -410,7 +410,7 @@ export namespace mcr::utils {
         /**
          * @brief Create a stable worker record before launching its thread; caller holds m_mutex.
          */
-        void createThread() {
+        auto createThread() -> void {
             auto& worker = m_workers.emplace_back();
             try {
                 worker.thread = std::jthread{ [this, &worker] { runWorker(worker); } };
@@ -424,7 +424,7 @@ export namespace mcr::utils {
         /**
          * @brief Move finished records out for joining after the caller releases m_mutex.
          */
-        void collectFinished(std::list<Worker>& retired) {
+        auto collectFinished(std::list<Worker>& retired) -> void {
             for (auto worker = m_workers.begin(); worker != m_workers.end();) {
                 auto current = worker++;
                 if (current->finished) {
@@ -452,7 +452,7 @@ export namespace mcr::utils {
         /**
          * @brief Execute tasks until shutdown or retirement, synchronizing all queue and count updates.
          */
-        void runWorker(Worker& worker) {
+        auto runWorker(Worker& worker) -> void {
             s_current_pool = this;
             std::unique_lock lock{ m_mutex };
             auto             idle_since = std::chrono::steady_clock::now();

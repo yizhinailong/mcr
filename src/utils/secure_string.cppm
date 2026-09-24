@@ -74,7 +74,7 @@ export namespace mcr::utils {
          * @param p Storage obtained from an equal allocator, with no live elements remaining.
          * @param n Element count originally supplied to allocate.
          */
-        void deallocate(T* p, std::size_t n) noexcept {
+        auto deallocate(T* p, std::size_t n) noexcept -> void {
             auto* bytes = reinterpret_cast<unsigned char volatile*>(p);
             for (std::size_t index{ 0 }; index < n * sizeof(T); ++index) {
                 bytes[index] = 0;

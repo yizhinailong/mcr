@@ -58,7 +58,7 @@ export namespace mcr::utils {
          * @throws std::system_error If std::call_once cannot complete.
          * @note T's destructor must not throw. Stop all instance users before shutdown.
          */
-        static void ExitInstance() {
+        static auto ExitInstance() -> void {
             std::call_once(s_exit_flag, [] {
                 if (s_instance == nullptr) {
                     throw std::logic_error{ "mcr::utils::Singleton: ExitInstance requires successful initialization" };

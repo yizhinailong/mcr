@@ -15,7 +15,7 @@ namespace {
     /**
      * @brief Inspect only the watched allocation while it still exists, before free.
      */
-    void observe_release(void* storage) noexcept {
+    auto observe_release(void* storage) noexcept -> void {
         if (storage == g_watched_storage && g_watched_storage != nullptr) {
             auto const* bytes = static_cast<unsigned char const*>(storage);
             g_release_zeroed  = true;
@@ -27,20 +27,20 @@ namespace {
         }
     }
 
-    void watch_release(void const* storage, std::size_t bytes) noexcept {
+    auto watch_release(void const* storage, std::size_t bytes) noexcept -> void {
         g_watched_storage  = storage;
         g_watched_bytes    = bytes;
         g_release_observed = false;
         g_release_zeroed   = false;
     }
 
-    void require(bool condition, std::string_view message) {
+    auto require(bool condition, std::string_view message) -> void {
         if (!condition) {
             throw std::runtime_error{ std::string{ message } };
         }
     }
 
-    void require_wiped() {
+    auto require_wiped() -> void {
         require(g_release_observed, "the watched allocation must reach the release hook");
         require(g_release_zeroed, "every allocated byte must be zero before storage is released");
     }
@@ -50,7 +50,7 @@ namespace {
 /**
  * @brief Pair replacement allocation and release functions to inspect memory without use-after-free.
  */
-void* operator new(std::size_t bytes) {
+auto operator new(std::size_t bytes) -> void* {
     while (true) {
         if (auto* storage = std::malloc(bytes == 0 ? 1 : bytes)) {
             return storage;
@@ -63,24 +63,24 @@ void* operator new(std::size_t bytes) {
     }
 }
 
-void* operator new[](std::size_t bytes) {
+auto operator new[](std::size_t bytes) -> void* {
     return ::operator new(bytes);
 }
 
-void operator delete(void* storage) noexcept {
+auto operator delete(void* storage) noexcept -> void {
     observe_release(storage);
     std::free(storage);
 }
 
-void operator delete(void* storage, std::size_t) noexcept {
+auto operator delete(void* storage, std::size_t) noexcept -> void {
     ::operator delete(storage);
 }
 
-void operator delete[](void* storage) noexcept {
+auto operator delete[](void* storage) noexcept -> void {
     ::operator delete(storage);
 }
 
-void operator delete[](void* storage, std::size_t) noexcept {
+auto operator delete[](void* storage, std::size_t) noexcept -> void {
     ::operator delete(storage);
 }
 
@@ -106,7 +106,7 @@ namespace {
     static_assert(std::is_nothrow_move_constructible_v<SecureString>);
     static_assert(std::is_nothrow_move_assignable_v<SecureString>);
 
-    void check_allocator_compatibility() {
+    auto check_allocator_compatibility() -> void {
         SecureAllocator<char>       chars;
         SecureAllocator<char> const equal;
         SecureAllocator<int>        copied{ equal };
@@ -134,7 +134,7 @@ namespace {
     }
 
     template <typename T>
-    void check_raw_wipe() {
+    auto check_raw_wipe() -> void {
         SecureAllocator<T>    allocator;
         SecureAllocator<T>    equal;
         constexpr std::size_t COUNT{ 7 };
@@ -145,7 +145,7 @@ namespace {
         require_wiped();
     }
 
-    void check_destroyed_objects() {
+    auto check_destroyed_objects() -> void {
         struct Value {
             int value;
 
@@ -169,7 +169,7 @@ namespace {
         require_wiped();
     }
 
-    void check_string_operations() {
+    auto check_string_operations() -> void {
         SecureString empty;
         require(empty.empty() && empty.c_str()[0] == '\0', "default strings must be empty and null-terminated");
         std::string  source(80, 's');
@@ -203,7 +203,7 @@ namespace {
         require(assigned.size() == sizeof(bytes) && binary.size() == 80, "string swap must support equal allocators");
     }
 
-    void check_string_wipe() {
+    auto check_string_wipe() -> void {
         {
             SecureString secret(96, 's');
             auto const   allocation_size = secret.capacity() + 1;

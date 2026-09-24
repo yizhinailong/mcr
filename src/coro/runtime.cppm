@@ -21,7 +21,7 @@ export namespace mcr::detail {
      */
     struct WakeCoroRuntime {
         CoroRuntime* runtime;
-        void         operator()() const noexcept;
+        auto         operator()() const noexcept -> void;
     };
 
     /**
@@ -121,7 +121,7 @@ export namespace mcr::detail {
         /**
          * @brief Wake polling without racing destruction of the multi handle.
          */
-        void Wake() noexcept {
+        auto Wake() noexcept -> void {
             std::lock_guard lock{ m_mutex };
             if (m_multi) {
                 (void)curl_multi_wakeup(m_multi->handle);
@@ -171,7 +171,7 @@ export namespace mcr::detail {
          * @brief Cancel unfinished transfers, join threads, and release curl without reporting an outcome.
          * @note Shared by Cleanup and the destructor; callers must already be outside runtime threads.
          */
-        void Teardown() {
+        auto Teardown() -> void {
             std::lock_guard cleanup_lock{ m_cleanup_mutex };
             {
                 std::lock_guard lock{ m_mutex };
@@ -193,7 +193,11 @@ export namespace mcr::detail {
         /**
          * @brief Append without allocating; caller owns the relevant queue lock.
          */
-        static void append(std::shared_ptr<CoroTransfer>& head, std::shared_ptr<CoroTransfer>& tail, std::shared_ptr<CoroTransfer> value) noexcept {
+        static auto append(
+            std::shared_ptr<CoroTransfer>& head,
+            std::shared_ptr<CoroTransfer>& tail,
+            std::shared_ptr<CoroTransfer>  value
+        ) noexcept -> void {
             if (tail) {
                 tail->next = value;
             } else {
@@ -205,7 +209,12 @@ export namespace mcr::detail {
         /**
          * @brief Publish an outcome only after removing the easy handle from the multi handle.
          */
-        void complete(std::shared_ptr<CoroTransfer> transfer, CURLcode result, std::exception_ptr error = {}, CURLMcode multi_error = CURLM_OK) noexcept {
+        auto complete(
+            std::shared_ptr<CoroTransfer> transfer,
+            CURLcode                      result,
+            std::exception_ptr            error       = {},
+            CURLMcode                     multi_error = CURLM_OK
+        ) noexcept -> void {
             transfer->result      = result;
             transfer->error       = std::move(error);
             transfer->multi_error = multi_error;
@@ -219,7 +228,7 @@ export namespace mcr::detail {
         /**
          * @brief Resume outside all runtime locks and outside curl's callback stack.
          */
-        void runCompletions() noexcept {
+        auto runCompletions() noexcept -> void {
             coro_runtime_thread = true;
             for (;;) {
                 std::shared_ptr<CoroTransfer> transfer;
@@ -244,7 +253,7 @@ export namespace mcr::detail {
         /**
          * @brief Drive all active HTTP transfers and collect each completion independently.
          */
-        void runIo() noexcept {
+        auto runIo() noexcept -> void {
             coro_runtime_thread = true;
             std::unordered_map<CURL*, std::shared_ptr<CoroTransfer>> active;
             std::exception_ptr                                       failure;
@@ -347,7 +356,7 @@ export namespace mcr::detail {
         }
     };
 
-    void WakeCoroRuntime::operator()() const noexcept {
+    auto WakeCoroRuntime::operator()() const noexcept -> void {
         runtime->Wake();
     }
 

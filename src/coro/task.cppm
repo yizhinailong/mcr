@@ -82,7 +82,7 @@ namespace mcr::detail {
         std::shared_ptr<TaskState<T>> state{ std::make_shared<TaskState<T>>() };
 
         template <typename U>
-        void return_value(U&& value) {
+        auto return_value(U&& value) -> void {
             if constexpr (std::is_lvalue_reference_v<T>) {
                 static_assert(std::is_lvalue_reference_v<U&&>, "A reference task must return an lvalue.");
                 state->value = std::addressof(value);
@@ -99,7 +99,7 @@ namespace mcr::detail {
     struct TaskReturn<void> {
         std::shared_ptr<TaskState<void>> state{ std::make_shared<TaskState<void>>() };
 
-        void return_void() noexcept {}
+        auto return_void() noexcept -> void {}
     };
 
     /**
@@ -108,7 +108,7 @@ namespace mcr::detail {
     struct ForwardTaskStop {
         std::stop_source source;
 
-        void operator()() noexcept { source.request_stop(); }
+        auto operator()() noexcept -> void { source.request_stop(); }
     };
 
     /**
@@ -179,12 +179,12 @@ export namespace mcr {
                     return state->Complete();
                 }
 
-                void await_resume() const noexcept {}
+                auto await_resume() const noexcept -> void {}
             };
 
             auto final_suspend() const noexcept -> FinalAwaiter { return {}; }
 
-            void unhandled_exception() noexcept { this->state->error = std::current_exception(); }
+            auto unhandled_exception() noexcept -> void { this->state->error = std::current_exception(); }
 
             auto GetStopToken() const noexcept -> std::stop_token { return this->state->stop.get_token(); }
         };
@@ -232,7 +232,7 @@ export namespace mcr {
          * @brief Start execution until its first suspension; repeated calls have no effect.
          * @throws std::logic_error If this task is empty or has been consumed.
          */
-        void Start() {
+        auto Start() -> void {
             if (!m_state) {
                 throw std::logic_error{ "mcr::Task::Start: task is empty." };
             }

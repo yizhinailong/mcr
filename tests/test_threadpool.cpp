@@ -12,7 +12,7 @@ static_assert(std::has_virtual_destructor_v<mcr::utils::ThreadPool>);
 namespace {
     using namespace std::chrono_literals;
 
-    void require(bool condition, std::string_view message) {
+    auto require(bool condition, std::string_view message) -> void {
         if (!condition) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -31,7 +31,7 @@ namespace {
     }
 
     template <typename Fn>
-    void rejects_configuration(Fn fn) {
+    auto rejects_configuration(Fn fn) -> void {
         try {
             fn();
         } catch (std::invalid_argument const&) {
@@ -53,7 +53,7 @@ namespace {
         return false;
     }
 
-    void check_configuration() {
+    auto check_configuration() -> void {
         rejects_configuration([] { mcr::utils::ThreadPool pool{ 0, 0 }; });
         rejects_configuration([] { mcr::utils::ThreadPool pool{ 3, 2 }; });
         rejects_configuration([] { mcr::utils::ThreadPool pool{ 1, 2, 0ms }; });
@@ -79,7 +79,7 @@ namespace {
         require(pool.GetMaxIdleTime() == 20ms, "idle timeout changes must be observable");
     }
 
-    void check_tasks() {
+    auto check_tasks() -> void {
         mcr::utils::ThreadPool pool{ 1, 4 };
         require(pool.Submit([](int a, int b) { return a + b; }, 20, 22).value().get() == 42, "Submit must automatically start a stopped pool and return a result");
 
@@ -134,7 +134,7 @@ namespace {
         require(pool.GetIdleThreadNum() == pool.GetCurrentThreadNum(), "Wait must observe all workers as idle");
     }
 
-    void check_pause_and_wait() {
+    auto check_pause_and_wait() -> void {
         mcr::utils::ThreadPool pool{ 1, 3 };
         pool.Start();
         for (int round{ 0 }; round < 20; ++round) {
@@ -157,7 +157,7 @@ namespace {
         }
     }
 
-    void check_growth_and_retirement() {
+    auto check_growth_and_retirement() -> void {
         mcr::utils::ThreadPool         pool{ 1, 4, 30ms };
         std::promise<void>             release;
         auto                           gate = release.get_future().share();
@@ -193,7 +193,7 @@ namespace {
         require(eventually([&] { return long_idle.GetCurrentThreadNum() == 0; }), "changing idle time must wake workers with a previous long timeout");
     }
 
-    void check_concurrent_submit() {
+    auto check_concurrent_submit() -> void {
         mcr::utils::ThreadPool                       pool{ 1, 4, 20ms };
         std::array<std::atomic<int>, 400>            counts{};
         std::array<std::vector<std::future<int>>, 4> results;
@@ -217,7 +217,7 @@ namespace {
         require(pool.GetCurrentThreadNum() <= 4, "concurrent submission must respect the maximum");
     }
 
-    void check_stop_and_restart() {
+    auto check_stop_and_restart() -> void {
         mcr::utils::ThreadPool pool{ 1, 1 };
         std::promise<void>     release;
         auto                   gate = release.get_future().share();

@@ -119,7 +119,7 @@ export namespace mcr {
          * @brief Append a null-terminated string in place.
          * @param rhs Null-terminated suffix to append.
          */
-        void operator+=(char const* rhs) {
+        auto operator+=(char const* rhs) -> void {
             m_str += rhs;
         }
 
@@ -127,7 +127,7 @@ export namespace mcr {
          * @brief Append a standard string in place.
          * @param rhs Suffix to append.
          */
-        void operator+=(std::string const& rhs) {
+        auto operator+=(std::string const& rhs) -> void {
             m_str += rhs;
         }
 
@@ -135,7 +135,7 @@ export namespace mcr {
          * @brief Append another option's text in place.
          * @param rhs Option of the same type whose text is appended.
          */
-        void operator+=(StringHolder<T> const& rhs) {
+        auto operator+=(StringHolder<T> const& rhs) -> void {
             m_str += rhs.m_str;
         }
 

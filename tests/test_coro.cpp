@@ -12,7 +12,7 @@ namespace {
     using namespace std::chrono_literals;
     using mcr::test::HttpServer;
 
-    void require(bool value, std::string_view message) {
+    auto require(bool value, std::string_view message) -> void {
         if (!value) {
             throw std::runtime_error{ std::string{ message } };
         }
@@ -30,7 +30,7 @@ namespace {
         return mcr::GetCoro(server.Url(path), proxies(), mcr::options::Timeout{ 3s }, std::move(options)...);
     }
 
-    void methods(HttpServer const& server) {
+    auto methods(HttpServer const& server) -> void {
         auto args  = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
         auto check = [](mcr::Task<mcr::Result<mcr::Response>> task, std::string_view method) {
             auto response = mcr::sync_wait(std::move(task)).value();
@@ -46,7 +46,7 @@ namespace {
         check(std::apply([](auto... values) { return mcr::PatchCoro(std::move(values)...); }, args), "PATCH");
     }
 
-    void ownership(HttpServer const& server) {
+    auto ownership(HttpServer const& server) -> void {
         mcr::Task<mcr::Result<mcr::Response>> task;
         {
             mcr::Body body{ "owned before suspension" };
@@ -69,7 +69,7 @@ namespace {
         co_return first.value().status_code + second.value().status_code;
     }
 
-    void concurrent(HttpServer const& server) {
+    auto concurrent(HttpServer const& server) -> void {
         std::mutex                threads_mutex;
         std::set<std::thread::id> io_threads;
         auto                      observer = mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
@@ -94,7 +94,7 @@ namespace {
         }
     }
 
-    void errors(HttpServer const& server) {
+    auto errors(HttpServer const& server) -> void {
         require(mcr::sync_wait(get(server, "/slow", mcr::options::Timeout{ 20ms })).value().error.code == mcr::ErrorCode::OPERATION_TIMEDOUT, "timeouts must remain response transport errors");
         auto http_error = mcr::sync_wait(get(server, "/error")).value();
         require(http_error.status_code == 404 && !http_error.error, "HTTP errors must remain ordinary responses");
@@ -119,7 +119,7 @@ namespace {
         co_return co_await get(server, "/stream", std::move(callback));
     }
 
-    void cancellation(HttpServer const& server) {
+    auto cancellation(HttpServer const& server) -> void {
         auto before    = server.Connections();
         auto cancelled = get(server, "/hello");
         require(cancelled.Cancel() && !cancelled.Cancel(), "Cancel must signal once, including before Start");
@@ -163,7 +163,7 @@ namespace {
         require(release.wait_for(3s) == std::future_status::ready, "continuation test must be released");
     }
 
-    void independent_io(HttpServer const& server) {
+    auto independent_io(HttpServer const& server) -> void {
         std::promise<void> entered, release, header;
         auto               began    = entered.get_future();
         auto               received = header.get_future();
@@ -184,7 +184,7 @@ namespace {
         require(mcr::sync_wait(std::move(next)).value().status_code == 200 && progressed, "a busy continuation must not prevent unrelated network I/O");
     }
 
-    void downloads(HttpServer const& server) {
+    auto downloads(HttpServer const& server) -> void {
         auto path = std::filesystem::temp_directory_path() / std::format("mcr_coro_{}.bin", std::chrono::steady_clock::now().time_since_epoch().count());
 
         struct RemoveFile {
@@ -209,7 +209,7 @@ namespace {
         require(!failed && failed.error().code == mcr::ErrorCode::WRITE_ERROR, "file opening failures must return WRITE_ERROR");
     }
 
-    void shutdown(HttpServer const& server) {
+    auto shutdown(HttpServer const& server) -> void {
         std::promise<void> arrived;
         auto               seen = arrived.get_future();
         std::promise<void> release;
