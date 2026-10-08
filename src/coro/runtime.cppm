@@ -40,8 +40,11 @@ export namespace mcr::detail {
         bool                                               prepared{ false };
         std::shared_ptr<CoroTransfer>                      next;                    ///< Intrusive pending/completion queue link; no allocation at completion.
 
-        CoroTransfer(std::shared_ptr<Session> owned_session, std::function<Result<void>(Session&)> prepare_request, std::stop_token token)
-            : session{ std::move(owned_session) }, prepare{ std::move(prepare_request) }, stop{ token } {}
+        CoroTransfer(
+            std::shared_ptr<Session>              owned_session,
+            std::function<Result<void>(Session&)> prepare_request,
+            std::stop_token                       token
+        ) : session{ std::move(owned_session) }, prepare{ std::move(prepare_request) }, stop{ token } {}
     };
 
     /**
