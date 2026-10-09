@@ -20,7 +20,7 @@ export namespace mcr {
      */
     class GlobalThreadPool : public utils::ThreadPool, public utils::Singleton<GlobalThreadPool> {
     private:
-        friend utils::Singleton<GlobalThreadPool>;
+        friend class utils::Singleton<GlobalThreadPool>;
 
     protected:
         /**

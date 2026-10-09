@@ -58,7 +58,7 @@ export namespace mcr {
          * @param headers Received raw header blocks.
          * @param received_cookies Cookies extracted from the handle.
          * @param transfer_error Transport outcome.
-         * @throws std::invalid_argument If the holder or easy handle is null.
+         * @return A response snapshot, or BAD_FUNCTION_ARGUMENT when the holder or easy handle is null.
          */
         [[nodiscard]] static auto FromCurl(std::shared_ptr<curl::CurlHolder> curl, std::string body, std::string headers, Cookies received_cookies = {}, Error transfer_error = {}) -> Result<Response> {
             Response result;

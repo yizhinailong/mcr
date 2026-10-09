@@ -24,14 +24,14 @@ export namespace mcr::curl {
 
     /**
      * @brief Load a PEM CA bundle into the OpenSSL context supplied to a curl SSL_CTX callback.
-     * @param curl Curl easy handle; unused, as in cpr.
      * @param sslctx OpenSSL SSL_CTX from the same OpenSSL library linked to mcr.
      * @param raw_cert_buf Borrowed NUL-terminated PEM bundle, alive throughout the callback.
      * @return CURLE_OK after loading at least one certificate, CURLE_ABORTED_BY_CALLBACK for
      * invalid arguments or malformed certificates, CURLE_OUT_OF_MEMORY on allocation failure,
      * or CURLE_NOT_BUILT_IN when OpenSSL context support is absent.
-     * @note Configure CURLOPT_SSL_CTX_FUNCTION and CURLOPT_SSL_CTX_DATA together. This callback
-     * never throws or owns the supplied pointers. Prefer options::Ssl(options::ssl::CaBuffer{...}) for portable CA loading.
+     * @note Configure CURLOPT_SSL_CTX_FUNCTION and CURLOPT_SSL_CTX_DATA together. The curl handle
+     * is unused, as in cpr. This callback never throws or owns the supplied pointers.
+     * Prefer options::Ssl(options::ssl::CaBuffer{...}) for portable CA loading.
      */
     auto sslctx_function_load_ca_cert_from_buffer(CURL* /*curl*/, void* sslctx, void* raw_cert_buf) noexcept -> CURLcode {
         if (!sslctx || !raw_cert_buf) {

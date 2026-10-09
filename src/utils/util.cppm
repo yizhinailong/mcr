@@ -314,12 +314,12 @@ export namespace mcr::utils {
 
     /**
      * @brief Forward curl diagnostic categories and borrowed bytes to a DebugCallback.
-     * @param handle Curl handle, unused by this adapter.
      * @param type Diagnostic category.
      * @param data Borrowed diagnostic bytes, including embedded nulls.
      * @param size Byte count.
      * @param debug Borrowed diagnostic consumer.
      * @return Zero, as required by curl's debug callback contract.
+     * @note The curl handle is unused, as in cpr.
      */
     auto debug_user_function(CURL* /*handle*/, curl_infotype type, char* data, std::size_t size, DebugCallback const* debug) -> int {
         (*debug)(static_cast<DebugCallback::InfoType>(type), { data, size });

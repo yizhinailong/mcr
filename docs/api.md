@@ -62,6 +62,8 @@ JSON 请求可将上面的 `Header` 和 `Body` 换成 `mcr::JsonBody{ mcr::Json{
   请求准备失败通过 `Result<Response>` 传入完成回调；用户回调异常通过 future 的 `Get()` 传播；传输错误位于 `Response::error`。
 - 零个选项是合法调用；例如 `Get()` 返回缺少 URL 的传输错误。
   零个批量参数返回空 vector；`MultiGet(std::tuple<>{})` 则执行一个缺少 URL 的请求。
+- 同步、异步、回调和批量入口均标注 `[[nodiscard]]`；丢弃 `Result` 会触发编译器警告，
+  配置错误不应被忽略。
 
 ## 批量请求
 

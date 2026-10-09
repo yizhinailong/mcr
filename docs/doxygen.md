@@ -85,7 +85,8 @@ WARN_IF_DOC_ERROR     = YES
 WARN_AS_ERROR         = NO
 ```
 
-当前源码仍有未补齐的成员注释、参数名不匹配及继承构造函数解析警告。
+当前源码仍有未补齐的成员注释警告，集中在默认特殊成员函数、协程 promise 与 awaiter
+内部接口，以及 `mcr::options::ssl` 中的少数 typedef。
 这些警告会输出到终端，目前不会阻止生成文档。
 `EXTRACT_ALL = YES` 会将未写文档的实体也视为已文档化，并关闭缺失文档警告，
 因此需要检查注释完整性时应保留 `NO`。

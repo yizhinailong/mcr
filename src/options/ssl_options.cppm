@@ -630,62 +630,52 @@ export namespace mcr::options {
         auto SetOption(ssl::TLS13_Ciphers const& opt) -> void { tls13_ciphers = opt.ciphers; }
 
         /**
-         * @brief Apply TLSv1.
-         * @param opt Protocol bound tag.
+         * @brief Apply the TLSv1 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::TLSv1 const& /*opt*/) -> void { ssl_version = CURL_SSLVERSION_TLSv1; }
 
         /**
-         * @brief Apply TLSv1_0.
-         * @param opt Protocol bound tag.
+         * @brief Apply the TLSv1_0 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::TLSv1_0 const& /*opt*/) -> void { ssl_version = CURL_SSLVERSION_TLSv1_0; }
 
         /**
-         * @brief Apply TLSv1_1.
-         * @param opt Protocol bound tag.
+         * @brief Apply the TLSv1_1 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::TLSv1_1 const& /*opt*/) -> void { ssl_version = CURL_SSLVERSION_TLSv1_1; }
 
         /**
-         * @brief Apply TLSv1_2.
-         * @param opt Protocol bound tag.
+         * @brief Apply the TLSv1_2 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::TLSv1_2 const& /*opt*/) -> void { ssl_version = CURL_SSLVERSION_TLSv1_2; }
 
         /**
-         * @brief Apply TLSv1_3.
-         * @param opt Protocol bound tag.
+         * @brief Apply the TLSv1_3 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::TLSv1_3 const& /*opt*/) -> void { ssl_version = CURL_SSLVERSION_TLSv1_3; }
 
         /**
-         * @brief Apply MaxTLSVersion.
-         * @param opt Protocol bound tag.
+         * @brief Apply the MaxTLSVersion protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::MaxTLSVersion const& /*opt*/) -> void { max_version = CURL_SSLVERSION_MAX_DEFAULT; }
 
         /**
-         * @brief Apply MaxTLSv1_0.
-         * @param opt Protocol bound tag.
+         * @brief Apply the MaxTLSv1_0 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::MaxTLSv1_0 const& /*opt*/) -> void { max_version = CURL_SSLVERSION_MAX_TLSv1_0; }
 
         /**
-         * @brief Apply MaxTLSv1_1.
-         * @param opt Protocol bound tag.
+         * @brief Apply the MaxTLSv1_1 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::MaxTLSv1_1 const& /*opt*/) -> void { max_version = CURL_SSLVERSION_MAX_TLSv1_1; }
 
         /**
-         * @brief Apply MaxTLSv1_2.
-         * @param opt Protocol bound tag.
+         * @brief Apply the MaxTLSv1_2 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::MaxTLSv1_2 const& /*opt*/) -> void { max_version = CURL_SSLVERSION_MAX_TLSv1_2; }
 
         /**
-         * @brief Apply MaxTLSv1_3.
-         * @param opt Protocol bound tag.
+         * @brief Apply the MaxTLSv1_3 protocol bound tag, which carries no value.
          */
         auto SetOption(ssl::MaxTLSv1_3 const& /*opt*/) -> void { max_version = CURL_SSLVERSION_MAX_TLSv1_3; }
     };
