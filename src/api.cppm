@@ -75,7 +75,12 @@ namespace mcr::detail {
      */
     template <typename Tuple>
     auto apply_options(Session& session, Tuple&& options) -> Result<void> {
-        return std::apply([&](auto&&... values) { return set_options(session, std::forward<decltype(values)>(values)...); }, std::forward<Tuple>(options));
+        return std::apply(
+            [&](auto&&... values) {
+                return set_options(session, std::forward<decltype(values)>(values)...);
+            },
+            std::forward<Tuple>(options)
+        );
     }
 
     /**
@@ -107,7 +112,12 @@ namespace mcr::detail {
      */
     template <auto Action, typename... Ts>
     auto request_async(Ts&&... options) -> Result<AsyncResponse> {
-        return mcr::async([](auto... values) { return request<Action>(std::move(values)...); }, std::forward<Ts>(options)...);
+        return mcr::async(
+            [](auto... values) {
+                return request<Action>(std::move(values)...);
+            },
+            std::forward<Ts>(options)...
+        );
     }
 
     /**
