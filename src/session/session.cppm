@@ -2027,8 +2027,11 @@ export namespace mcr {
             if (!next) {
                 throw std::bad_alloc{};
             }
-            (void)list.release();
-            list.reset(next);
+            // Appending keeps the current head, so only a fresh first node needs adopting;
+            // resetting unconditionally would free the node it is about to adopt.
+            if (next != list.get()) {
+                list.reset(next);
+            }
 
             return {};
         }
