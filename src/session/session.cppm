@@ -1966,6 +1966,13 @@ export namespace mcr {
             if (auto status = setOption(CURLOPT_NOSIGNAL, 1L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
+#ifdef _WIN32
+            // Follow cpr and verify against the Windows certificate store by default. OpenSSL
+            // builds need this before any Ssl option is supplied; Schannel already defaults to it.
+            if (auto status = setOption(CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
+#endif
             if (auto status = setOption(CURLOPT_TCP_KEEPALIVE, 1L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }

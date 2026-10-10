@@ -60,6 +60,8 @@ auto response = session.Get().value();
 
 - 默认启用证书链和主机名校验。`SetVerifySsl` 同时切换两项；
   `mcr::options::ssl::VerifyPeer` / `mcr::options::ssl::VerifyHost` 可分别配置。
+- Windows 上会话创建时即设置 `CURLSSLOPT_NATIVE_CA`，从系统证书库补充可信 CA，
+  无需先传入 `Ssl` 选项；显式 `Ssl` 选项会保留该默认值，`ssl::NoRevoke` 只追加吊销设置。
 - 支持证书和私钥文件/内存数据、密码、CA 文件/目录/内存数据、公钥固定、CRL、
   OCSP 状态校验、TLS 版本上下限、ALPN、密码套件、会话缓存及吊销检查选项。
 - `SetSslOptions` 替换整套配置，空字段清除旧凭据、CA blob 和公钥固定。
@@ -158,6 +160,9 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
   TLS 替换、blob 复制、代理凭据解码、批次归属检查和异常恢复采用上述行为。
 - 当前 curl 8.21 依赖不再支持的 SSLv2、SSLv3、NPN 不提供选项。
   保留 `SslFastStart` 类型，显式启用它固定返回 `NOT_BUILT_IN`；不保留旧版 curl 的设置路径。
+- 上游 #1316 要求默认启用原生 CA 存储，mcr 的默认值与之一致。上游按 libcurl 版本门控并在
+  所有平台设置，mcr 改为按 `_WIN32` 门控：curl 头文件说明该标志目前只在 Windows 实现，
+  非 Windows 构建设置与否效果相同。
 - 参数追加到已有 query，且位于 fragment 之前。
 - 每次准备请求都清除上一请求的方法和 curl 内容配置，避免复用时残留；
   保留 Multipart 的 GET 仍使用 GET。HEAD 与 Download 忽略存储的 Content，
