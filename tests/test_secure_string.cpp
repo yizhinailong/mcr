@@ -9,8 +9,8 @@ namespace {
 
     void const* g_watched_storage{ nullptr };
     std::size_t g_watched_bytes{ 0 };
-    bool        g_release_observed{ false };
-    bool        g_release_zeroed{ false };
+    bool g_release_observed{ false };
+    bool g_release_zeroed{ false };
 
     /**
      * @brief Inspect only the watched allocation while it still exists, before free.
@@ -18,20 +18,20 @@ namespace {
     auto observe_release(void* storage) noexcept -> void {
         if (storage == g_watched_storage && g_watched_storage != nullptr) {
             auto const* bytes = static_cast<unsigned char const*>(storage);
-            g_release_zeroed  = true;
+            g_release_zeroed = true;
             for (std::size_t index{ 0 }; index < g_watched_bytes; ++index) {
                 g_release_zeroed &= bytes[index] == 0;
             }
             g_release_observed = true;
-            g_watched_storage  = nullptr;
+            g_watched_storage = nullptr;
         }
     }
 
     auto watch_release(void const* storage, std::size_t bytes) noexcept -> void {
-        g_watched_storage  = storage;
-        g_watched_bytes    = bytes;
+        g_watched_storage = storage;
+        g_watched_bytes = bytes;
         g_release_observed = false;
-        g_release_zeroed   = false;
+        g_release_zeroed = false;
     }
 
     auto require(bool condition, std::string_view message) -> void {
@@ -107,10 +107,10 @@ namespace {
     static_assert(std::is_nothrow_move_assignable_v<SecureString>);
 
     auto check_allocator_compatibility() -> void {
-        SecureAllocator<char>       chars;
+        SecureAllocator<char> chars;
         SecureAllocator<char> const equal;
-        SecureAllocator<int>        copied{ equal };
-        SecureAllocator<int>        moved{ std::move(chars) };
+        SecureAllocator<int> copied{ equal };
+        SecureAllocator<int> moved{ std::move(chars) };
         require(copied.IsEqual(equal) && equal == moved && !(copied != equal), "allocators must compare equal across element types");
         require(&(copied = equal) == &copied && &(moved = std::move(chars)) == &moved, "cross-type assignments must return the destination");
 
@@ -128,17 +128,17 @@ namespace {
         };
 
         SecureAllocator<Aligned> aligned;
-        auto*                    storage = aligned.allocate(2);
+        auto* storage = aligned.allocate(2);
         require(reinterpret_cast<std::uintptr_t>(storage) % alignof(Aligned) == 0, "allocation must preserve extended alignment");
         aligned.deallocate(storage, 2);
     }
 
     template <typename T>
     auto check_raw_wipe() -> void {
-        SecureAllocator<T>    allocator;
-        SecureAllocator<T>    equal;
+        SecureAllocator<T> allocator;
+        SecureAllocator<T> equal;
         constexpr std::size_t COUNT{ 7 };
-        auto*                 storage = allocator.allocate(COUNT);
+        auto* storage = allocator.allocate(COUNT);
         std::memset(storage, 0xA5, COUNT * sizeof(T));
         watch_release(storage, COUNT * sizeof(T));
         equal.deallocate(storage, COUNT);
@@ -158,7 +158,7 @@ namespace {
 
         using Traits = std::allocator_traits<SecureAllocator<Value>>;
         SecureAllocator<Value> allocator;
-        auto*                  storage = Traits::allocate(allocator, 2);
+        auto* storage = Traits::allocate(allocator, 2);
         Traits::construct(allocator, storage, 41);
         Traits::construct(allocator, storage + 1, 42);
         require(storage[0].value == 41 && storage[1].value == 42, "allocator_traits must construct non-default-constructible elements");
@@ -172,12 +172,12 @@ namespace {
     auto check_string_operations() -> void {
         SecureString empty;
         require(empty.empty() && empty.c_str()[0] == '\0', "default strings must be empty and null-terminated");
-        std::string  source(80, 's');
+        std::string source(80, 's');
         SecureString owned{ std::string_view{ source } };
         source.front() = 'x';
         require(owned.front() == 's', "construction must own an independent copy of input text");
 
-        char const   bytes[]{ 'a', '\0', 'b', 'c' };
+        char const bytes[]{ 'a', '\0', 'b', 'c' };
         SecureString binary{ bytes, sizeof(bytes) };
         require(std::string_view{ binary } == std::string_view{ bytes, sizeof(bytes) }, "construction and views must preserve embedded null bytes");
         require(binary.c_str()[binary.size()] == '\0', "binary strings must also have a trailing terminator");
@@ -206,7 +206,7 @@ namespace {
     auto check_string_wipe() -> void {
         {
             SecureString secret(96, 's');
-            auto const   allocation_size = secret.capacity() + 1;
+            auto const allocation_size = secret.capacity() + 1;
             secret.resize(secret.capacity(), 'x');
             watch_release(secret.data(), allocation_size);
             secret.clear();
@@ -214,7 +214,7 @@ namespace {
         require_wiped();
 
         SecureString growing(96, 'g');
-        auto const   old_capacity = growing.capacity();
+        auto const old_capacity = growing.capacity();
         growing.resize(old_capacity, 'x');
         watch_release(growing.data(), old_capacity + 1);
         growing.reserve(old_capacity * 2 + 1);

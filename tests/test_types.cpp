@@ -34,16 +34,16 @@ namespace {
     };
 
     auto check_construction() -> bool {
-        bool           passed{ true };
+        bool passed{ true };
         mcr::Url const empty;
         passed &= check(
             empty.Str().empty() && empty.CStr()[0] == '\0',
             "default URL must be empty and null-terminated"
         );
 
-        std::string    source{ "https://example.test/api" };
-        mcr::Url const from_string   = source;
-        mcr::Url const from_view     = std::string_view{ source }.substr(0, 20);
+        std::string source{ "https://example.test/api" };
+        mcr::Url const from_string = source;
+        mcr::Url const from_view = std::string_view{ source }.substr(0, 20);
         mcr::Url const from_c_string = source.c_str();
         source.assign("changed");
         passed &= check(from_string == "https://example.test/api", "string construction must own its text");
@@ -57,7 +57,7 @@ namespace {
         passed &=
             check(from_temporary.Str() == std::string(128, 'x'), "URL must retain a temporary string's contents");
 
-        char const     bytes[]{ 'a', '\0', 'b', 'c' };
+        char const bytes[]{ 'a', '\0', 'b', 'c' };
         mcr::Url const from_bytes(bytes, sizeof(bytes));
         mcr::Url const binary_view(std::string_view{ bytes, sizeof(bytes) });
         passed &= check(
@@ -96,8 +96,8 @@ namespace {
         mcr::Url assigned;
         assigned = moved;
         mcr::Url move_assigned;
-        move_assigned  = std::move(moved);
-        passed        &= check(
+        move_assigned = std::move(moved);
+        passed &= check(
             assigned == move_assigned && assigned.Str() == std::string(128, 'x') + "/copy",
             "copy and move assignment must preserve the destination text"
         );
@@ -112,10 +112,10 @@ namespace {
     }
 
     auto check_operators() -> bool {
-        bool              passed{ true };
-        mcr::Url const    base{ "https://example.test" };
+        bool passed{ true };
+        mcr::Url const base{ "https://example.test" };
         std::string const suffix{ "/api" };
-        mcr::Url const    option_suffix{ suffix };
+        mcr::Url const option_suffix{ suffix };
         passed &=
             check(base + "/api" == "https://example.test/api", "C string concatenation must preserve URL text");
         passed &= check(base + suffix == base + option_suffix, "string and same-type concatenation must agree");
@@ -129,7 +129,7 @@ namespace {
             check(appended == "https://example.test/api/v1/items", "all append overloads must append their text");
         mcr::Url repeated{ "ab" };
         repeated += repeated;
-        passed   &= check(repeated == "abab", "a holder must support appending itself");
+        passed &= check(repeated == "abab", "a holder must support appending itself");
 
         char equal_text[]{ "https://example.test" };
         passed &= check(
@@ -151,7 +151,7 @@ namespace {
         passed &=
             check(base != suffix && base != option_suffix, "different strings and options must compare unequal");
 
-        char const     bytes[]{ 'a', '\0', 'b' };
+        char const bytes[]{ 'a', '\0', 'b' };
         mcr::Url const binary(bytes, sizeof(bytes));
         mcr::Url const other_binary("a\0c", 3);
         passed &= check(
@@ -160,7 +160,7 @@ namespace {
         );
         mcr::Url binary_appended{ binary };
         binary_appended += binary;
-        passed          &= check(
+        passed &= check(
             binary_appended.Str() == std::string(bytes, sizeof(bytes)) + std::string(bytes, sizeof(bytes)),
             "holder append must preserve embedded nulls"
         );
@@ -184,7 +184,7 @@ namespace {
     }
 
     auto check_headers() -> bool {
-        bool                              passed{ true };
+        bool passed{ true };
         mcr::CaseInsensitiveCompare const compare;
         static_assert(noexcept(compare(std::declval<std::string const&>(), std::declval<std::string const&>())));
         passed &= check(
@@ -222,8 +222,8 @@ namespace {
             !inserted && entry->second == "Application/JSON" && headers.size() == 2,
             "equivalent names must not create duplicate headers"
         );
-        headers["content-TYPE"]  = "text/plain";
-        passed                  &= check(
+        headers["content-TYPE"] = "text/plain";
+        passed &= check(
             headers.size() == 2 && headers.at("Content-Type") == "text/plain",
             "subscript must update an equivalent existing key"
         );
@@ -231,9 +231,9 @@ namespace {
             headers.find("CONTENT-TYPE")->first == "Content-Type",
             "updates must preserve the original key spelling"
         );
-        headers["Accept"]  = "";
-        passed            &= check(headers.at("ACCEPT").empty(), "headers must support empty values");
-        passed            &= check(
+        headers["Accept"] = "";
+        passed &= check(headers.at("ACCEPT").empty(), "headers must support empty values");
+        passed &= check(
             headers.erase("x-TRACE") == 1 && !headers.contains("X-Trace"),
             "header erasure must ignore name case"
         );

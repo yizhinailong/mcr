@@ -21,7 +21,7 @@ auto main() -> int {
             { "active",                                                         true },
             { "values", mcr::Json::array({ 1, nullptr, "\xe4\xbd\xa0\xe5\xa5\xbd" }) }
         };
-        mcr::Json const     expected = source;
+        mcr::Json const expected = source;
         mcr::JsonBody const body{ source };
         source["name"] = "changed";
         bool passed{ check(mcr::Json::parse(body.Str()) == expected, "body must retain a snapshot of nested JSON and UTF-8 strings") };

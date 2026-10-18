@@ -19,7 +19,7 @@ static_assert(std::is_same_v<std::remove_cvref_t<decltype(std::declval<mcr::curl
 namespace {
 
     std::atomic<std::ptrdiff_t> g_live_allocations{ 0 };
-    std::atomic_bool            g_fail_allocations{ false };
+    std::atomic_bool g_fail_allocations{ false };
 
     auto tracked_malloc(std::size_t size) noexcept -> void* {
         if (g_fail_allocations.load()) {
@@ -55,7 +55,7 @@ namespace {
 
     auto tracked_strdup(char const* input) noexcept -> char* {
         auto const length{ std::strlen(input) + 1 };
-        auto*      result{ static_cast<char*>(tracked_malloc(length)) };
+        auto* result{ static_cast<char*>(tracked_malloc(length)) };
         if (result) {
             std::memcpy(result, input, length);
         }
@@ -95,9 +95,9 @@ namespace {
     }
 
     auto attach_resources(mcr::curl::CurlHolder& holder, int& mime_frees) -> bool {
-        holder.chunk             = curl_slist_append(nullptr, "X-Test: owned");
+        holder.chunk = curl_slist_append(nullptr, "X-Test: owned");
         holder.resolve_curl_list = curl_slist_append(nullptr, "example.test:80:127.0.0.1");
-        holder.multipart         = curl_mime_init(holder.handle);
+        holder.multipart = curl_mime_init(holder.handle);
         if (!check(holder.chunk && holder.resolve_curl_list && holder.multipart, "fixture must allocate header, resolve, and MIME resources")) {
             return false;
         }
@@ -155,8 +155,8 @@ namespace {
     }
 
     auto check_moves() -> bool {
-        int  source_frees{ 0 };
-        int  replaced_frees{ 0 };
+        int source_frees{ 0 };
+        int replaced_frees{ 0 };
         bool passed{ true };
         {
             auto source = mcr::curl::CurlHolder::Create().value();
@@ -168,13 +168,13 @@ namespace {
             auto* resolve{ source.resolve_curl_list };
             auto* multipart{ source.multipart };
             source.error.front() = 'x';
-            auto const            old_error{ source.error };
+            auto const old_error{ source.error };
             mcr::curl::CurlHolder moved{ std::move(source) };
             passed &= check(has_no_resources(source) && moved.handle == handle && moved.chunk == chunk && moved.resolve_curl_list == resolve && moved.multipart == multipart && moved.error == old_error && source_frees == 0, "move construction must transfer every resource and preserve error text without freeing the source resources");
             passed &= check_error_buffer(moved);
             passed &= check(source.error == old_error, "moved handles must not write to the source object's error buffer");
             auto const moved_error{ moved.error };
-            auto       destination = mcr::curl::CurlHolder::Create().value();
+            auto destination = mcr::curl::CurlHolder::Create().value();
             if (!attach_resources(destination, replaced_frees)) {
                 return false;
             }
@@ -182,28 +182,28 @@ namespace {
             passed &= check_error_buffer(destination);
             passed &= check(moved.error == moved_error, "move assignment must rebind error storage without modifying the former holder");
             auto* self{ &destination };
-            destination                = std::move(*self);
-            passed                    &= check(destination.handle == handle && destination.chunk == chunk && destination.resolve_curl_list == resolve && destination.multipart == multipart && source_frees == 0 && destination.UrlEncode("still usable").value() == "still%20usable", "self-move must preserve resources and usability");
-            passed                    &= check(std::string_view{ destination.chunk->data } == "X-Test: owned" && std::string_view{ destination.resolve_curl_list->data } == "example.test:80:127.0.0.1", "owned lists must remain valid after moving");
+            destination = std::move(*self);
+            passed &= check(destination.handle == handle && destination.chunk == chunk && destination.resolve_curl_list == resolve && destination.multipart == multipart && source_frees == 0 && destination.UrlEncode("still usable").value() == "still%20usable", "self-move must preserve resources and usability");
+            passed &= check(std::string_view{ destination.chunk->data } == "X-Test: owned" && std::string_view{ destination.resolve_curl_list->data } == "example.test:80:127.0.0.1", "owned lists must remain valid after moving");
 
-            auto const encode_failure  = source.UrlEncode("input");
-            auto const decode_failure  = source.UrlDecode("input");
-            passed                    &= check(!encode_failure && !decode_failure && encode_failure.error().code == mcr::ErrorCode::FAILED_INIT && decode_failure.error().code == mcr::ErrorCode::FAILED_INIT, "URL conversion requires an active handle");
+            auto const encode_failure = source.UrlEncode("input");
+            auto const decode_failure = source.UrlDecode("input");
+            passed &= check(!encode_failure && !decode_failure && encode_failure.error().code == mcr::ErrorCode::FAILED_INIT && decode_failure.error().code == mcr::ErrorCode::FAILED_INIT, "URL conversion requires an active handle");
             mcr::curl::CurlHolder empty{ std::move(source) };
             passed &= check(has_no_resources(empty), "moving an empty holder must remain safe");
-            source  = std::move(destination);
+            source = std::move(destination);
             passed &= check(has_no_resources(destination) && source.UrlDecode("reused%20holder").value() == "reused holder", "a moved-from holder must be reusable by move assignment");
         }
         passed &= check(source_frees == 1 && replaced_frees == 1, "each MIME resource must be freed exactly once across moves and destruction");
 
         int discarded_frees{ 0 };
         {
-            auto                  source = mcr::curl::CurlHolder::Create().value();
+            auto source = mcr::curl::CurlHolder::Create().value();
             mcr::curl::CurlHolder owner{ std::move(source) };
             if (!attach_resources(owner, discarded_frees)) {
                 return false;
             }
-            owner   = std::move(source);
+            owner = std::move(source);
             passed &= check(has_no_resources(owner) && discarded_frees == 1, "assignment from an empty holder must release the destination's prior resources");
         }
         return passed;
@@ -214,11 +214,11 @@ namespace {
         {
             FailAllocations fail;
             {
-                auto const failure  = mcr::curl::CurlHolder::Create();
-                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
+                auto const failure = mcr::curl::CurlHolder::Create();
+                passed &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
             }
         }
-        auto       holder = mcr::curl::CurlHolder::Create().value();
+        auto holder = mcr::curl::CurlHolder::Create().value();
         auto const before{ g_live_allocations.load() };
         {
             FailAllocations fail;

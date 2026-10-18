@@ -23,9 +23,9 @@ namespace {
      * @brief Check failure propagation without consuming an invalid expected value.
      */
     auto check_requests() -> void {
-        mcr::test::HttpServer           server;
+        mcr::test::HttpServer server;
         mcr::options::HttpVersion const invalid{ static_cast<mcr::options::HttpVersionCode>(255) };
-        mcr::options::Proxies const     proxies{
+        mcr::options::Proxies const proxies{
             {     "http",  "" },
             { "no_proxy", "*" }
         };

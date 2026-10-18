@@ -23,8 +23,8 @@ namespace {
      * @brief Observe task capture release and verify destruction can reenter the pool.
      */
     struct Capture {
-        mcr::utils::ThreadPool& pool;     ///< Pool whose mutex must be unlocked during release.
-        int&                    releases; ///< Number of times this capture has been destroyed.
+        mcr::utils::ThreadPool& pool; ///< Pool whose mutex must be unlocked during release.
+        int& releases;                ///< Number of times this capture has been destroyed.
 
         /**
          * @brief Acquire the pool mutex before recording capture destruction.
@@ -110,10 +110,10 @@ namespace {
      * @return True if submission encountered the injected allocation failure.
      */
     auto check_allocation_failure(std::ptrdiff_t fail_after) -> bool {
-        constexpr std::size_t       TASK_COUNT{ 24 };
+        constexpr std::size_t TASK_COUNT{ 24 };
         std::array<int, TASK_COUNT> releases{};
-        int                         runs{};
-        mcr::utils::ThreadPool      pool{ 1, 1 };
+        int runs{};
+        mcr::utils::ThreadPool pool{ 1, 1 };
         pool.Start();
         pool.Pause();
         std::array<std::unique_ptr<Capture>, TASK_COUNT> captures;

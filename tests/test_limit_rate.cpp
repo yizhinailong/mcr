@@ -37,14 +37,14 @@ int main() {
     mcr::options::LimitRate original{ 1024, 2048 };
     mcr::options::LimitRate copied{ original };
     original.downrate = 0;
-    original.uprate   = -1;
+    original.uprate = -1;
     mcr::options::LimitRate moved{ std::move(copied) };
     mcr::options::LimitRate assigned{ 0, 0 };
     assigned = moved;
     mcr::options::LimitRate move_assigned{ 0, 0 };
-    move_assigned     = std::move(moved);
+    move_assigned = std::move(moved);
     assigned.downrate = 4096;
-    assigned.uprate   = 8192;
+    assigned.uprate = 8192;
     if (original.downrate != 0 || original.uprate != -1 || move_assigned.downrate != 1024 || move_assigned.uprate != 2048 || assigned.downrate != 4096 || assigned.uprate != 8192) {
         std::println("test_limit_rate: public updates, copying, and moving must preserve independent download/upload values");
         return 1;

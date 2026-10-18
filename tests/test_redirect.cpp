@@ -65,32 +65,32 @@ namespace {
         }
 
         mcr::options::Redirect option{};
-        option.maximum        = 0L;
-        option.follow         = false;
+        option.maximum = 0L;
+        option.follow = false;
         option.cont_send_cred = true;
-        option.post_flags     = Flags::POST_302;
+        option.post_flags = Flags::POST_302;
         mcr::options::Redirect copied{ option };
-        option   = mcr::options::Redirect{};
+        option = mcr::options::Redirect{};
         passed &= check(matches(copied, 0L, false, true, Flags::POST_302), "copy construction must preserve public updates independently");
-        copied  = option;
+        copied = option;
         passed &= check(matches(copied, 50L, true, false, Flags::NONE), "assignment must replace all four options");
         return passed;
     }
 
     auto check_flag_updates() -> bool {
         Flags flags{ Flags::POST_301 };
-        bool  passed{ check(&(flags |= Flags::POST_302) == &flags && flags == (Flags::POST_301 | Flags::POST_302), "operator|= must combine bits and return its left operand by reference") };
-        passed                     &= check(&(flags &= ~Flags::POST_301) == &flags && flags == Flags::POST_302, "operator&= must allow clearing a selected bit and return its left operand by reference");
-        passed                     &= check(&(flags ^= Flags::POST_ALL) == &flags && flags == (Flags::POST_301 | Flags::POST_303), "operator^= must toggle selected bits and return its left operand by reference");
+        bool passed{ check(&(flags |= Flags::POST_302) == &flags && flags == (Flags::POST_301 | Flags::POST_302), "operator|= must combine bits and return its left operand by reference") };
+        passed &= check(&(flags &= ~Flags::POST_301) == &flags && flags == Flags::POST_302, "operator&= must allow clearing a selected bit and return its left operand by reference");
+        passed &= check(&(flags ^= Flags::POST_ALL) == &flags && flags == (Flags::POST_301 | Flags::POST_303), "operator^= must toggle selected bits and return its left operand by reference");
         (flags |= Flags::POST_302) &= Flags::POST_303;
-        passed                     &= check(flags == Flags::POST_303 && any(flags), "compound assignments must chain and any must be found by argument-dependent lookup");
-        flags                      ^= flags;
-        passed                     &= check(!any(flags), "self xor must clear every bit");
-        flags                       = static_cast<Flags>(0x80);
-        flags                      |= Flags::POST_301;
-        flags                      &= ~Flags::POST_301;
-        flags                      ^= Flags::POST_302;
-        passed                     &= check(std::to_underlying(flags) == 0x82, "compound operations must preserve unnamed bits");
+        passed &= check(flags == Flags::POST_303 && any(flags), "compound assignments must chain and any must be found by argument-dependent lookup");
+        flags ^= flags;
+        passed &= check(!any(flags), "self xor must clear every bit");
+        flags = static_cast<Flags>(0x80);
+        flags |= Flags::POST_301;
+        flags &= ~Flags::POST_301;
+        flags ^= Flags::POST_302;
+        passed &= check(std::to_underlying(flags) == 0x82, "compound operations must preserve unnamed bits");
         return passed;
     }
 

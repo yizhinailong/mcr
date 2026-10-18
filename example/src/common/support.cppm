@@ -24,7 +24,7 @@ export namespace example {
      * @brief Hold command-line values for the duration of an example.
      */
     struct Arguments {
-        std::string           url;    ///< HTTP endpoint supplied by the caller.
+        std::string url;              ///< HTTP endpoint supplied by the caller.
         std::filesystem::path output; ///< Destination for file downloads, otherwise empty.
     };
 
@@ -58,7 +58,7 @@ export namespace example {
             }
         }
 
-        Runtime(Runtime const&)                    = delete;
+        Runtime(Runtime const&) = delete;
         auto operator=(Runtime const&) -> Runtime& = delete;
 
         /**
@@ -126,12 +126,12 @@ export namespace example {
      */
     template <typename Handler>
     auto run(
-        int              argc,
-        char**           argv,
+        int argc,
+        char** argv,
         std::string_view name,
-        Handler&&        handler,
-        RuntimeKind      kind         = RuntimeKind::Synchronous,
-        bool             needs_output = false
+        Handler&& handler,
+        RuntimeKind kind = RuntimeKind::Synchronous,
+        bool needs_output = false
     ) -> int {
         auto usage = [&] {
             std::println("Usage: {} <URL>{}", name, needs_output ? " <OUTPUT>" : "");
@@ -146,7 +146,7 @@ export namespace example {
         }
         try {
             Arguments const args{ argv[1], needs_output ? std::filesystem::path{ argv[2] } : std::filesystem::path{} };
-            Runtime         runtime{ kind };
+            Runtime runtime{ kind };
             return std::invoke(std::forward<Handler>(handler), args);
         } catch (std::bad_expected_access<mcr::Error> const& error) {
             return print_error(error.error());

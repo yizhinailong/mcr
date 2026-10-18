@@ -19,13 +19,13 @@ export namespace mcr {
      */
     class Cookie {
     private:
-        std::string                           m_name;                        ///< Owned cookie name.
-        std::string                           m_value;                       ///< Owned cookie value.
-        std::string                           m_domain;                      ///< Domain associated with the cookie.
-        bool                                  m_include_subdomains{ false }; ///< Whether the cookie applies to subdomains.
-        std::string                           m_path;                        ///< Path associated with the cookie.
-        bool                                  m_https_only{ false };         ///< Whether the cookie is restricted to HTTPS.
-        std::chrono::system_clock::time_point m_expires{};                   ///< Expiration time, defaulting to the Unix epoch.
+        std::string m_name;                                ///< Owned cookie name.
+        std::string m_value;                               ///< Owned cookie value.
+        std::string m_domain;                              ///< Domain associated with the cookie.
+        bool m_include_subdomains{ false };                ///< Whether the cookie applies to subdomains.
+        std::string m_path;                                ///< Path associated with the cookie.
+        bool m_https_only{ false };                        ///< Whether the cookie is restricted to HTTPS.
+        std::chrono::system_clock::time_point m_expires{}; ///< Expiration time, defaulting to the Unix epoch.
 
     public:
         /**
@@ -44,13 +44,13 @@ export namespace mcr {
          * @param expires Expiration time, defaulting to the Unix epoch.
          */
         Cookie(
-            std::string                           name,
-            std::string                           value,
-            std::string                           domain             = {},
-            bool                                  include_subdomains = false,
-            std::string                           path               = "/",
-            bool                                  https_only         = false,
-            std::chrono::system_clock::time_point expires            = std::chrono::system_clock::from_time_t(0)
+            std::string name,
+            std::string value,
+            std::string domain = {},
+            bool include_subdomains = false,
+            std::string path = "/",
+            bool https_only = false,
+            std::chrono::system_clock::time_point expires = std::chrono::system_clock::from_time_t(0)
         ) : m_name{ std::move(name) }, m_value{ std::move(value) }, m_domain{ std::move(domain) }, m_include_subdomains{ include_subdomains }, m_path{ std::move(path) }, m_https_only{ https_only }, m_expires{ expires } {}
 
         /**
@@ -132,7 +132,7 @@ export namespace mcr {
     public:
         bool encode{ true };                                        ///< Whether request serialization percent-encodes cookie names and unquoted values.
 
-        using iterator       = std::vector<Cookie>::iterator;       ///< Mutable cookie iterator.
+        using iterator = std::vector<Cookie>::iterator;             ///< Mutable cookie iterator.
         using const_iterator = std::vector<Cookie>::const_iterator; ///< Read-only cookie iterator.
 
         /**

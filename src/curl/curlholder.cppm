@@ -25,11 +25,11 @@ export namespace mcr::curl {
      */
     struct CurlHolder {
     public:
-        CURL*                             handle{ nullptr };            ///< Owned easy handle, null after moving out.
-        curl_slist*                       chunk{ nullptr };             ///< Owned request header list.
-        curl_slist*                       resolve_curl_list{ nullptr }; ///< Owned hostname resolution override list.
-        curl_mime*                        multipart{ nullptr };         ///< Owned multipart MIME data.
-        std::array<char, CURL_ERROR_SIZE> error{};                      ///< Error storage registered with the active handle.
+        CURL* handle{ nullptr };                   ///< Owned easy handle, null after moving out.
+        curl_slist* chunk{ nullptr };              ///< Owned request header list.
+        curl_slist* resolve_curl_list{ nullptr };  ///< Owned hostname resolution override list.
+        curl_mime* multipart{ nullptr };           ///< Owned multipart MIME data.
+        std::array<char, CURL_ERROR_SIZE> error{}; ///< Error storage registered with the active handle.
 
         /**
          * @brief Initialize an easy handle and register this holder's error buffer.
@@ -52,7 +52,7 @@ export namespace mcr::curl {
             return result;
         }
 
-        CurlHolder(CurlHolder const&)                    = delete;
+        CurlHolder(CurlHolder const&) = delete;
         auto operator=(CurlHolder const&) -> CurlHolder& = delete;
 
         /**
@@ -83,11 +83,11 @@ export namespace mcr::curl {
         auto operator=(CurlHolder&& other) noexcept -> CurlHolder& {
             if (this != &other) {
                 releaseResources();
-                handle            = std::exchange(other.handle, nullptr);
-                chunk             = std::exchange(other.chunk, nullptr);
+                handle = std::exchange(other.handle, nullptr);
+                chunk = std::exchange(other.chunk, nullptr);
                 resolve_curl_list = std::exchange(other.resolve_curl_list, nullptr);
-                multipart         = std::exchange(other.multipart, nullptr);
-                error             = other.error;
+                multipart = std::exchange(other.multipart, nullptr);
+                error = other.error;
                 bindErrorBuffer();
             }
             return *this;
@@ -132,7 +132,7 @@ export namespace mcr::curl {
             if (input.empty()) {
                 return {};
             }
-            int                                         output_length{ 0 };
+            int output_length{ 0 };
             std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_unescape(handle, input.data(), *length, &output_length), &curl_free };
             if (!output) {
                 return std::unexpected{

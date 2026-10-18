@@ -22,13 +22,13 @@ export namespace mcr {
         /**
          * @brief Construct an empty certificate information collection.
          */
-        CertInfo()                          = default;
+        CertInfo() = default;
 
         /**
          * @brief Copy all entries into independent storage.
          * @param other Collection to copy.
          */
-        CertInfo(CertInfo const& other)     = default;
+        CertInfo(CertInfo const& other) = default;
 
         /**
          * @brief Transfer the entries from another collection.
@@ -47,7 +47,7 @@ export namespace mcr {
          */
         ~CertInfo() noexcept = default;
 
-        using iterator       = std::vector<std::string>::iterator;       ///< Mutable entry iterator.
+        using iterator = std::vector<std::string>::iterator;             ///< Mutable entry iterator.
         using const_iterator = std::vector<std::string>::const_iterator; ///< Read-only entry iterator.
 
         /**

@@ -159,7 +159,7 @@ export namespace mcr::options {
         POST_302 = 0x1 << 1,                       ///< Preserve POST after a 302 redirect.
         POST_303 = 0x1 << 2,                       ///< Preserve POST after a 303 redirect.
         POST_ALL = POST_301 | POST_302 | POST_303, ///< Preserve POST for all three redirect statuses.
-        NONE     = 0x0                             ///< Use the default POST redirect behavior.
+        NONE = 0x0                                 ///< Use the default POST redirect behavior.
     };
 
     /**
@@ -246,9 +246,9 @@ export namespace mcr::options {
      */
     class Redirect {
     public:
-        long              maximum{ 50L };                        ///< Maximum redirects to follow; zero refuses redirects and -1 means unlimited.
-        bool              follow{ true };                        ///< Whether to follow 3xx redirect responses.
-        bool              cont_send_cred{ false };               ///< Whether to continue sending authentication credentials when the hostname changes.
+        long maximum{ 50L };                                     ///< Maximum redirects to follow; zero refuses redirects and -1 means unlimited.
+        bool follow{ true };                                     ///< Whether to follow 3xx redirect responses.
+        bool cont_send_cred{ false };                            ///< Whether to continue sending authentication credentials when the hostname changes.
         PostRedirectFlags post_flags{ PostRedirectFlags::NONE }; ///< Which redirect statuses preserve POST.
 
         /**
@@ -264,9 +264,9 @@ export namespace mcr::options {
          * @param post_flags_param Redirect statuses for which to preserve POST.
          */
         Redirect(
-            long              maximum_param,
-            bool              follow_param,
-            bool              cont_send_cred_param,
+            long maximum_param,
+            bool follow_param,
+            bool cont_send_cred_param,
             PostRedirectFlags post_flags_param
         ) : maximum{ maximum_param },
             follow{ follow_param },

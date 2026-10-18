@@ -104,7 +104,7 @@ export namespace mcr::options {
         class KeyFile {
         public:
             std::filesystem::path filename; ///< Owned key path.
-            utils::SecureString   password; ///< Owned passphrase in secure storage.
+            utils::SecureString password;   ///< Owned passphrase in secure storage.
 
             /**
              * @brief Own a key path and passphrase.
@@ -139,7 +139,7 @@ export namespace mcr::options {
          */
         class KeyBlob {
         public:
-            std::string        blob;     ///< Owned private-key bytes.
+            std::string blob;             ///< Owned private-key bytes.
             utils::SecureString password; ///< Owned passphrase in secure storage.
 
             /**
@@ -460,30 +460,30 @@ export namespace mcr::options {
      * Obsolete SSLv2, SSLv3 and NPN options are not exposed by the project's curl 8.21 dependency.
      */
     struct SslOptions {
-        std::string        cert_file;                                  ///< Client certificate path.
-        utils::SecureString cert_blob;                                  ///< In-memory client certificate.
-        std::string        cert_type;                                  ///< Client certificate encoding.
-        std::string        key_file;                                   ///< Private-key path.
-        utils::SecureString key_blob;                                   ///< In-memory private key.
-        std::string        key_type;                                   ///< Private-key encoding.
-        utils::SecureString key_pass;                                   ///< Private-key password.
-        std::string        pinned_public_key;                          ///< Public-key pin specification.
-        bool               enable_alpn{ true };                        ///< Advertise ALPN.
-        bool               verify_host{ true };                        ///< Verify the requested hostname.
-        bool               verify_peer{ true };                        ///< Verify the certificate chain.
-        bool               verify_status{ false };                     ///< Require stapled OCSP status.
-        long               ssl_version{ CURL_SSLVERSION_DEFAULT };     ///< Minimum TLS version.
-        long               max_version{ CURL_SSLVERSION_MAX_DEFAULT }; ///< Maximum TLS version.
-        bool               ssl_no_revoke{ false };                     ///< Disable revocation checks when supported.
-        bool               ssl_fast_start{ false };                    ///< Unsupported preference; Session rejects true.
-        std::string        ca_info;                                    ///< CA bundle path; empty restores curl's default.
-        std::string        ca_info_blob;                               ///< CA bundle contents.
-        std::string        ca_path;                                    ///< CA directory; empty restores curl's default.
-        std::string        ca_buffer;                                  ///< Alternative in-memory CA bundle.
-        std::string        crl_file;                                   ///< CRL path.
-        std::string        ciphers;                                    ///< Cipher selection for TLS up to 1.2.
-        std::string        tls13_ciphers;                              ///< TLS 1.3 cipher selection.
-        bool               session_id_cache{ true };                   ///< Cache TLS sessions.
+        std::string cert_file;                           ///< Client certificate path.
+        utils::SecureString cert_blob;                   ///< In-memory client certificate.
+        std::string cert_type;                           ///< Client certificate encoding.
+        std::string key_file;                            ///< Private-key path.
+        utils::SecureString key_blob;                    ///< In-memory private key.
+        std::string key_type;                            ///< Private-key encoding.
+        utils::SecureString key_pass;                    ///< Private-key password.
+        std::string pinned_public_key;                   ///< Public-key pin specification.
+        bool enable_alpn{ true };                        ///< Advertise ALPN.
+        bool verify_host{ true };                        ///< Verify the requested hostname.
+        bool verify_peer{ true };                        ///< Verify the certificate chain.
+        bool verify_status{ false };                     ///< Require stapled OCSP status.
+        long ssl_version{ CURL_SSLVERSION_DEFAULT };     ///< Minimum TLS version.
+        long max_version{ CURL_SSLVERSION_MAX_DEFAULT }; ///< Maximum TLS version.
+        bool ssl_no_revoke{ false };                     ///< Disable revocation checks when supported.
+        bool ssl_fast_start{ false };                    ///< Unsupported preference; Session rejects true.
+        std::string ca_info;                             ///< CA bundle path; empty restores curl's default.
+        std::string ca_info_blob;                        ///< CA bundle contents.
+        std::string ca_path;                             ///< CA directory; empty restores curl's default.
+        std::string ca_buffer;                           ///< Alternative in-memory CA bundle.
+        std::string crl_file;                            ///< CRL path.
+        std::string ciphers;                             ///< Cipher selection for TLS up to 1.2.
+        std::string tls13_ciphers;                       ///< TLS 1.3 cipher selection.
+        bool session_id_cache{ true };                   ///< Cache TLS sessions.
 
         /**
          * @brief Select a certificate file and clear blob storage.

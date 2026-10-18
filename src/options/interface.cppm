@@ -54,11 +54,11 @@ export namespace mcr::options {
          */
         Interface(std::initializer_list<std::string> args) : StringHolder<Interface>(args) {}
 
-        Interface(Interface const& other)                        = default;
-        Interface(Interface&& other) noexcept                    = default;
-        ~Interface() override                                    = default;
+        Interface(Interface const& other) = default;
+        Interface(Interface&& other) noexcept = default;
+        ~Interface() override = default;
 
-        auto operator=(Interface const& other) -> Interface&     = default;
+        auto operator=(Interface const& other) -> Interface& = default;
         auto operator=(Interface&& other) noexcept -> Interface& = default;
     };
 

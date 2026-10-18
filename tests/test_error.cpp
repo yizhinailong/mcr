@@ -50,7 +50,7 @@ int main() {
      * Curl's PARTIAL_FILE is 18 and its HTTP2 is 16, requiring explicit mapping.
      */
     struct MappingCase {
-        std::int32_t   curl_code;
+        std::int32_t curl_code;
         mcr::ErrorCode error_code;
     };
 
@@ -112,7 +112,7 @@ int main() {
     passed &= check(success.has_value(), "CURLE_OK must yield a successful Result<void>");
 
     std::string diagnostic{ "request timed out" };
-    auto const  failure{ mcr::check_curl_error(CURLE_OPERATION_TIMEDOUT, diagnostic) };
+    auto const failure{ mcr::check_curl_error(CURLE_OPERATION_TIMEDOUT, diagnostic) };
     diagnostic.clear();
     passed &= check(
         !failure &&

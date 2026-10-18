@@ -17,8 +17,8 @@ int main() {
      * @brief A boundary code and its expected response class.
      */
     struct ClassificationCase {
-        long code;           ///< Status code to classify.
-        int  response_class; ///< Hundreds digit for classes 1 through 5, or zero for no class.
+        long code;          ///< Status code to classify.
+        int response_class; ///< Hundreds digit for classes 1 through 5, or zero for no class.
     };
 
     ClassificationCase const cases[]{

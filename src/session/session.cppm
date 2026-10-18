@@ -36,8 +36,8 @@ import std;
 
 export namespace mcr {
 
-    using AsyncResponse = utils::AsyncWrapper<Result<Response>>;                                      ///< Asynchronous transfer result.
-    using Content       = std::variant<std::monostate, Payload, Body, BodyView, Multipart, JsonBody>; ///< Persistent request content.
+    using AsyncResponse = utils::AsyncWrapper<Result<Response>>;                                ///< Asynchronous transfer result.
+    using Content = std::variant<std::monostate, Payload, Body, BodyView, Multipart, JsonBody>; ///< Persistent request content.
 
     class Session;
     class MultiPerform;
@@ -61,7 +61,7 @@ export namespace mcr {
             DOWNLOAD_CALLBACK_REQUEST,
             DOWNLOAD_FILE_REQUEST
         };
-        virtual ~Interceptor()                                       = default;
+        virtual ~Interceptor() = default;
         /**
          * @brief Modify, forward, retry, or replace a request.
          * @param session Current session.
@@ -106,8 +106,8 @@ export namespace mcr {
      */
     class InterceptorMulti {
     public:
-        using ProceedHttpMethod                                                      = Interceptor::ProceedHttpMethod; ///< Matching cpr method tags.
-        virtual ~InterceptorMulti()                                                  = default;
+        using ProceedHttpMethod = Interceptor::ProceedHttpMethod; ///< Matching cpr method tags.
+        virtual ~InterceptorMulti() = default;
         /**
          * @brief Modify, forward, retry, or replace a batch.
          * @param multi Current batch.
@@ -153,36 +153,36 @@ export namespace mcr {
     private:
         friend Interceptor;
         friend MultiPerform;
-        std::vector<std::shared_ptr<Interceptor>> m_interceptors;       ///< Interceptors in registration order.
-        std::size_t                               m_next_interceptor{}; ///< Next interceptor in the current nested request.
-        std::size_t                               m_request_depth{};    ///< Number of active interceptor/request frames.
-        std::string                               m_method{ "GET" };    ///< Last prepared method, retained by Proceed.
-        MultiPerform*                             m_multi_owner{};      ///< Batch that currently owns this session, if any.
-        bool                                      m_multi_preparing{};  ///< Permit the owning batch to prepare its handle.
-        bool                                      m_in_transfer{};      ///< Reject recursive transfers from curl callbacks.
-        std::shared_ptr<curl::CurlHolder>         m_curl;               ///< Owned transfer resources.
-        Url                                       m_url;                ///< Base URL before adding parameters.
-        Parameters                                m_parameters;         ///< Persistent URL parameters.
-        Header                                    m_header;             ///< Persistent request headers.
-        options::Proxies                          m_proxies;            ///< Persistent proxy selection.
-        options::ProxyAuthentication              m_proxy_auth;         ///< Persistent encoded proxy credentials.
-        options::AcceptEncoding                   m_accept_encoding;    ///< Compression preference.
-        Content                                   m_content;            ///< Owned or borrowed request content.
-        ReadCallback                              m_read;               ///< Optional upload producer.
-        HeaderCallback                            m_header_callback;    ///< Optional header observer.
-        WriteCallback                             m_write;              ///< Optional response consumer.
-        ProgressCallback                          m_progress;           ///< Optional progress observer.
-        DebugCallback                             m_debug;              ///< Optional diagnostics observer.
-        ServerSentEventCallback                   m_sse;                ///< Optional event consumer.
-        ServerSentEventParser                     m_sse_parser;         ///< Parser reset before every transfer.
-        std::shared_ptr<std::atomic_bool>         m_cancellation;       ///< Shared cancellation flag.
-        std::string                               m_response_string;    ///< Current buffered response body.
-        std::string                               m_header_string;      ///< Current raw response headers.
-        std::size_t                               m_reserve_size{};     ///< Requested body buffer reservation.
-        WriteCallback                             m_download_write;     ///< Consumer used only for a prepared download.
-        std::ofstream*                            m_download_file{};    ///< Borrowed file for a prepared download.
-        bool                                      m_downloading{};      ///< Selects the current body destination.
-        std::exception_ptr                        m_callback_error;     ///< First exception caught inside a curl callback.
+        std::vector<std::shared_ptr<Interceptor>> m_interceptors; ///< Interceptors in registration order.
+        std::size_t m_next_interceptor{};                         ///< Next interceptor in the current nested request.
+        std::size_t m_request_depth{};                            ///< Number of active interceptor/request frames.
+        std::string m_method{ "GET" };                            ///< Last prepared method, retained by Proceed.
+        MultiPerform* m_multi_owner{};                            ///< Batch that currently owns this session, if any.
+        bool m_multi_preparing{};                                 ///< Permit the owning batch to prepare its handle.
+        bool m_in_transfer{};                                     ///< Reject recursive transfers from curl callbacks.
+        std::shared_ptr<curl::CurlHolder> m_curl;                 ///< Owned transfer resources.
+        Url m_url;                                                ///< Base URL before adding parameters.
+        Parameters m_parameters;                                  ///< Persistent URL parameters.
+        Header m_header;                                          ///< Persistent request headers.
+        options::Proxies m_proxies;                               ///< Persistent proxy selection.
+        options::ProxyAuthentication m_proxy_auth;                ///< Persistent encoded proxy credentials.
+        options::AcceptEncoding m_accept_encoding;                ///< Compression preference.
+        Content m_content;                                        ///< Owned or borrowed request content.
+        ReadCallback m_read;                                      ///< Optional upload producer.
+        HeaderCallback m_header_callback;                         ///< Optional header observer.
+        WriteCallback m_write;                                    ///< Optional response consumer.
+        ProgressCallback m_progress;                              ///< Optional progress observer.
+        DebugCallback m_debug;                                    ///< Optional diagnostics observer.
+        ServerSentEventCallback m_sse;                            ///< Optional event consumer.
+        ServerSentEventParser m_sse_parser;                       ///< Parser reset before every transfer.
+        std::shared_ptr<std::atomic_bool> m_cancellation;         ///< Shared cancellation flag.
+        std::string m_response_string;                            ///< Current buffered response body.
+        std::string m_header_string;                              ///< Current raw response headers.
+        std::size_t m_reserve_size{};                             ///< Requested body buffer reservation.
+        WriteCallback m_download_write;                           ///< Consumer used only for a prepared download.
+        std::ofstream* m_download_file{};                         ///< Borrowed file for a prepared download.
+        bool m_downloading{};                                     ///< Selects the current body destination.
+        std::exception_ptr m_callback_error;                      ///< First exception caught inside a curl callback.
 
     public:
         /**
@@ -202,10 +202,10 @@ export namespace mcr {
             return result;
         }
 
-        Session(Session const&)                    = delete;
-        Session(Session&&)                         = delete;
+        Session(Session const&) = delete;
+        Session(Session&&) = delete;
         auto operator=(Session const&) -> Session& = delete;
-        auto operator=(Session&&) -> Session&      = delete;
+        auto operator=(Session&&) -> Session& = delete;
 
         /**
          * @brief Detach borrowed callback and body pointers before destroying session state.
@@ -638,7 +638,7 @@ export namespace mcr {
          */
         auto SetWriteCallback(WriteCallback const& write) -> Result<void> {
             m_write = write;
-            m_sse   = {};
+            m_sse = {};
 
             return {};
         }
@@ -673,7 +673,7 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetServerSentEventCallback(ServerSentEventCallback const& sse) -> Result<void> {
-            m_sse   = sse;
+            m_sse = sse;
             m_write = {};
 
             return {};
@@ -933,7 +933,7 @@ export namespace mcr {
          * @return Full request URL.
          */
         [[nodiscard]] auto GetFullRequestUrl() -> Result<std::string> {
-            auto       result{ m_url.Str() };
+            auto result{ m_url.Str() };
             auto const parameters{ m_parameters.GetContent(*m_curl) };
             if (!parameters) {
                 return std::unexpected{ parameters.error() };
@@ -941,10 +941,10 @@ export namespace mcr {
             if (parameters->empty()) {
                 return result;
             }
-            auto const             fragment{ result.find('#') };
-            auto const             end{ fragment == std::string::npos ? result.size() : fragment };
+            auto const fragment{ result.find('#') };
+            auto const end{ fragment == std::string::npos ? result.size() : fragment };
             std::string_view const base{ result.data(), end };
-            std::string            separator;
+            std::string separator;
             if (base.find('?') == std::string_view::npos) {
                 separator = "?";
             } else if (!base.ends_with('?') && !base.ends_with('&')) {
@@ -1045,7 +1045,7 @@ export namespace mcr {
          * @throws Any exception captured from user callbacks during the transfer.
          */
         auto Complete(CURLcode curl_error) -> Result<Response> {
-            m_download_file  = nullptr;
+            m_download_file = nullptr;
             m_download_write = {};
             if (m_callback_error) {
                 std::rethrow_exception(std::exchange(m_callback_error, {}));
@@ -2252,8 +2252,8 @@ export namespace mcr {
             if (auto status = setOption(CURLOPT_CUSTOMREQUEST, static_cast<char const*>(nullptr)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            m_downloading    = download;
-            m_download_file  = nullptr;
+            m_downloading = download;
+            m_download_file = nullptr;
             m_download_write = {};
             m_callback_error = {};
             m_curl->error.fill('\0');
@@ -2331,7 +2331,7 @@ export namespace mcr {
                 return std::unexpected{ std::move(status.error()) };
             }
             auto const encodings{ m_accept_encoding.GetString() };
-            auto       disabled = m_accept_encoding.Disabled();
+            auto disabled = m_accept_encoding.Disabled();
             if (!disabled) {
                 return std::unexpected{ std::move(disabled.error()) };
             }
@@ -2519,21 +2519,21 @@ export namespace mcr {
     private:
         friend InterceptorMulti;
         using DownloadTarget = std::variant<WriteCallback, std::reference_wrapper<std::ofstream>>;
-        Sessions                                       m_sessions;           ///< Sessions and their current methods.
-        std::vector<std::weak_ptr<Session>>            m_claimed;            ///< Claims used to release ownership after mutable list edits.
-        std::unique_ptr<curl::CurlMultiHolder>         m_multi;              ///< Owned multi handle, allocated lazily after moving out.
-        std::unordered_map<Session*, DownloadTarget>   m_downloads;          ///< Destinations for the current batch request.
-        std::vector<std::shared_ptr<InterceptorMulti>> m_interceptors;       ///< Batch interceptor chain.
-        std::size_t                                    m_next_interceptor{}; ///< Next interceptor for nested retries.
-        std::size_t                                    m_request_depth{};    ///< Active request frames.
-        bool                                           m_transferring{};     ///< True only while easy handles are attached to the multi handle.
+        Sessions m_sessions;                                           ///< Sessions and their current methods.
+        std::vector<std::weak_ptr<Session>> m_claimed;                 ///< Claims used to release ownership after mutable list edits.
+        std::unique_ptr<curl::CurlMultiHolder> m_multi;                ///< Owned multi handle, allocated lazily after moving out.
+        std::unordered_map<Session*, DownloadTarget> m_downloads;      ///< Destinations for the current batch request.
+        std::vector<std::shared_ptr<InterceptorMulti>> m_interceptors; ///< Batch interceptor chain.
+        std::size_t m_next_interceptor{};                              ///< Next interceptor for nested retries.
+        std::size_t m_request_depth{};                                 ///< Active request frames.
+        bool m_transferring{};                                         ///< True only while easy handles are attached to the multi handle.
 
     public:
         /**
          * @brief Create an empty batch.
          */
         MultiPerform();
-        MultiPerform(MultiPerform const&)                    = delete;
+        MultiPerform(MultiPerform const&) = delete;
         auto operator=(MultiPerform const&) -> MultiPerform& = delete;
         /**
          * @brief Move an idle batch and transfer session claims.
@@ -2559,13 +2559,13 @@ export namespace mcr {
          * @param method Initial method.
          * @return Success or the first operation error.
          */
-        auto               AddSession(std::shared_ptr<Session> const& session, HttpMethod method = HttpMethod::UNDEFINED) -> Result<void>;
+        auto AddSession(std::shared_ptr<Session> const& session, HttpMethod method = HttpMethod::UNDEFINED) -> Result<void>;
         /**
          * @brief Remove an existing registration and release its claim.
          * @param session Registered session.
          * @return Success or the first operation error.
          */
-        auto               RemoveSession(std::shared_ptr<Session> const& session) -> Result<void>;
+        auto RemoveSession(std::shared_ptr<Session> const& session) -> Result<void>;
         /**
          * @brief Access registrations while no network transfer is active.
          * @return Ordered mutable registrations, including methods.
@@ -2658,7 +2658,7 @@ export namespace mcr {
             }
             m_downloads.clear();
             try {
-                std::size_t  index{};
+                std::size_t index{};
                 Result<void> targets;
                 ((targets ? targets = setDownloadTarget(index++, std::forward<Args>(args)) : targets), ...);
                 if (!targets) {
@@ -2932,11 +2932,11 @@ namespace mcr {
         }
         detail::ScopeExit restore{ [this, next = m_next_interceptor, method = m_method, downloading = m_downloading, write = m_download_write, file = m_download_file]() mutable {
             m_next_interceptor = next;
-            m_method           = std::move(method);
-            m_downloading      = downloading;
+            m_method = std::move(method);
+            m_downloading = downloading;
             --m_request_depth;
             m_download_write = m_request_depth ? std::move(write) : WriteCallback{};
-            m_download_file  = m_request_depth ? file : nullptr;
+            m_download_file = m_request_depth ? file : nullptr;
         } };
         ++m_request_depth;
         if (m_next_interceptor < m_interceptors.size()) {
@@ -2949,15 +2949,15 @@ namespace mcr {
     }
 
     auto Session::proceed() -> Result<Response> {
-        auto       method{ m_method };
-        auto       write{ m_download_write };
-        auto*      file{ m_download_file };
+        auto method{ m_method };
+        auto write{ m_download_write };
+        auto* file{ m_download_file };
         bool const downloading{ m_downloading };
         if (auto status = prepare(method, downloading); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
         m_download_write = std::move(write);
-        m_download_file  = file;
+        m_download_file = file;
         return perform();
     }
 
@@ -3007,14 +3007,14 @@ namespace mcr {
     auto MultiPerform::operator=(MultiPerform&& other) noexcept -> MultiPerform& {
         if (this != &other) {
             releaseSessions();
-            m_sessions         = std::move(other.m_sessions);
-            m_claimed          = std::move(other.m_claimed);
-            m_multi            = std::move(other.m_multi);
-            m_downloads        = std::move(other.m_downloads);
-            m_interceptors     = std::move(other.m_interceptors);
+            m_sessions = std::move(other.m_sessions);
+            m_claimed = std::move(other.m_claimed);
+            m_multi = std::move(other.m_multi);
+            m_downloads = std::move(other.m_downloads);
+            m_interceptors = std::move(other.m_interceptors);
             m_next_interceptor = 0;
-            m_request_depth    = 0;
-            m_transferring     = false;
+            m_request_depth = 0;
+            m_transferring = false;
             rebindSessions();
         }
         return *this;
@@ -3055,7 +3055,7 @@ namespace mcr {
         if (auto status = checkIdleTransfer(); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
-        std::unordered_set<Session*>        seen;
+        std::unordered_set<Session*> seen;
         std::vector<std::weak_ptr<Session>> claims;
         claims.reserve(m_sessions.size());
         for (auto const& [session, method] : m_sessions) {
@@ -3318,7 +3318,7 @@ namespace mcr {
                 for (auto const& weak : m_claimed) {
                     if (auto session{ weak.lock() }) {
                         session->m_download_write = {};
-                        session->m_download_file  = nullptr;
+                        session->m_download_file = nullptr;
                     }
                 }
             }
@@ -3395,7 +3395,7 @@ namespace mcr {
                 continue;
             }
             auto const position{ positions.at(message->easy_handle) };
-            auto       response = m_sessions[position].first->Complete(message->data.result);
+            auto response = m_sessions[position].first->Complete(message->data.result);
             if (!response) {
                 return std::unexpected{ std::move(response.error()) };
             }

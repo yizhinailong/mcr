@@ -66,15 +66,15 @@ namespace {
             "custom duration periods must convert to whole milliseconds"
         );
 
-        mcr::options::Timeout       timeout = 1500;
+        mcr::options::Timeout timeout = 1500;
         mcr::options::Timeout const copied{ timeout };
-        timeout.ms  = 2s;
-        passed     &= check(
+        timeout.ms = 2s;
+        passed &= check(
             copied.Milliseconds().value() == 1500 && timeout.Milliseconds().value() == 2000,
             "copies must be independent and Milliseconds must observe public ms updates"
         );
-        timeout  = 3s;
-        passed  &= check(timeout.Milliseconds().value() == 3000, "chrono durations must implicitly convert for assignment");
+        timeout = 3s;
+        passed &= check(timeout.Milliseconds().value() == 3000, "chrono durations must implicitly convert for assignment");
         return passed;
     }
 
@@ -83,21 +83,21 @@ namespace {
 
         bool passed{ true };
         for (std::int32_t const count : { 0, 1, -1, 1500, (std::numeric_limits<std::int32_t>::min)(), (std::numeric_limits<std::int32_t>::max)() }) {
-            mcr::options::ConnectTimeout const integer  = count;
-            mcr::options::ConnectTimeout const chrono   = std::chrono::milliseconds{ count };
-            passed                                     &= check(integer.ms == chrono.ms && integer.Milliseconds().value() == count, "both connection timeout constructors must preserve the full int32 millisecond range");
+            mcr::options::ConnectTimeout const integer = count;
+            mcr::options::ConnectTimeout const chrono = std::chrono::milliseconds{ count };
+            passed &= check(integer.ms == chrono.ms && integer.Milliseconds().value() == count, "both connection timeout constructors must preserve the full int32 millisecond range");
         }
         passed &= check(mcr::options::ConnectTimeout{ 2s }.Milliseconds().value() == 2000 && mcr::options::ConnectTimeout{ 1min }.Milliseconds().value() == 60000, "whole-millisecond chrono conversions must work through the milliseconds constructor");
         passed &= check(mcr::options::ConnectTimeout{ std::chrono::duration_cast<std::chrono::milliseconds>(1999us) }.Milliseconds().value() == 1, "sub-millisecond durations require an explicit cast for connection timeouts");
 
         mcr::options::ConnectTimeout original{ 1500ms };
         mcr::options::ConnectTimeout copied{ original };
-        mcr::options::Timeout&       base{ original };
-        base.ms   = 2s;
-        passed   &= check(original.Milliseconds().value() == 2000 && copied.Milliseconds().value() == 1500, "the derived option must use inherited storage and retain independent copies");
-        copied    = 42;
-        original  = 500ms;
-        passed   &= check(copied.Milliseconds().value() == 42 && original.Milliseconds().value() == 500, "implicit integer and millisecond construction must support assignment");
+        mcr::options::Timeout& base{ original };
+        base.ms = 2s;
+        passed &= check(original.Milliseconds().value() == 2000 && copied.Milliseconds().value() == 1500, "the derived option must use inherited storage and retain independent copies");
+        copied = 42;
+        original = 500ms;
+        passed &= check(copied.Milliseconds().value() == 42 && original.Milliseconds().value() == 500, "implicit integer and millisecond construction must support assignment");
         return passed;
     }
 
@@ -119,19 +119,19 @@ namespace {
             TimeoutType timeout{ std::chrono::milliseconds{ LONG_MAX_MS } };
             ++timeout.ms;
             {
-                auto const failure  = timeout.Milliseconds();
-                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
+                auto const failure = timeout.Milliseconds();
+                passed &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
             }
 
             timeout.ms = std::chrono::milliseconds{ LONG_MIN_MS };
             --timeout.ms;
             {
-                auto const failure  = timeout.Milliseconds();
-                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
+                auto const failure = timeout.Milliseconds();
+                passed &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
             }
 
-            timeout.ms  = std::chrono::milliseconds{ 42 };
-            passed     &= check(timeout.Milliseconds().value() == 42, "a timeout must remain usable after a failed conversion");
+            timeout.ms = std::chrono::milliseconds{ 42 };
+            passed &= check(timeout.Milliseconds().value() == 42, "a timeout must remain usable after a failed conversion");
         }
         return passed;
     }

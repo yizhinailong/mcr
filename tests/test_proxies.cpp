@@ -5,7 +5,7 @@
 import std;
 import mcr.proxy;
 
-using ProxyMap  = std::map<std::string, std::string>;
+using ProxyMap = std::map<std::string, std::string>;
 using ProxyList = std::initializer_list<ProxyMap::value_type>;
 
 static_assert(std::is_default_constructible_v<mcr::options::Proxies>);
@@ -27,17 +27,17 @@ namespace {
         mcr::options::Proxies const defaults;
         mcr::options::Proxies const empty_list(ProxyList{});
         mcr::options::Proxies const empty_map(ProxyMap{});
-        bool               passed{ check(!defaults.Has("http") && !defaults.Has("") && !empty_list.Has("https") && !empty_map.Has("http"), "default and empty inputs must contain no mappings") };
+        bool passed{ check(!defaults.Has("http") && !defaults.Has("") && !empty_list.Has("https") && !empty_map.Has("http"), "default and empty inputs must contain no mappings") };
 
-        std::string  protocol{ "http" };
-        std::string  address{ "http://proxy.test:8080" };
+        std::string protocol{ "http" };
+        std::string address{ "http://proxy.test:8080" };
         mcr::options::Proxies from_list = {
             { protocol,                    address },
             {  "https", "socks5://proxy.test:1080" }
         };
-        protocol  = "changed";
-        address   = "changed";
-        passed   &= check(from_list.Has("http") && from_list["http"] == "http://proxy.test:8080" && from_list["https"] == "socks5://proxy.test:1080" && !from_list.Has("changed"), "initializer-list construction must copy both protocol names and proxy addresses");
+        protocol = "changed";
+        address = "changed";
+        passed &= check(from_list.Has("http") && from_list["http"] == "http://proxy.test:8080" && from_list["https"] == "socks5://proxy.test:1080" && !from_list.Has("changed"), "initializer-list construction must copy both protocol names and proxy addresses");
 
         ProxyMap source{
             {     "http", "proxy.test:3128" },
@@ -46,8 +46,8 @@ namespace {
         mcr::options::Proxies from_map{ source };
         source["http"] = "changed";
         source.erase("no_proxy");
-        source["https"]  = "added";
-        passed          &= check(from_map["http"] == "proxy.test:3128" && from_map.Has("no_proxy") && from_map["no_proxy"].empty() && !from_map.Has("https"), "explicit map construction must retain an independent copy, including empty proxy values");
+        source["https"] = "added";
+        passed &= check(from_map["http"] == "proxy.test:3128" && from_map.Has("no_proxy") && from_map["no_proxy"].empty() && !from_map.Has("https"), "explicit map construction must retain an independent copy, including empty proxy values");
         (void)from_map["ftp"];
         passed &= check(!source.contains("ftp"), "subscript insertion must not modify the source map");
 
@@ -78,7 +78,7 @@ namespace {
         passed &= check(inserted.empty() && proxies.Has("missing") && &proxies["missing"] == &inserted && &proxies["http"] == existing_address && existing == "lower", "subscript must insert a stable empty value and preserve existing references");
 
         std::array<char, 6> const bounded{ 'x', 'h', 't', 't', 'p', 'x' };
-        std::string_view const    view{ bounded.data() + 1, 4 };
+        std::string_view const view{ bounded.data() + 1, 4 };
         passed &= check(proxies.Has(view) && &proxies[view] == existing_address && !proxies.Has(std::string_view{ bounded.data(), bounded.size() }), "lookup must respect nonterminated string-view boundaries");
         std::string new_key{ "xnewx" };
         (void)proxies[std::string_view{ new_key }.substr(1, 3)];

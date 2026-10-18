@@ -64,14 +64,14 @@ export namespace mcr {
         Part(std::string_view name_param, Buffer const& buffer, std::string_view content_type_param = {})
             : name{ name_param }, value{ buffer.filename.string() }, content_type{ content_type_param }, data{ buffer.data }, datalen{ buffer.datalen }, is_buffer{ true } {}
 
-        std::string    name;               ///< Owned field name.
-        std::string    value;              ///< Owned text or buffer filename; empty for a file field.
-        std::string    content_type;       ///< Owned optional content type, empty when unspecified.
-        Buffer::data_t data{ nullptr };    ///< Borrowed byte address, used only for buffer fields.
-        std::size_t    datalen{ 0 };       ///< Borrowed byte count, zero for text and file fields.
-        bool           is_file{ false };   ///< True for a field containing file descriptors.
-        bool           is_buffer{ false }; ///< True for a field containing borrowed buffer data.
-        Files          files;              ///< Owned ordered file descriptors, empty for text and buffer fields.
+        std::string name;               ///< Owned field name.
+        std::string value;              ///< Owned text or buffer filename; empty for a file field.
+        std::string content_type;       ///< Owned optional content type, empty when unspecified.
+        Buffer::data_t data{ nullptr }; ///< Borrowed byte address, used only for buffer fields.
+        std::size_t datalen{ 0 };       ///< Borrowed byte count, zero for text and file fields.
+        bool is_file{ false };          ///< True for a field containing file descriptors.
+        bool is_buffer{ false };        ///< True for a field containing borrowed buffer data.
+        Files files;                    ///< Owned ordered file descriptors, empty for text and buffer fields.
     };
 
     /**

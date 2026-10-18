@@ -30,12 +30,12 @@ namespace {
 
     auto certificate(long serial) -> std::string {
         std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key{ EVP_PKEY_Q_keygen(nullptr, nullptr, "RSA", 2048), &EVP_PKEY_free };
-        std::unique_ptr<X509, decltype(&X509_free)>         cert{ X509_new(), &X509_free };
+        std::unique_ptr<X509, decltype(&X509_free)> cert{ X509_new(), &X509_free };
         require(key && cert);
         require(X509_set_version(cert.get(), 2) == 1 && ASN1_INTEGER_set(X509_get_serialNumber(cert.get()), serial) == 1);
         require(X509_gmtime_adj(X509_getm_notBefore(cert.get()), -60) && X509_gmtime_adj(X509_getm_notAfter(cert.get()), 3600));
         require(X509_set_pubkey(cert.get(), key.get()) == 1);
-        auto*      name{ X509_get_subject_name(cert.get()) };
+        auto* name{ X509_get_subject_name(cert.get()) };
         auto const common_name{ std::format("mcr-test-{}", serial) };
         require(X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<unsigned char const*>(common_name.c_str()), -1, -1, 0) == 1);
         require(X509_set_issuer_name(cert.get(), name) == 1);
@@ -44,7 +44,7 @@ namespace {
         require(X509_sign(cert.get(), key.get(), EVP_sha256()) > 0);
         std::unique_ptr<BIO, decltype(&BIO_free)> bio{ BIO_new(BIO_s_mem()), &BIO_free };
         require(bio && PEM_write_bio_X509(bio.get(), cert.get()) == 1);
-        char*      bytes{};
+        char* bytes{};
         auto const length{ BIO_get_mem_data(bio.get(), &bytes) };
         require(length > 0);
         return { bytes, static_cast<std::size_t>(length) };
@@ -58,17 +58,17 @@ namespace {
             return mcr::curl::sslctx_function_load_ca_cert_from_buffer(nullptr, context.get(), bytes.data());
         };
         auto* store{ SSL_CTX_get_cert_store(context.get()) };
-        auto  count = [&] {
+        auto count = [&] {
             return sk_X509_OBJECT_num(X509_STORE_get0_objects(store));
         };
-        bool       passed{ check(load("") == CURLE_ABORTED_BY_CALLBACK && load("not a certificate") == CURLE_ABORTED_BY_CALLBACK, "empty and invalid bundles must fail") };
+        bool passed{ check(load("") == CURLE_ABORTED_BY_CALLBACK && load("not a certificate") == CURLE_ABORTED_BY_CALLBACK, "empty and invalid bundles must fail") };
         auto const first{ certificate(1) };
         auto const second{ certificate(2) };
         passed &= check(load(first + "-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n") == CURLE_ABORTED_BY_CALLBACK && count() == 0, "a malformed trailing certificate must fail before updating trust");
         passed &= check(load(first + second) == CURLE_OK && count() == 2, "every valid certificate in a bundle must be added");
         passed &= check(load(first + second) == CURLE_OK && count() == 2, "reloading a CA bundle must tolerate duplicate certificates");
-        std::unique_ptr<BIO, decltype(&BIO_free)>                       bio{ BIO_new_mem_buf(first.data(), static_cast<int>(first.size())), &BIO_free };
-        std::unique_ptr<X509, decltype(&X509_free)>                     cert{ PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free };
+        std::unique_ptr<BIO, decltype(&BIO_free)> bio{ BIO_new_mem_buf(first.data(), static_cast<int>(first.size())), &BIO_free };
+        std::unique_ptr<X509, decltype(&X509_free)> cert{ PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free };
         std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)> verification{ X509_STORE_CTX_new(), &X509_STORE_CTX_free };
         require(cert && verification && X509_STORE_CTX_init(verification.get(), store, cert.get(), nullptr) == 1);
         passed &= check(X509_verify_cert(verification.get()) == 1, "loaded certificates must participate in OpenSSL trust verification");

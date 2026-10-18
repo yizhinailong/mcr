@@ -139,14 +139,14 @@ namespace {
         pool.Start();
         for (int round{ 0 }; round < 20; ++round) {
             pool.Pause();
-            std::atomic<int>               completed{ 0 };
+            std::atomic<int> completed{ 0 };
             std::vector<std::future<void>> futures;
             for (int task{ 0 }; task < 20; ++task) {
                 futures.push_back(pool.Submit([&completed] { ++completed; }).value());
             }
-            auto       waiter        = std::async(std::launch::async, [&pool] { pool.Wait(); });
+            auto waiter = std::async(std::launch::async, [&pool] { pool.Wait(); });
             bool const stayed_paused = futures.front().wait_for(5ms) == std::future_status::timeout && completed == 0;
-            bool const wait_blocked  = waiter.wait_for(5ms) == std::future_status::timeout;
+            bool const wait_blocked = waiter.wait_for(5ms) == std::future_status::timeout;
             pool.Resume();
             for (auto& future : futures) {
                 future.get();
@@ -158,16 +158,16 @@ namespace {
     }
 
     auto check_growth_and_retirement() -> void {
-        mcr::utils::ThreadPool         pool{ 1, 4, 30ms };
-        std::promise<void>             release;
-        auto                           gate = release.get_future().share();
-        std::atomic<int>               entered{ 0 };
+        mcr::utils::ThreadPool pool{ 1, 4, 30ms };
+        std::promise<void> release;
+        auto gate = release.get_future().share();
+        std::atomic<int> entered{ 0 };
         std::vector<std::future<void>> futures;
         for (int task{ 0 }; task < 4; ++task) {
             futures.push_back(pool.Submit([&entered, gate] { ++entered; gate.wait(); }).value());
         }
         bool const all_entered = eventually([&] { return entered == 4; });
-        bool const bounded     = pool.GetCurrentThreadNum() == 4 && pool.GetIdleThreadNum() == 0;
+        bool const bounded = pool.GetCurrentThreadNum() == 4 && pool.GetIdleThreadNum() == 0;
         pool.SetMaxThreadNum(2);
         release.set_value();
         for (auto& future : futures) {
@@ -194,10 +194,10 @@ namespace {
     }
 
     auto check_concurrent_submit() -> void {
-        mcr::utils::ThreadPool                       pool{ 1, 4, 20ms };
-        std::array<std::atomic<int>, 400>            counts{};
+        mcr::utils::ThreadPool pool{ 1, 4, 20ms };
+        std::array<std::atomic<int>, 400> counts{};
         std::array<std::vector<std::future<int>>, 4> results;
-        std::vector<std::jthread>                    producers;
+        std::vector<std::jthread> producers;
         for (int producer{ 0 }; producer < 4; ++producer) {
             producers.emplace_back([&, producer] {
                 for (int index{ 0 }; index < 100; ++index) {
@@ -219,24 +219,24 @@ namespace {
 
     auto check_stop_and_restart() -> void {
         mcr::utils::ThreadPool pool{ 1, 1 };
-        std::promise<void>     release;
-        auto                   gate = release.get_future().share();
-        std::atomic<bool>      entered{ false };
-        auto                   active            = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; }).value();
-        bool const             active_started    = eventually([&] { return entered.load(); });
-        auto                   waiter            = std::async(std::launch::async, [&pool] { pool.Wait(); });
-        bool const             waited_for_active = waiter.wait_for(10ms) == std::future_status::timeout;
-        auto                   pending           = pool.Submit([] { return 99; }).value();
-        auto                   stopped           = std::async(std::launch::async, [&pool] { return pool.Stop(); });
-        bool const             stopping          = eventually([&] { return !pool.IsStarted(); });
-        bool                   rejected{ false };
-        auto                   lifetime = std::make_shared<int>(0);
-        std::weak_ptr<int>     rejected_lifetime{ lifetime };
-        auto                   rejected_submission = pool.Submit([owned = std::make_unique<int>(1), lifetime = std::move(lifetime)] { return *owned; });
-        rejected                                   = !rejected_submission && rejected_submission.error().code == mcr::ErrorCode::FAILED_INIT;
-        bool const canceled                        = is_canceled(pending);
-        bool const joined_active                   = stopped.wait_for(10ms) == std::future_status::timeout;
-        bool const restart_rejected                = pool.Start() == -1 && pool.Stop() == -1 && !pool.IsStopped();
+        std::promise<void> release;
+        auto gate = release.get_future().share();
+        std::atomic<bool> entered{ false };
+        auto active = pool.Submit([&entered, gate] { entered = true; gate.wait(); return 23; }).value();
+        bool const active_started = eventually([&] { return entered.load(); });
+        auto waiter = std::async(std::launch::async, [&pool] { pool.Wait(); });
+        bool const waited_for_active = waiter.wait_for(10ms) == std::future_status::timeout;
+        auto pending = pool.Submit([] { return 99; }).value();
+        auto stopped = std::async(std::launch::async, [&pool] { return pool.Stop(); });
+        bool const stopping = eventually([&] { return !pool.IsStarted(); });
+        bool rejected{ false };
+        auto lifetime = std::make_shared<int>(0);
+        std::weak_ptr<int> rejected_lifetime{ lifetime };
+        auto rejected_submission = pool.Submit([owned = std::make_unique<int>(1), lifetime = std::move(lifetime)] { return *owned; });
+        rejected = !rejected_submission && rejected_submission.error().code == mcr::ErrorCode::FAILED_INIT;
+        bool const canceled = is_canceled(pending);
+        bool const joined_active = stopped.wait_for(10ms) == std::future_status::timeout;
+        bool const restart_rejected = pool.Start() == -1 && pool.Stop() == -1 && !pool.IsStopped();
         release.set_value();
         int const stop_result = stopped.get();
         waiter.get();

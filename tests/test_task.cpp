@@ -16,8 +16,8 @@ namespace {
      * @brief Allow deterministic completion from either side of an await registration.
      */
     struct Gate {
-        std::mutex              mutex;
-        bool                    ready{ false };
+        std::mutex mutex;
+        bool ready{ false };
         std::coroutine_handle<> continuation;
 
         bool await_ready() {
@@ -41,7 +41,7 @@ namespace {
             {
                 std::lock_guard lock{ mutex };
                 ready = true;
-                next  = std::exchange(continuation, {});
+                next = std::exchange(continuation, {});
             }
             if (next) {
                 next.resume();
@@ -126,9 +126,9 @@ int main() {
             require(false, "empty tasks must be rejected");
         } catch (std::logic_error const&) {}
 
-        Gate               lifetime_gate;
-        auto               owned = std::make_shared<int>(11);
-        std::weak_ptr<int> weak  = owned;
+        Gate lifetime_gate;
+        auto owned = std::make_shared<int>(11);
+        std::weak_ptr<int> weak = owned;
         {
             auto abandoned = deferred(lifetime_gate, std::move(owned));
             abandoned.Start();

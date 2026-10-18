@@ -12,10 +12,10 @@ static_assert(mcr::CURL_VERSION_NUM == LIBCURL_VERSION_NUM);
 static_assert(!mcr::VERSION.empty());
 
 auto main() -> int {
-    auto const    manifest{ std::filesystem::path{ __FILE__ }.parent_path().parent_path() / "mcpp.toml" };
+    auto const manifest{ std::filesystem::path{ __FILE__ }.parent_path().parent_path() / "mcpp.toml" };
     std::ifstream input{ manifest };
-    bool          package{ false };
-    std::string   line;
+    bool package{ false };
+    std::string line;
     while (std::getline(input, line)) {
         auto const start{ line.find_first_not_of(" \t") };
         if (start == std::string::npos) {

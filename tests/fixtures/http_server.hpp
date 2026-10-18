@@ -45,7 +45,7 @@ namespace mcr::test {
             }
         }
 
-        Socket(Socket const&)                    = delete;
+        Socket(Socket const&) = delete;
         auto operator=(Socket const&) -> Socket& = delete;
 
         ~Socket() {
@@ -81,19 +81,19 @@ namespace mcr::test {
      */
     class HttpServer {
     private:
-        Socket                    m_listener{ socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) };
-        std::string               m_url;
-        std::atomic_int           m_connections{};
-        std::atomic_int           m_barrier_arrivals{};
-        std::mutex                m_failure_mutex;
-        std::exception_ptr        m_failure;
+        Socket m_listener{ socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) };
+        std::string m_url;
+        std::atomic_int m_connections{};
+        std::atomic_int m_barrier_arrivals{};
+        std::mutex m_failure_mutex;
+        std::exception_ptr m_failure;
         std::vector<std::jthread> m_clients;
-        std::jthread              m_worker;
+        std::jthread m_worker;
 
     public:
         HttpServer() {
             sockaddr_in address{};
-            address.sin_family      = AF_INET;
+            address.sin_family = AF_INET;
             address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             if (bind(m_listener.handle, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 || listen(m_listener.handle, 16) != 0) {
                 throw std::runtime_error{ "fixture bind/listen failed" };
@@ -102,7 +102,7 @@ namespace mcr::test {
             if (getsockname(m_listener.handle, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
                 throw std::runtime_error{ "fixture getsockname failed" };
             }
-            m_url    = std::format("http://127.0.0.1:{}", ntohs(address.sin_port));
+            m_url = std::format("http://127.0.0.1:{}", ntohs(address.sin_port));
             m_worker = std::jthread{ [this](std::stop_token stop) {
                 try {
                     while (!stop.stop_requested()) {
@@ -179,7 +179,7 @@ namespace mcr::test {
                     continue;
                 }
                 std::array<char, 4096> buffer{};
-                auto const             count{ recv(socket, buffer.data(), static_cast<int>(buffer.size()), 0) };
+                auto const count{ recv(socket, buffer.data(), static_cast<int>(buffer.size()), 0) };
                 if (count <= 0) {
                     return false;
                 }
@@ -209,7 +209,7 @@ namespace mcr::test {
                     return;
                 }
                 std::istringstream request{ request_line };
-                std::string        method, target;
+                std::string method, target;
                 request >> method >> target;
                 std::string raw_headers, field;
                 while (true) {
@@ -288,15 +288,15 @@ namespace mcr::test {
                 } else if (target.ends_with("/proxy-auth")) {
                     if (headers["Proxy-Authorization"] != "Basic dSRlcjpwQHNz") {
                         status = "407 Proxy Authentication Required";
-                        extra  = "Proxy-Authenticate: Basic realm=\"local-test\"\r\n";
+                        extra = "Proxy-Authenticate: Basic realm=\"local-test\"\r\n";
                     }
                 } else if (target.starts_with("/json/")) {
                     content_type = "application/json";
                     if (target == "/json/echo") {
                         output = body;
                     } else if (target == "/json/error") {
-                        status       = "422 Unprocessable Content";
-                        output       = R"({"error":"invalid input"})";
+                        status = "422 Unprocessable Content";
+                        output = R"({"error":"invalid input"})";
                         content_type = "application/problem+json";
                     } else if (target == "/json/empty") {
                         status = "204 No Content";
@@ -309,7 +309,7 @@ namespace mcr::test {
                 } else if (target == "/redirect" || target == "/loop") {
                     status = "302 Found";
                     output = "redirect body";
-                    extra  = std::string{ "X-Intermediate: yes\r\nLocation: " } + (target == "/loop" ? "/loop" : "/hello") + "\r\n";
+                    extra = std::string{ "X-Intermediate: yes\r\nLocation: " } + (target == "/loop" ? "/loop" : "/hello") + "\r\n";
                 } else if (target == "/cookie") {
                     extra = "Set-Cookie: stored=yes; Path=/; HttpOnly\r\n";
                 } else if (target == "/sse") {

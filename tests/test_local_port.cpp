@@ -16,9 +16,9 @@ namespace {
         static_assert(std::is_convertible_v<Option const&, std::uint16_t>);
 
         for (std::uint16_t const value : { std::uint16_t{ 0 }, std::uint16_t{ 1 }, std::uint16_t{ 1024 }, std::uint16_t{ 32768 }, (std::numeric_limits<std::uint16_t>::max)() }) {
-            Option const        option     = value;
-            std::uint16_t const converted  = option;
-            long const          curl_value = option;
+            Option const option = value;
+            std::uint16_t const converted = option;
+            long const curl_value = option;
             if (converted != value || curl_value != value) {
                 std::println("test_local_port: {} must preserve {} through implicit construction and conversion", name, value);
                 return false;

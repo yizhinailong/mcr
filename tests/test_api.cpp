@@ -35,7 +35,7 @@ namespace {
     template <typename Sync, typename Async, typename Callback, typename Multi, typename MultiAsync>
     auto check_family(HttpServer const& server, std::string_view method, Sync sync, Async asynchronous, Callback callback, Multi multi, MultiAsync multi_async) -> bool {
         auto const args{ options(server) };
-        bool       passed{ check_response(std::apply(sync, args), method) };
+        bool passed{ check_response(std::apply(sync, args), method) };
         passed &= check_response(std::apply(asynchronous, args).Get().value(), method);
         auto continuation{ [&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  return check_response(response, method); } };
         passed &= std::apply([&](auto const&... values) { return callback(continuation, values...); }, args).Get();
@@ -86,24 +86,24 @@ namespace {
         },
                                   options(server)) };
         bool passed{ check(response.header["X-Request-X-Custom"] == "last" && response.header["X-Request-X-Empty"] == "preserved", "all cv/ref forms of repeated Header options must merge in order") };
-        response  = std::apply([&](auto const&... values) { return mcr::Get(values..., std::ref(first), std::cref(second)).value(); }, options(server));
-        passed   &= check(response.header["X-Request-X-Custom"] == "second" && response.header["X-Request-X-Empty"] == "preserved", "explicit reference-wrapped headers must also merge");
+        response = std::apply([&](auto const&... values) { return mcr::Get(values..., std::ref(first), std::cref(second)).value(); }, options(server));
+        passed &= check(response.header["X-Request-X-Custom"] == "second" && response.header["X-Request-X-Empty"] == "preserved", "explicit reference-wrapped headers must also merge");
 
         auto* pool{ mcr::GlobalThreadPool::GetInstance() };
         pool->Wait();
         (void)pool->Pause();
-        mcr::AsyncResponse                                                      copied;
+        mcr::AsyncResponse copied;
         std::vector<mcr::utils::AsyncWrapper<mcr::Result<mcr::Response>, true>> batch;
         {
             auto args{ options(server) };
-            copied                    = std::apply([&](auto&... values) { return mcr::PostAsync(values..., first).value(); }, args);
-            batch                     = mcr::MultiPostAsync(args).value();
+            copied = std::apply([&](auto&... values) { return mcr::PostAsync(values..., first).value(); }, args);
+            batch = mcr::MultiPostAsync(args).value();
             std::get<mcr::Body>(args) = mcr::Body{ "changed" };
-            first["X-Custom"]         = "changed";
+            first["X-Custom"] = "changed";
         }
         (void)pool->Resume();
-        response  = copied.Get().value();
-        passed   &= check(response.text == "payload" && response.header["X-Request-X-Custom"] == "first" && batch[0].Get().value().text == "payload", "queued async calls must own copies of ordinary lvalue options and tuples");
+        response = copied.Get().value();
+        passed &= check(response.text == "payload" && response.header["X-Request-X-Custom"] == "first" && batch[0].Get().value().text == "payload", "queued async calls must own copies of ordinary lvalue options and tuples");
         return passed;
     }
 
@@ -114,23 +114,23 @@ namespace {
         explicit MoveOnlyUrl(mcr::Url url) : mcr::Url{ std::move(url) } {}
 
         MoveOnlyUrl(MoveOnlyUrl const&) = delete;
-        MoveOnlyUrl(MoveOnlyUrl&&)      = default;
+        MoveOnlyUrl(MoveOnlyUrl&&) = default;
     };
 
     auto check_batches(HttpServer const& server) -> bool {
         HttpServer concurrent;
-        auto       batch{ mcr::MultiGet(options(concurrent, "/barrier"), options(concurrent, "/barrier")).value() };
-        bool       passed{ check(batch.size() == 2 && batch[0].status_code == 200 && batch[1].status_code == 200, "MultiGet must run requests concurrently") };
+        auto batch{ mcr::MultiGet(options(concurrent, "/barrier"), options(concurrent, "/barrier")).value() };
+        bool passed{ check(batch.size() == 2 && batch[0].status_code == 200 && batch[1].status_code == 200, "MultiGet must run requests concurrently") };
         concurrent.Check();
         HttpServer async_concurrent;
-        auto       futures{ mcr::MultiGetAsync(options(async_concurrent, "/barrier"), options(async_concurrent, "/barrier")).value() };
+        auto futures{ mcr::MultiGetAsync(options(async_concurrent, "/barrier"), options(async_concurrent, "/barrier")).value() };
         for (auto& future : futures) {
             passed &= check(future.Get().value().status_code == 200, "MultiGetAsync must permit concurrent execution");
         }
         async_concurrent.Check();
-        batch         = mcr::MultiGet(options(server, "/error"), std::tuple{ mcr::Url{ "invalid-scheme://localhost/" } }, options(server)).value();
-        passed       &= check(batch.size() == 3 && batch[0].status_code == 404 && !batch[0].error && bool(batch[1].error) && batch[2].text == "payload", "HTTP and transfer errors must keep their input positions");
-        auto movable  = [&] {
+        batch = mcr::MultiGet(options(server, "/error"), std::tuple{ mcr::Url{ "invalid-scheme://localhost/" } }, options(server)).value();
+        passed &= check(batch.size() == 3 && batch[0].status_code == 404 && !batch[0].error && bool(batch[1].error) && batch[2].text == "payload", "HTTP and transfer errors must keep their input positions");
+        auto movable = [&] {
             return std::tuple{
                 MoveOnlyUrl{ server.Url() },
                 mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } },
@@ -151,8 +151,8 @@ namespace {
         auto args{ options(server) };
         auto moved{ std::apply([](auto const&... values) {
             return mcr::PostCallback([state = std::make_unique<int>(7)](mcr::Result<mcr::Response> response_result) mutable {
-                       auto response  = std::move(response_result).value();
-                       *state        += static_cast<int>(response.text.size());
+                       auto response = std::move(response_result).value();
+                       *state += static_cast<int>(response.text.size());
                        return std::move(state);
                    },
                                      values...)
@@ -167,7 +167,7 @@ namespace {
                                 .value()
                                 .Get() == 200,
                         "owned continuations must be invoked as lvalues, as in cpr");
-        int  value{};
+        int value{};
         auto reference{ std::apply([&](auto const&... values) { return mcr::GetCallback([&](mcr::Result<mcr::Response>) -> int& { return value; }, values...).value(); }, args) };
         static_assert(std::same_as<decltype(reference), mcr::utils::AsyncWrapper<int&, true>>);
         reference.Get() = 17;
@@ -183,8 +183,8 @@ namespace {
             passed &= check(std::string_view{ error.what() } == "continuation", "the original continuation exception must be retained");
         }
         auto preparation{ mcr::GetAsync(mcr::options::HttpVersion{ static_cast<mcr::options::HttpVersionCode>(255) }).value() };
-        auto failed  = preparation.Get();
-        passed      &= check(!failed && failed.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "async preparation must return a configuration error");
+        auto failed = preparation.Get();
+        passed &= check(!failed && failed.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "async preparation must return a configuration error");
         return passed;
     }
 
@@ -193,16 +193,16 @@ namespace {
         pool->Wait();
         (void)pool->Pause();
         int const before{ server.Connections() };
-        auto      queued{ mcr::MultiGetAsync(options(server)).value() };
-        bool      passed{ check(queued[0].Cancel() == mcr::utils::CancellationResult::success, "queued batch requests must be cancellable") };
-        auto      queued_result{ queued[0].Share() };
+        auto queued{ mcr::MultiGetAsync(options(server)).value() };
+        bool passed{ check(queued[0].Cancel() == mcr::utils::CancellationResult::success, "queued batch requests must be cancellable") };
+        auto queued_result{ queued[0].Share() };
         (void)pool->Resume();
         passed &= check(queued_result.get().value().status_code == 0 && server.Connections() == before, "cancellation before execution must avoid a network request");
 
         std::promise<void> received;
-        auto               signal{ received.get_future() };
-        bool               signalled{ false };
-        auto               arguments{ std::tuple_cat(options(server, "/stream"), std::tuple{ mcr::WriteCallback{ [&](std::string_view, std::intptr_t) {
+        auto signal{ received.get_future() };
+        bool signalled{ false };
+        auto arguments{ std::tuple_cat(options(server, "/stream"), std::tuple{ mcr::WriteCallback{ [&](std::string_view, std::intptr_t) {
                                            if (!std::exchange(signalled, true)) {
                                                received.set_value();
                                            }
@@ -251,28 +251,28 @@ namespace {
 
     auto check_downloads(HttpServer const& server) -> bool {
         TempDirectory directory;
-        auto          args{ options(server, "/binary") };
-        std::string   binary(256, '\0');
+        auto args{ options(server, "/binary") };
+        std::string binary(256, '\0');
         for (std::size_t index{}; index < binary.size(); ++index) {
             binary[index] = static_cast<char>(index);
         }
         std::string bytes;
-        auto        callback{ std::apply([&](auto const&... values) { return mcr::Download(mcr::WriteCallback{ [&](std::string_view part, std::intptr_t) { bytes.append(part); return true; } }, values...).value(); }, args) };
-        bool        passed{ check(!callback.error && callback.text.empty() && bytes == binary, "callback downloads must preserve every byte") };
-        auto const  path{ directory.path / "synchronous.bin" };
+        auto callback{ std::apply([&](auto const&... values) { return mcr::Download(mcr::WriteCallback{ [&](std::string_view part, std::intptr_t) { bytes.append(part); return true; } }, values...).value(); }, args) };
+        bool passed{ check(!callback.error && callback.text.empty() && bytes == binary, "callback downloads must preserve every byte") };
+        auto const path{ directory.path / "synchronous.bin" };
         {
             std::ofstream file{ path, std::ios::binary };
-            auto          response{ std::apply([&](auto const&... values) { return mcr::Download(file, values...).value(); }, args) };
+            auto response{ std::apply([&](auto const&... values) { return mcr::Download(file, values...).value(); }, args) };
             passed &= check(!response.error && response.text.empty(), "stream downloads must return transfer metadata");
         }
         passed &= check(read_file(path) == binary, "stream downloads must preserve all binary bytes");
         auto future{ std::apply([&](auto const&... values) { return mcr::DownloadAsync(directory.path / "asynchronous.bin", values...).value(); }, args) };
         passed &= check(!future.Get().value().error && read_file(directory.path / "asynchronous.bin") == binary, "asynchronous downloads must open and close files in binary mode");
         std::ofstream closed;
-        auto          closed_result  = mcr::Download(closed, server.Url());
-        passed                      &= check(!closed_result && closed_result.error().code == mcr::ErrorCode::WRITE_ERROR, "closed download streams must return WRITE_ERROR");
-        auto unwritable              = mcr::DownloadAsync(directory.path, server.Url()).value().Get();
-        passed                      &= check(!unwritable && unwritable.error().code == mcr::ErrorCode::WRITE_ERROR, "async file-open failures must return WRITE_ERROR");
+        auto closed_result = mcr::Download(closed, server.Url());
+        passed &= check(!closed_result && closed_result.error().code == mcr::ErrorCode::WRITE_ERROR, "closed download streams must return WRITE_ERROR");
+        auto unwritable = mcr::DownloadAsync(directory.path, server.Url()).value().Get();
+        passed &= check(!unwritable && unwritable.error().code == mcr::ErrorCode::WRITE_ERROR, "async file-open failures must return WRITE_ERROR");
         return passed;
     }
 } // namespace

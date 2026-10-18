@@ -816,7 +816,7 @@ export namespace mcr {
         return mcr::async(
             [](std::filesystem::path path, auto... values) -> Result<Response> {
                 std::ofstream file{ path, std::ios::binary | std::ios::trunc };
-                auto          response{ Download(file, std::move(values)...) };
+                auto response{ Download(file, std::move(values)...) };
                 if (!response) {
                     return response;
                 }
@@ -857,7 +857,7 @@ export namespace mcr {
         if (auto status = detail::set_options(*session, std::move(options)...); !status) {
             co_return std::unexpected{ std::move(status.error()) };
         }
-        auto token    = co_await detail::TaskStopToken{};
+        auto token = co_await detail::TaskStopToken{};
         auto response = co_await detail::CoroTransferAwaiter{
             std::move(session),
             [&file](Session& current) { return current.PrepareDownload(file); },

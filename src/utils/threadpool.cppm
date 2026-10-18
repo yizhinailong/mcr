@@ -9,9 +9,9 @@ import std;
 
 export namespace mcr::utils {
 
-    inline constexpr std::size_t               DEFAULT_THREAD_POOL_MIN_THREAD_NUM{ 1 };                                                   ///< Default minimum worker count.
-    inline const std::size_t                   DEFAULT_THREAD_POOL_MAX_THREAD_NUM{ (std::max)(1u, std::thread::hardware_concurrency()) }; ///< Default maximum, including a fallback when hardware concurrency is unknown.
-    inline constexpr std::chrono::milliseconds DEFAULT_THREAD_POOL_MAX_IDLE_TIME{ 250 };                                                  ///< Idle lifetime of workers above the minimum.
+    inline constexpr std::size_t DEFAULT_THREAD_POOL_MIN_THREAD_NUM{ 1 };                                               ///< Default minimum worker count.
+    inline const std::size_t DEFAULT_THREAD_POOL_MAX_THREAD_NUM{ (std::max)(1u, std::thread::hardware_concurrency()) }; ///< Default maximum, including a fallback when hardware concurrency is unknown.
+    inline constexpr std::chrono::milliseconds DEFAULT_THREAD_POOL_MAX_IDLE_TIME{ 250 };                                ///< Idle lifetime of workers above the minimum.
 
     /**
      * @brief Execute queued tasks with automatic startup, bounded growth, and idle worker retirement.
@@ -23,7 +23,75 @@ export namespace mcr::utils {
         using Task = std::function<void()>; ///< A queued operation without a direct return value.
 
     private:
-        using QueuedTask = std::move_only_function<void(bool)>; ///< Own a task; invoke with true to cancel without calling user code.
+        /**
+         * @brief Own a type-erased move-only task; invoke with true to cancel without calling user code.
+         * @note Replaces std::move_only_function, which libc++ 23 does not implement.
+         */
+        class QueuedTask {
+        public:
+            QueuedTask() = default;
+            QueuedTask(QueuedTask const&) = delete;
+            QueuedTask(QueuedTask&&) noexcept = default;
+            auto operator=(QueuedTask const&) -> QueuedTask& = delete;
+            auto operator=(QueuedTask&&) noexcept -> QueuedTask& = default;
+
+            /**
+             * @brief Store a callable that accepts the cancellation flag.
+             * @tparam Fn Callable type.
+             * @param fn Callable moved or copied into the task.
+             * @throws std::bad_alloc If storage cannot be allocated.
+             */
+            template <typename Fn>
+            QueuedTask(Fn&& fn) : m_target{ std::make_unique<Target<std::decay_t<Fn>>>(std::forward<Fn>(fn)) } {}
+
+            /**
+             * @brief Check whether a callable is stored.
+             * @return True when the task is not empty.
+             */
+            [[nodiscard]] explicit operator bool() const noexcept { return m_target != nullptr; }
+
+            /**
+             * @brief Invoke the stored callable.
+             * @param cancel Forwarded to the callable; true must throw so the future carries the error.
+             */
+            auto operator()(bool cancel) -> void { m_target->invoke(cancel); }
+
+            /**
+             * @brief Exchange the stored callable with another task.
+             * @param other Task to swap with.
+             */
+            auto swap(QueuedTask& other) noexcept -> void { m_target.swap(other.m_target); }
+
+        private:
+            /**
+             * @brief Type-erased callable interface.
+             */
+            struct TargetBase {
+                virtual ~TargetBase() = default;
+
+                /**
+                 * @brief Invoke the erased callable.
+                 * @param cancel Cancellation flag.
+                 */
+                virtual auto invoke(bool cancel) -> void = 0;
+            };
+
+            /**
+             * @brief Concrete storage for a callable.
+             * @tparam Fn Stored callable type.
+             */
+            template <typename Fn>
+            struct Target final : TargetBase {
+                template <typename F>
+                explicit Target(F&& fn) : m_fn(std::forward<F>(fn)) {}
+
+                auto invoke(bool cancel) -> void override { m_fn(cancel); }
+
+                Fn m_fn; ///< The owned callable.
+            };
+
+            std::unique_ptr<TargetBase> m_target; ///< Null when the task is empty.
+        };
 
         enum class Status : std::uint8_t { STOPPED,
                                            RUNNING,
@@ -34,21 +102,21 @@ export namespace mcr::utils {
          * @brief A stable worker record; the thread is joined before its completion flag is destroyed.
          */
         struct Worker {
-            bool         finished{ false }; ///< Protected by the pool mutex.
-            std::jthread thread;            ///< Joins when this worker record is destroyed.
+            bool finished{ false }; ///< Protected by the pool mutex.
+            std::jthread thread;    ///< Joins when this worker record is destroyed.
         };
 
-        mutable std::mutex                     m_mutex;
-        std::condition_variable                m_task_cond;
-        std::condition_variable                m_done_cond;
-        Status                                 m_status{ Status::STOPPED };
-        std::size_t                            m_min_thread_num;
-        std::size_t                            m_max_thread_num;
-        std::chrono::milliseconds              m_max_idle_time;
-        std::size_t                            m_current_thread_num{ 0 };
-        std::size_t                            m_active_thread_num{ 0 };
-        std::list<Worker>                      m_workers;
-        std::queue<QueuedTask>                 m_tasks;
+        mutable std::mutex m_mutex;
+        std::condition_variable m_task_cond;
+        std::condition_variable m_done_cond;
+        Status m_status{ Status::STOPPED };
+        std::size_t m_min_thread_num;
+        std::size_t m_max_thread_num;
+        std::chrono::milliseconds m_max_idle_time;
+        std::size_t m_current_thread_num{ 0 };
+        std::size_t m_active_thread_num{ 0 };
+        std::list<Worker> m_workers;
+        std::queue<QueuedTask> m_tasks;
         inline static thread_local ThreadPool* s_current_pool{ nullptr };
 
     public:
@@ -60,18 +128,18 @@ export namespace mcr::utils {
          * @throws std::invalid_argument If thread limits or the idle duration are invalid.
          */
         explicit ThreadPool(
-            std::size_t               min_threads = DEFAULT_THREAD_POOL_MIN_THREAD_NUM,
-            std::size_t               max_threads = DEFAULT_THREAD_POOL_MAX_THREAD_NUM,
+            std::size_t min_threads = DEFAULT_THREAD_POOL_MIN_THREAD_NUM,
+            std::size_t max_threads = DEFAULT_THREAD_POOL_MAX_THREAD_NUM,
             std::chrono::milliseconds max_idle_ms = DEFAULT_THREAD_POOL_MAX_IDLE_TIME
         ) : m_min_thread_num{ min_threads }, m_max_thread_num{ max_threads }, m_max_idle_time{ max_idle_ms } {
             validateLimits(min_threads, max_threads);
             validateIdleTime(max_idle_ms);
         }
 
-        ThreadPool(ThreadPool const&)            = delete;
-        ThreadPool(ThreadPool&&)                 = delete;
+        ThreadPool(ThreadPool const&) = delete;
+        ThreadPool(ThreadPool&&) = delete;
         ThreadPool& operator=(ThreadPool const&) = delete;
-        ThreadPool& operator=(ThreadPool&&)      = delete;
+        ThreadPool& operator=(ThreadPool&&) = delete;
 
         /**
          * @brief Cancel pending tasks and join workers; call Wait first to finish all queued work.
@@ -86,7 +154,7 @@ export namespace mcr::utils {
          */
         auto SetMinThreadNum(std::size_t min_threads) -> void {
             std::list<Worker> retired;
-            std::scoped_lock  lock{ m_mutex };
+            std::scoped_lock lock{ m_mutex };
             validateLimits(min_threads, m_max_thread_num);
             collectFinished(retired);
             if (isStarted()) {
@@ -106,7 +174,7 @@ export namespace mcr::utils {
          */
         auto SetMaxThreadNum(std::size_t max_threads) -> void {
             std::list<Worker> retired;
-            std::scoped_lock  lock{ m_mutex };
+            std::scoped_lock lock{ m_mutex };
             validateLimits(m_min_thread_num, max_threads);
             collectFinished(retired);
             m_max_thread_num = max_threads;
@@ -199,7 +267,7 @@ export namespace mcr::utils {
          */
         auto Start(std::size_t start_threads = 0) -> int {
             std::list<Worker> retired;
-            std::scoped_lock  lock{ m_mutex };
+            std::scoped_lock lock{ m_mutex };
             collectFinished(retired);
             if (m_status != Status::STOPPED) {
                 return -1;
@@ -216,7 +284,7 @@ export namespace mcr::utils {
          */
         auto Stop() -> int {
             checkExternalWait();
-            std::list<Worker>      workers;
+            std::list<Worker> workers;
             std::queue<QueuedTask> canceled;
             {
                 std::scoped_lock lock{ m_mutex };
@@ -302,11 +370,11 @@ export namespace mcr::utils {
                                       arguments);
                 }
             };
-            auto               future = task.get_future();
-            QueuedTask         queued;
-            std::list<Worker>  retired;
+            auto future = task.get_future();
+            QueuedTask queued;
+            std::list<Worker> retired;
             std::exception_ptr submission_error;
-            bool               rejected{};
+            bool rejected{};
             try {
                 queued = std::move(task);
                 std::scoped_lock lock{ m_mutex };
@@ -437,7 +505,7 @@ export namespace mcr::utils {
          * @brief Compute a saturated idle deadline without overflowing chrono representations.
          */
         auto idleDeadline(std::chrono::steady_clock::time_point idle_since) const -> std::chrono::steady_clock::time_point {
-            using Clock                 = std::chrono::steady_clock;
+            using Clock = std::chrono::steady_clock;
             constexpr auto MAX_INTERVAL = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::duration::max());
             if (m_max_idle_time >= MAX_INTERVAL) {
                 return Clock::time_point::max();
@@ -455,7 +523,7 @@ export namespace mcr::utils {
         auto runWorker(Worker& worker) -> void {
             s_current_pool = this;
             std::unique_lock lock{ m_mutex };
-            auto             idle_since = std::chrono::steady_clock::now();
+            auto idle_since = std::chrono::steady_clock::now();
             for (;;) {
                 if (m_status == Status::STOPPING || m_current_thread_num > m_max_thread_num) {
                     break;
@@ -492,7 +560,7 @@ export namespace mcr::utils {
             }
             --m_current_thread_num;
             worker.finished = true;
-            s_current_pool  = nullptr;
+            s_current_pool = nullptr;
         }
     };
 

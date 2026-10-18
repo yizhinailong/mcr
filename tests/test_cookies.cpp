@@ -32,18 +32,18 @@ namespace {
 
     auto check_metadata() -> bool {
         mcr::Cookie const empty;
-        bool              passed{ check(empty.GetName().empty() && empty.GetValue().empty() && empty.GetDomain().empty() && empty.GetPath().empty() && !empty.IsIncludingSubdomains() && !empty.IsHttpsOnly() && empty.GetExpires() == system_clock::from_time_t(0), "default cookie must have empty text, false flags, and an epoch expiration") };
+        bool passed{ check(empty.GetName().empty() && empty.GetValue().empty() && empty.GetDomain().empty() && empty.GetPath().empty() && !empty.IsIncludingSubdomains() && !empty.IsHttpsOnly() && empty.GetExpires() == system_clock::from_time_t(0), "default cookie must have empty text, false flags, and an epoch expiration") };
         mcr::Cookie const named{ "SID", "value" };
         passed &= check(named.GetName() == "SID" && named.GetValue() == "value" && named.GetDomain().empty() && named.GetPath() == "/" && !named.IsIncludingSubdomains() && !named.IsHttpsOnly() && named.GetExpires() == system_clock::from_time_t(0), "name/value construction must use cpr's root path and metadata defaults");
 
-        std::string                    name{ "SID" };
-        std::string                    value{ "value" };
-        std::string                    domain{ ".Example.COM" };
-        std::string                    path{ "/account" };
+        std::string name{ "SID" };
+        std::string value{ "value" };
+        std::string domain{ ".Example.COM" };
+        std::string path{ "/account" };
         system_clock::time_point const expires{ sys_days{ 2015y / October / 21 } + 7h + 28min + 789ms };
-        mcr::Cookie const              owned{ name, value, domain, true, path, true, expires };
-        name = value = domain = path  = "changed";
-        passed                       &= check(owned.GetName() == "SID" && owned.GetValue() == "value" && owned.GetDomain() == ".Example.COM" && owned.GetPath() == "/account" && owned.IsIncludingSubdomains() && owned.IsHttpsOnly() && owned.GetExpires() == expires, "cookie must own all strings and preserve flags and full timestamp precision without normalization");
+        mcr::Cookie const owned{ name, value, domain, true, path, true, expires };
+        name = value = domain = path = "changed";
+        passed &= check(owned.GetName() == "SID" && owned.GetValue() == "value" && owned.GetDomain() == ".Example.COM" && owned.GetPath() == "/account" && owned.IsIncludingSubdomains() && owned.IsHttpsOnly() && owned.GetExpires() == expires, "cookie must own all strings and preserve flags and full timestamp precision without normalization");
         mcr::Cookie const empty_path{ "name", "value", "", false, "" };
         passed &= check(empty_path.GetPath().empty(), "an explicitly empty path must remain empty");
         std::string const binary{ "a\0b", 3 };
@@ -55,7 +55,7 @@ namespace {
     auto check_expiration() -> bool {
         struct DateCase {
             system_clock::time_point expires;
-            std::string_view         expected;
+            std::string_view expected;
         };
 
         DateCase const cases[]{
@@ -76,11 +76,11 @@ namespace {
     auto check_collection() -> bool {
         mcr::Cookies defaults;
         mcr::Cookies raw = false;
-        bool         passed{ check(defaults.encode && defaults.empty() && !raw.encode && raw.empty() && defaults.begin() == defaults.end() && defaults.cbegin() == defaults.cend(), "empty collection constructors must preserve the selected encoding mode") };
-        mcr::Cookie  input{ "single", "one" };
-        mcr::Cookies single  = input;
-        input                = mcr::Cookie{ "changed", "two" };
-        passed              &= check(single.encode && std::ranges::distance(single) == 1 && single[0].GetName() == "single", "single-cookie conversion must own an independent copy");
+        bool passed{ check(defaults.encode && defaults.empty() && !raw.encode && raw.empty() && defaults.begin() == defaults.end() && defaults.cbegin() == defaults.cend(), "empty collection constructors must preserve the selected encoding mode") };
+        mcr::Cookie input{ "single", "one" };
+        mcr::Cookies single = input;
+        input = mcr::Cookie{ "changed", "two" };
+        passed &= check(single.encode && std::ranges::distance(single) == 1 && single[0].GetName() == "single", "single-cookie conversion must own an independent copy");
         mcr::Cookies single_raw{ input, false };
         passed &= check(!single_raw.encode && single_raw[0].GetValue() == "two", "single-cookie constructor must honor an explicit encoding mode");
 
@@ -103,18 +103,18 @@ namespace {
                 passed &= check(std::string_view{ error.what() } == std::format("Cookie: {} does not exist", missing) && std::ranges::distance(cookies) == 3, "failed lookup must preserve cpr's diagnostic without inserting a cookie");
             }
         }
-        cookies["SID"]  = mcr::Cookie{ "SID", "updated" };
-        passed         &= check(cookies[0].GetValue() == "updated" && cookies[1].GetValue() == "second", "named lookup must permit replacement of only the first matching cookie");
+        cookies["SID"] = mcr::Cookie{ "SID", "updated" };
+        passed &= check(cookies[0].GetValue() == "updated" && cookies[1].GetValue() == "second", "named lookup must permit replacement of only the first matching cookie");
         mcr::Cookie appended{ "extra", "copy" };
         cookies.emplace_back(appended);
         cookies.push_back(appended);
-        appended  = mcr::Cookie{ "changed", "changed" };
-        passed   &= check(std::ranges::distance(cookies) == 5 && cookies[3].GetName() == "extra" && cookies[4].GetValue() == "copy", "both append methods must store independent copies in order");
+        appended = mcr::Cookie{ "changed", "changed" };
+        passed &= check(std::ranges::distance(cookies) == 5 && cookies[3].GetName() == "extra" && cookies[4].GetValue() == "copy", "both append methods must store independent copies in order");
         cookies.pop_back();
         mcr::Cookies const snapshot{ cookies };
-        passed     &= check(snapshot.begin() == snapshot.cbegin() && snapshot.end() == snapshot.cend() && std::ranges::distance(snapshot) == 4, "const iteration must expose the remaining ordered cookies");
-        cookies[0]  = mcr::Cookie{ "changed", "changed" };
-        passed     &= check(snapshot.begin()->GetName() == "SID" && !snapshot.encode, "collection copies must preserve independent cookies and encoding mode");
+        passed &= check(snapshot.begin() == snapshot.cbegin() && snapshot.end() == snapshot.cend() && std::ranges::distance(snapshot) == 4, "const iteration must expose the remaining ordered cookies");
+        cookies[0] = mcr::Cookie{ "changed", "changed" };
+        passed &= check(snapshot.begin()->GetName() == "SID" && !snapshot.encode, "collection copies must preserve independent cookies and encoding mode");
         mcr::Cookies assigned;
         assigned = snapshot;
         mcr::Cookies moved{ std::move(assigned) };
@@ -128,7 +128,7 @@ namespace {
         }
         passed &= check(moved.begin() == moved.end(), "removing every cookie must produce an empty range");
         std::string const binary_name{ "a\0b", 3 };
-        mcr::Cookies      binary{
+        mcr::Cookies binary{
             { binary_name,      "value" },
             {          "", "empty name" }
         };
@@ -137,18 +137,18 @@ namespace {
     }
 
     auto check_encoding() -> bool {
-        auto         holder = mcr::curl::CurlHolder::Create().value();
+        auto holder = mcr::curl::CurlHolder::Create().value();
         mcr::Cookies cookies{
             {  "SID", "value" },
             { "lang", "en-US" }
         };
-        bool         passed{ check(cookies.GetEncoded(holder).value() == "SID=value; lang=en-US; ", "serialization must preserve insertion order and the trailing separator") };
+        bool passed{ check(cookies.GetEncoded(holder).value() == "SID=value; lang=en-US; ", "serialization must preserve insertion order and the trailing separator") };
         mcr::Cookies reserved{
             { "a b", "c+d;%&" }
         };
-        passed          &= check(reserved.GetEncoded(holder).value() == "a%20b=c%2Bd%3B%25%26; ", "names and unquoted values must be percent-encoded by default");
-        reserved.encode  = false;
-        passed          &= check(reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "changing encode must select raw name/value serialization");
+        passed &= check(reserved.GetEncoded(holder).value() == "a%20b=c%2Bd%3B%25%26; ", "names and unquoted values must be percent-encoded by default");
+        reserved.encode = false;
+        passed &= check(reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "changing encode must select raw name/value serialization");
         mcr::Cookies quoted{
             { "quoted name", "\"hello world;=+%\"" },
             {       "empty",                "\"\"" },
@@ -173,14 +173,14 @@ namespace {
         passed &= check(unicode.GetEncoded(holder).value() == "%E9%9B%AA=%E4%B8%80; ", "UTF-8 names and values must be encoded byte by byte");
         std::string const binary_name{ "n\0m", 3 };
         std::string const binary_value{ "v\0x", 3 };
-        mcr::Cookies      binary{
+        mcr::Cookies binary{
             { binary_name, binary_value }
         };
-        passed        &= check(binary.GetEncoded(holder).value() == "n%00m=v%00x; ", "binary names and values must be encoded without truncation");
-        binary.encode  = false;
-        passed        &= check(binary.GetEncoded(holder).value() == binary_name + '=' + binary_value + "; ", "raw serialization must retain embedded nulls");
+        passed &= check(binary.GetEncoded(holder).value() == "n%00m=v%00x; ", "binary names and values must be encoded without truncation");
+        binary.encode = false;
+        passed &= check(binary.GetEncoded(holder).value() == binary_name + '=' + binary_value + "; ", "raw serialization must retain embedded nulls");
         std::string const quoted_binary{ "\"a\0b\"", 5 };
-        mcr::Cookies      binary_quoted{
+        mcr::Cookies binary_quoted{
             { "binary", quoted_binary }
         };
         passed &= check(binary_quoted.GetEncoded(holder).value() == "binary=" + quoted_binary + "; ", "quoted binary values must remain verbatim");
@@ -188,8 +188,8 @@ namespace {
         mcr::curl::CurlHolder owner{ std::move(holder) };
         passed &= check(mcr::Cookies{}.GetEncoded(holder).value().empty() && reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "empty and raw collections must not require an active curl handle");
         {
-            auto const failure  = cookies.GetEncoded(holder);
-            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
+            auto const failure = cookies.GetEncoded(holder);
+            passed &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
         }
         return passed;
     }

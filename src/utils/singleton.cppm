@@ -20,14 +20,14 @@ export namespace mcr::utils {
     private:
         friend T;
 
-        inline static T*             s_instance{ nullptr }; ///< Owned until explicit ExitInstance.
-        inline static std::once_flag s_get_flag;            ///< Allows one successful construction per T.
-        inline static std::once_flag s_exit_flag;           ///< Allows one successful destruction per T.
+        inline static T* s_instance{ nullptr };   ///< Owned until explicit ExitInstance.
+        inline static std::once_flag s_get_flag;  ///< Allows one successful construction per T.
+        inline static std::once_flag s_exit_flag; ///< Allows one successful destruction per T.
 
         /**
          * @brief Allow only T to construct its singleton base.
          */
-        Singleton()  = default;
+        Singleton() = default;
 
         /**
          * @brief Destroy the base as part of T; deletion through the base is forbidden.
@@ -35,10 +35,10 @@ export namespace mcr::utils {
         ~Singleton() = default;
 
     public:
-        Singleton(Singleton const&)            = delete;
-        Singleton(Singleton&&)                 = delete;
+        Singleton(Singleton const&) = delete;
+        Singleton(Singleton&&) = delete;
         Singleton& operator=(Singleton const&) = delete;
-        Singleton& operator=(Singleton&&)      = delete;
+        Singleton& operator=(Singleton&&) = delete;
 
         /**
          * @brief Lazily construct one instance, retrying if construction throws.

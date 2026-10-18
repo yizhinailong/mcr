@@ -96,10 +96,10 @@ export namespace mcr::options {
             return result;
         }
 
-        virtual ~EncodedAuthentication()                                           = default;
-        EncodedAuthentication(EncodedAuthentication const&)                        = default;
-        EncodedAuthentication(EncodedAuthentication&&) noexcept                    = default;
-        auto operator=(EncodedAuthentication const&) -> EncodedAuthentication&     = default;
+        virtual ~EncodedAuthentication() = default;
+        EncodedAuthentication(EncodedAuthentication const&) = default;
+        EncodedAuthentication(EncodedAuthentication&&) noexcept = default;
+        auto operator=(EncodedAuthentication const&) -> EncodedAuthentication& = default;
         auto operator=(EncodedAuthentication&&) noexcept -> EncodedAuthentication& = default;
 
         /**

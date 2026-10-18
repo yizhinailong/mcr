@@ -39,7 +39,7 @@ export namespace mcr::curl {
             return result;
         }
 
-        CurlMultiHolder(CurlMultiHolder const&)                    = delete;
+        CurlMultiHolder(CurlMultiHolder const&) = delete;
         auto operator=(CurlMultiHolder const&) -> CurlMultiHolder& = delete;
 
         /**

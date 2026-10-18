@@ -29,7 +29,7 @@ namespace {
         inline static std::atomic<int> attempts{ 0 };
         inline static std::atomic<int> constructions{ 0 };
         inline static std::atomic<int> destructions{ 0 };
-        inline static bool             fail_first{ false };
+        inline static bool fail_first{ false };
 
         int const value{ 42 };
 
@@ -61,11 +61,11 @@ namespace {
 
     auto check_concurrent_lifecycle() -> void {
         using Instance = TestSingleton<0>;
-        using Other    = TestSingleton<1>;
+        using Other = TestSingleton<1>;
 
         require(Instance::constructions == 0 && Other::constructions == 0, "singletons must initialize lazily");
         std::array<Instance*, 16> instances{};
-        std::latch                start{ 1 };
+        std::latch start{ 1 };
         {
             std::vector<std::jthread> threads;
             for (auto& instance : instances) {
@@ -108,7 +108,7 @@ namespace {
     }
 
     auto check_failed_initialization() -> void {
-        using Instance       = TestSingleton<2>;
+        using Instance = TestSingleton<2>;
         Instance::fail_first = true;
         bool threw{ false };
         try {

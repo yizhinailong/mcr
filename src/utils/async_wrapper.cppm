@@ -12,8 +12,8 @@ export namespace mcr::utils {
      * @brief Cancellation outcomes retaining cpr's names and numeric values.
      */
     enum class [[nodiscard]] CancellationResult : std::uint8_t {
-        failure           = 0, ///< Reserved for compatibility; the flag-based wrapper does not return it.
-        success           = 1, ///< This call changed the cancellation flag from false to true.
+        failure = 0,           ///< Reserved for compatibility; the flag-based wrapper does not return it.
+        success = 1,           ///< This call changed the cancellation flag from false to true.
         invalid_operation = 2, ///< No cancellable future remains, or cancellation was already requested.
     };
 
@@ -48,11 +48,11 @@ export namespace mcr::utils {
          */
         explicit AsyncWrapper(std::future<RetType>&& future) noexcept : m_future{ std::move(future) } {}
 
-        AsyncWrapper(AsyncWrapper const&)                        = delete;
-        auto operator=(AsyncWrapper const&) -> AsyncWrapper&     = delete;
-        AsyncWrapper(AsyncWrapper&&) noexcept                    = default;
+        AsyncWrapper(AsyncWrapper const&) = delete;
+        auto operator=(AsyncWrapper const&) -> AsyncWrapper& = delete;
+        AsyncWrapper(AsyncWrapper&&) noexcept = default;
         auto operator=(AsyncWrapper&&) noexcept -> AsyncWrapper& = default;
-        ~AsyncWrapper()                                          = default;
+        ~AsyncWrapper() = default;
 
         /**
          * @brief Wait for and consume the stored result, preserving reference and void results.
@@ -161,9 +161,9 @@ export namespace mcr::utils {
             Base::operator=(Base{ std::move(future) });
         }
 
-        AsyncWrapper(AsyncWrapper const&)                    = delete;
+        AsyncWrapper(AsyncWrapper const&) = delete;
         auto operator=(AsyncWrapper const&) -> AsyncWrapper& = delete;
-        AsyncWrapper(AsyncWrapper&&) noexcept                = default;
+        AsyncWrapper(AsyncWrapper&&) noexcept = default;
 
         /**
          * @brief Cancel the previously owned operation and take ownership from another wrapper.

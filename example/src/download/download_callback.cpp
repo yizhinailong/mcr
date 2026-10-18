@@ -14,7 +14,7 @@ import mcr_example.support;
  */
 auto main(int argc, char** argv) -> int {
     return example::run(argc, argv, "download_callback", [](example::Arguments const& args) {
-        std::string              bytes;
+        std::string bytes;
         mcr::WriteCallback const write{ [&bytes](std::string_view chunk, std::intptr_t) {
             bytes.append(chunk);
             return true;

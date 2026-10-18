@@ -29,7 +29,7 @@ export namespace mcr::options {
     class Authentication {
     private:
         utils::SecureString m_auth_string; ///< Owned credentials, including the colon separator.
-        AuthMode            m_auth_mode;   ///< Selected authentication policy.
+        AuthMode m_auth_mode;              ///< Selected authentication policy.
 
     public:
         /**
@@ -82,18 +82,18 @@ export namespace mcr::options {
          * @brief Copy token bytes into independent secure-string storage.
          * @param other Source token.
          */
-        Bearer(Bearer const& other)                        = default;
+        Bearer(Bearer const& other) = default;
 
         /**
          * @brief Move the token using secure-string move semantics.
          * @param other Source token.
          */
-        Bearer(Bearer&& other) noexcept                    = default;
+        Bearer(Bearer&& other) noexcept = default;
 
         /**
          * @brief Destroy the token, including derived state when deleted through a base pointer.
          */
-        virtual ~Bearer() noexcept                         = default;
+        virtual ~Bearer() noexcept = default;
 
         /**
          * @brief Move token storage.
@@ -107,7 +107,7 @@ export namespace mcr::options {
          * @param other Source token.
          * @return This object after assignment.
          */
-        auto operator=(Bearer const& other) -> Bearer&     = default;
+        auto operator=(Bearer const& other) -> Bearer& = default;
 
         /**
          * @brief Borrow the null-terminated token string; derived classes may override this accessor.

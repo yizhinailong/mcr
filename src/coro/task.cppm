@@ -42,12 +42,12 @@ namespace mcr::detail {
      */
     template <typename T>
     struct TaskState : TaskValue<T> {
-        std::mutex              mutex;
+        std::mutex mutex;
         std::condition_variable condition;
-        bool                    done{ false };
-        std::exception_ptr      error;
+        bool done{ false };
+        std::exception_ptr error;
         std::coroutine_handle<> continuation{};
-        std::stop_source        stop;
+        std::stop_source stop;
 
         /**
          * @brief Publish the result after the coroutine frame has been destroyed.
@@ -191,7 +191,7 @@ export namespace mcr {
 
     private:
         using Handle = std::coroutine_handle<promise_type>;
-        Handle                                m_coroutine{}; ///< Owned only until the task starts.
+        Handle m_coroutine{}; ///< Owned only until the task starts.
         std::shared_ptr<detail::TaskState<T>> m_state;
 
         Task(Handle coroutine, std::shared_ptr<detail::TaskState<T>> state) noexcept
@@ -201,8 +201,8 @@ export namespace mcr {
         friend auto sync_wait(Task<U> task) -> U;
 
     public:
-        Task()                               = default;
-        Task(Task const&)                    = delete;
+        Task() = default;
+        Task(Task const&) = delete;
         auto operator=(Task const&) -> Task& = delete;
 
         Task(Task&& other) noexcept
@@ -212,7 +212,7 @@ export namespace mcr {
             if (this != &other) {
                 Task previous{ std::move(*this) };
                 m_coroutine = std::exchange(other.m_coroutine, {});
-                m_state     = std::move(other.m_state);
+                m_state = std::move(other.m_state);
             }
             return *this;
         }
@@ -260,8 +260,8 @@ export namespace mcr {
          * @brief Own the result and propagate parent cancellation while awaiting it.
          */
         class Awaiter {
-            Handle                                                       m_coroutine;
-            std::shared_ptr<detail::TaskState<T>>                        m_state;
+            Handle m_coroutine;
+            std::shared_ptr<detail::TaskState<T>> m_state;
             std::unique_ptr<std::stop_callback<detail::ForwardTaskStop>> m_parent_stop;
 
         public:
@@ -269,7 +269,7 @@ export namespace mcr {
                 : m_coroutine{ coroutine }, m_state{ std::move(state) } {}
 
             Awaiter(Awaiter const&) = delete;
-            Awaiter(Awaiter&&)      = delete;
+            Awaiter(Awaiter&&) = delete;
 
             ~Awaiter() {
                 if (m_coroutine) {
@@ -293,7 +293,7 @@ export namespace mcr {
                         detail::ForwardTaskStop{ m_state->stop }
                     );
                 }
-                auto state  = m_state;
+                auto state = m_state;
                 auto handle = std::exchange(m_coroutine, {});
                 {
                     std::lock_guard lock{ state->mutex };

@@ -40,11 +40,11 @@ export namespace mcr::curl {
 #ifdef MCR_SSL_CTX_OPENSSL
         try {
             auto const* buffer{ static_cast<char const*>(raw_cert_buf) };
-            auto const  length{ std::char_traits<char>::length(buffer) };
+            auto const length{ std::char_traits<char>::length(buffer) };
             if (length > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
                 return CURLE_ABORTED_BY_CALLBACK;
             }
-            using Bio         = std::unique_ptr<BIO, decltype(&BIO_free)>;
+            using Bio = std::unique_ptr<BIO, decltype(&BIO_free)>;
             using Certificate = std::unique_ptr<X509, decltype(&X509_free)>;
             Bio bio{ BIO_new_mem_buf(buffer, static_cast<int>(length)), &BIO_free };
             if (!bio) {

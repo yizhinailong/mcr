@@ -28,8 +28,8 @@ namespace {
     auto check_construction() -> bool {
         bool passed{ true };
         for (std::string_view const value : { "", "the_token", " Bearer already prefixed ", "a:b+c/%=&", "\xE4\xB8\xAD" }) {
-            mcr::options::Bearer const token  = value;
-            passed                  &= check(token.GetToken() && std::string_view{ token.GetToken() } == value, "construction must preserve token bytes without adding a prefix, trimming, or encoding");
+            mcr::options::Bearer const token = value;
+            passed &= check(token.GetToken() && std::string_view{ token.GetToken() } == value, "construction must preserve token bytes without adding a prefix, trimming, or encoding");
         }
         mcr::options::Bearer const empty{ std::string_view{} };
         passed &= check(empty.GetToken() && *empty.GetToken() == '\0', "a default empty view must produce a valid empty C string");
@@ -51,17 +51,17 @@ namespace {
     auto check_ownership() -> bool {
         bool passed{ true };
         for (std::size_t const length : { 1U, 512U }) {
-            std::string       source(length, 't');
+            std::string source(length, 't');
             std::string const expected{ source };
             mcr::options::Bearer original{ source };
             source.assign(length, 'x');
             passed &= check(std::string_view{ original.GetToken() } == expected, "short and heap-backed tokens must own their input views");
             mcr::options::Bearer copied{ original };
-            original  = mcr::options::Bearer{ "replacement" };
-            passed   &= check(std::string_view{ copied.GetToken() } == expected && std::string_view{ original.GetToken() } == "replacement", "copies must retain independent token values");
+            original = mcr::options::Bearer{ "replacement" };
+            passed &= check(std::string_view{ copied.GetToken() } == expected && std::string_view{ original.GetToken() } == "replacement", "copies must retain independent token values");
             mcr::options::Bearer moved{ std::move(copied) };
             passed &= check(std::string_view{ moved.GetToken() } == expected && copied.GetToken(), "moves must preserve the destination token and leave the source queryable");
-            copied  = mcr::options::Bearer{ "reused" };
+            copied = mcr::options::Bearer{ "reused" };
             passed &= check(&(original = moved) == &original && std::string_view{ original.GetToken() } == expected, "copy assignment must replace token bytes and return the destination");
             passed &= check(&(moved = std::move(copied)) == &moved && std::string_view{ moved.GetToken() } == "reused", "move assignment must replace token bytes and return the destination");
         }
@@ -93,7 +93,7 @@ namespace {
     };
 
     auto check_polymorphism() -> bool {
-        EditableBearer     editable{ "original" };
+        EditableBearer editable{ "original" };
         mcr::options::Bearer const& base{ editable };
         editable.SetToken("updated token");
         bool passed{ check(std::string_view{ base.GetToken() } == "updated token", "derived classes must be able to update the protected secure-string storage") };

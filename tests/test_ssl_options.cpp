@@ -44,16 +44,16 @@ namespace {
         options.SetOption(mcr::options::ssl::PemCert{ "new.pem" });
         options.SetOption(mcr::options::ssl::PemKey{ "new-key.pem" });
         options.SetOption(mcr::options::ssl::CaBuffer{ "buffer" });
-        passed              &= check(options.cert_blob.empty() && options.key_blob.empty() && options.key_pass.empty() && options.cert_type == "PEM" && options.ca_info_blob.empty() && options.ca_buffer == "buffer", "replacement options must clear obsolete sources and passphrases");
-        auto  session_owner  = mcr::Session::Create().value();
-        auto& session        = *session_owner;
+        passed &= check(options.cert_blob.empty() && options.key_blob.empty() && options.key_pass.empty() && options.cert_type == "PEM" && options.ca_info_blob.empty() && options.ca_buffer == "buffer", "replacement options must clear obsolete sources and passphrases");
+        auto session_owner = mcr::Session::Create().value();
+        auto& session = *session_owner;
         session.SetOption(defaults).value();
         session.SetOption(mcr::options::VerifySsl{ false }).value();
         session.SetVerifySsl({}).value();
         session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{})).value();
         {
-            auto const failure  = session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::SslFastStart{ true }));
-            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::NOT_BUILT_IN, "failure must return the expected error code");
+            auto const failure = session.SetSslOptions(mcr::options::Ssl(mcr::options::ssl::SslFastStart{ true }));
+            passed &= check(!failure && failure.error().code == mcr::ErrorCode::NOT_BUILT_IN, "failure must return the expected error code");
         }
         return passed;
     }
@@ -77,8 +77,8 @@ namespace {
      * @brief Own a hidden fixture process and its output log.
      */
     struct ChildProcess {
-        PROCESS_INFORMATION   info{};
-        HANDLE                log{ INVALID_HANDLE_VALUE };
+        PROCESS_INFORMATION info{};
+        HANDLE log{ INVALID_HANDLE_VALUE };
         std::filesystem::path directory;
 
         ~ChildProcess() {
@@ -108,12 +108,12 @@ namespace {
                 throw std::runtime_error{ "Could not open TLS fixture log." };
             }
             STARTUPINFOW startup{};
-            startup.cb          = sizeof(startup);
-            startup.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+            startup.cb = sizeof(startup);
+            startup.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
             startup.wShowWindow = SW_HIDE;
-            startup.hStdOutput  = log;
-            startup.hStdError   = log;
-            startup.hStdInput   = GetStdHandle(STD_INPUT_HANDLE);
+            startup.hStdOutput = log;
+            startup.hStdError = log;
+            startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
             auto command{ std::format(L"pwsh.exe -NoLogo -NoProfile -NonInteractive -File \"{}\" -Directory \"{}\"", script.wstring(), directory.wstring()) };
             if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &info)) {
                 throw std::runtime_error{ "TLS fixture requires PowerShell 7.5 or later (pwsh) on PATH." };
@@ -122,8 +122,8 @@ namespace {
     };
 
     struct HttpsFixture {
-        TempDirectory  directory;
-        ChildProcess   child;
+        TempDirectory directory;
+        ChildProcess child;
         unsigned short port{};
         unsigned short mutual_port{};
 
@@ -152,10 +152,10 @@ namespace {
 
     auto check_https() -> bool {
         HttpsFixture fixture;
-        auto const*  version{ curl_version_info(CURLVERSION_NOW) };
+        auto const* version{ curl_version_info(CURLVERSION_NOW) };
         std::println("test_ssl_options: TLS backend {}", version->ssl_version ? version->ssl_version : "none");
-        auto  session_owner = mcr::Session::Create().value();
-        auto& session       = *session_owner;
+        auto session_owner = mcr::Session::Create().value();
+        auto& session = *session_owner;
         session.SetUrl(fixture.Url()).value();
         session.SetProxies({
                                {    "https",  "" },
@@ -171,10 +171,10 @@ namespace {
         }
         passed &= check(unverified.text == "TLS works", "explicit VerifySsl(false) must disable both checks");
         session.SetVerifySsl(true).value();
-        passed         &= check(bool(session.Get().value().error), "reenabling verification must reject the untrusted peer again");
+        passed &= check(bool(session.Get().value().error), "reenabling verification must reject the untrusted peer again");
         // Generated certificates have no online revocation service. Keep chain and hostname
         // verification enabled while explicitly disabling revocation checks for this fixture.
-        auto local_tls  = [](auto&&... options) {
+        auto local_tls = [](auto&&... options) {
             return mcr::options::Ssl(mcr::options::ssl::NoRevoke{ true }, std::forward<decltype(options)>(options)...);
         };
         auto trust{ local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::TLSv1_2{}, mcr::options::ssl::MaxTLSv1_2{}) };
@@ -198,7 +198,7 @@ namespace {
         passed &= check(session.Get().value().text == "TLS works", "CaBuffer and a matching public-key pin must work together");
         session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::PinnedPublicKey{ "sha256//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" })).value();
         passed &= check(session.Get().value().error.code == mcr::ErrorCode::SSL_PINNEDPUBKEYNOTMATCH, "mismatched public-key pins must reject the connection");
-        trust   = local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") });
+        trust = local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") });
         session.SetSslOptions(trust).value();
         passed &= check(session.Get().value().text == "TLS works", "replacement TLS options must remove old public-key pins");
         session.SetUrl(fixture.Url(true)).value();
@@ -207,11 +207,11 @@ namespace {
         if (schannel) {
             trust.cert_file = fixture.Path("client.p12").string();
             trust.cert_type = "P12";
-            trust.key_pass  = "incorrect-password";
+            trust.key_pass = "incorrect-password";
             session.SetSslOptions(trust).value();
             auto bad_password{ session.Get().value() };
-            passed         &= check(bad_password.error.code == mcr::ErrorCode::SSL_CERTPROBLEM, "an incorrect PKCS12 password must fail client credential import");
-            trust.key_pass  = "fixture-password";
+            passed &= check(bad_password.error.code == mcr::ErrorCode::SSL_CERTPROBLEM, "an incorrect PKCS12 password must fail client credential import");
+            trust.key_pass = "fixture-password";
         } else {
             trust.SetOption(mcr::options::ssl::PemCert{ fixture.Path("client.pem") });
             trust.SetOption(mcr::options::ssl::PemKey{ fixture.Path("client-key.pem") });
@@ -223,7 +223,7 @@ namespace {
         // Related upstream limitations: https://github.com/curl/curl/issues/17626
         auto unsupported_credentials = [schannel](mcr::Response const& response) {
             return schannel && response.error.code == mcr::ErrorCode::SSL_CONNECT_ERROR &&
-                   response.error.message.contains("AcquireCredentialsHandle failed: SEC_E_UNKNOWN_CREDENTIALS");
+                response.error.message.contains("AcquireCredentialsHandle failed: SEC_E_UNKNOWN_CREDENTIALS");
         };
         bool const limited{ unsupported_credentials(mutual) };
         if (limited) {

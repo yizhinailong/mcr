@@ -53,9 +53,9 @@ export namespace mcr {
             return callback(buffer, buffer_size, userdata);
         }
 
-        std::intptr_t                                           userdata{}; ///< Publicly mutable opaque value passed to the producer.
-        CprOffT                                                 size{};     ///< Declared upload size; zero by default and -1 for the callback-only constructor.
-        std::function<bool(char*, std::size_t&, std::intptr_t)> callback;   ///< Upload producer; may be replaced or cleared.
+        std::intptr_t userdata{};                                         ///< Publicly mutable opaque value passed to the producer.
+        CprOffT size{};                                                   ///< Declared upload size; zero by default and -1 for the callback-only constructor.
+        std::function<bool(char*, std::size_t&, std::intptr_t)> callback; ///< Upload producer; may be replaced or cleared.
     };
 
     /**
@@ -89,8 +89,8 @@ export namespace mcr {
             return callback(header, userdata);
         }
 
-        std::intptr_t                                        userdata{}; ///< Publicly mutable opaque value passed to the consumer.
-        std::function<bool(std::string_view, std::intptr_t)> callback;   ///< Header consumer; may be replaced or cleared.
+        std::intptr_t userdata{};                                      ///< Publicly mutable opaque value passed to the consumer.
+        std::function<bool(std::string_view, std::intptr_t)> callback; ///< Header consumer; may be replaced or cleared.
     };
 
     /**
@@ -124,8 +124,8 @@ export namespace mcr {
             return callback(data, userdata);
         }
 
-        std::intptr_t                                        userdata{}; ///< Publicly mutable opaque value passed to the consumer.
-        std::function<bool(std::string_view, std::intptr_t)> callback;   ///< Body consumer; may be replaced or cleared.
+        std::intptr_t userdata{};                                      ///< Publicly mutable opaque value passed to the consumer.
+        std::function<bool(std::string_view, std::intptr_t)> callback; ///< Body consumer; may be replaced or cleared.
     };
 
     /**
@@ -163,8 +163,8 @@ export namespace mcr {
             return callback(download_total, download_now, upload_total, upload_now, userdata);
         }
 
-        std::intptr_t                                                                  userdata{}; ///< Publicly mutable opaque value passed to the observer.
-        std::function<bool(CprPfArgT, CprPfArgT, CprPfArgT, CprPfArgT, std::intptr_t)> callback;   ///< Progress observer; may be replaced or cleared.
+        std::intptr_t userdata{};                                                                ///< Publicly mutable opaque value passed to the observer.
+        std::function<bool(CprPfArgT, CprPfArgT, CprPfArgT, CprPfArgT, std::intptr_t)> callback; ///< Progress observer; may be replaced or cleared.
     };
 
     /**
@@ -177,12 +177,12 @@ export namespace mcr {
          * @brief Diagnostic categories matching curl_infotype values.
          */
         enum class InfoType : std::uint8_t {
-            TEXT         = 0, ///< Informational diagnostic text.
-            HEADER_IN    = 1, ///< Incoming protocol headers.
-            HEADER_OUT   = 2, ///< Outgoing protocol headers.
-            DATA_IN      = 3, ///< Incoming protocol data.
-            DATA_OUT     = 4, ///< Outgoing protocol data.
-            SSL_DATA_IN  = 5, ///< Incoming TLS data.
+            TEXT = 0,         ///< Informational diagnostic text.
+            HEADER_IN = 1,    ///< Incoming protocol headers.
+            HEADER_OUT = 2,   ///< Outgoing protocol headers.
+            DATA_IN = 3,      ///< Incoming protocol data.
+            DATA_OUT = 4,     ///< Outgoing protocol data.
+            SSL_DATA_IN = 5,  ///< Incoming TLS data.
             SSL_DATA_OUT = 6, ///< Outgoing TLS data.
         };
 
@@ -211,8 +211,8 @@ export namespace mcr {
             callback(type, data, userdata);
         }
 
-        std::intptr_t                                                  userdata{}; ///< Publicly mutable opaque value passed to the consumer.
-        std::function<void(InfoType, std::string_view, std::intptr_t)> callback;   ///< Diagnostic consumer; may be replaced or cleared.
+        std::intptr_t userdata{};                                                ///< Publicly mutable opaque value passed to the consumer.
+        std::function<void(InfoType, std::string_view, std::intptr_t)> callback; ///< Diagnostic consumer; may be replaced or cleared.
     };
 
     /**
@@ -223,8 +223,8 @@ export namespace mcr {
      */
     class CancellationCallback {
     private:
-        std::shared_ptr<std::atomic_bool>                       m_cancellation_state; ///< Shared flag; true requests cancellation.
-        std::optional<std::reference_wrapper<ProgressCallback>> m_user_cb;            ///< Borrowed observer, observed rather than copied.
+        std::shared_ptr<std::atomic_bool> m_cancellation_state;            ///< Shared flag; true requests cancellation.
+        std::optional<std::reference_wrapper<ProgressCallback>> m_user_cb; ///< Borrowed observer, observed rather than copied.
 
     public:
         /**

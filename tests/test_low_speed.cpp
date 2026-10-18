@@ -49,14 +49,14 @@ int main() {
     mcr::options::LowSpeed original{ 1000, 1s };
     mcr::options::LowSpeed copied{ original };
     original.limit = 0;
-    original.time  = -1s;
+    original.time = -1s;
     mcr::options::LowSpeed moved{ std::move(copied) };
     mcr::options::LowSpeed assigned{ 0, 0s };
     assigned = moved;
     mcr::options::LowSpeed move_assigned{ 0, 0s };
-    move_assigned  = std::move(moved);
+    move_assigned = std::move(moved);
     assigned.limit = 2048;
-    assigned.time  = 3min;
+    assigned.time = 3min;
     if (original.limit != 0 || original.time != -1s || move_assigned.limit != 1000 || move_assigned.time != 1s || assigned.limit != 2048 || assigned.time != 180s) {
         std::println("test_low_speed: copying, moving, and public field updates must retain independent threshold/duration pairs");
         return 1;

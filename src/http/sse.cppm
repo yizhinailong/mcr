@@ -12,10 +12,10 @@ export namespace mcr {
      * @brief An owned Server-Sent Event with cpr-compatible fields and defaults.
      */
     struct ServerSentEvent {
-        std::optional<std::string> id;                 ///< ID supplied in this event, including an explicitly empty ID.
-        std::string                event{ "message" }; ///< Event type; an absent or empty type is dispatched as "message".
-        std::string                data;               ///< Data fields joined with newlines, preserving empty fields.
-        std::optional<std::size_t> retry;              ///< Valid retry interval in milliseconds supplied in this event.
+        std::optional<std::string> id;    ///< ID supplied in this event, including an explicitly empty ID.
+        std::string event{ "message" };   ///< Event type; an absent or empty type is dispatched as "message".
+        std::string data;                 ///< Data fields joined with newlines, preserving empty fields.
+        std::optional<std::size_t> retry; ///< Valid retry interval in milliseconds supplied in this event.
 
         /**
          * @brief Construct an empty message with no ID or retry interval.
@@ -34,12 +34,12 @@ export namespace mcr {
      */
     class ServerSentEventParser {
     private:
-        std::string     m_buffer;             ///< Incoming bytes, including a consumed prefix until the next Parse().
-        std::size_t     m_line_start{ 0 };    ///< Start of the next unprocessed line.
-        std::size_t     m_scan_position{ 0 }; ///< Next byte to search, avoiding rescanning partial lines.
-        bool            m_skip_lf{ false };   ///< Whether a preceding CR may be followed by a matching LF.
-        bool            m_at_start{ true };   ///< Whether an initial UTF-8 BOM may still arrive.
-        ServerSentEvent m_current_event;      ///< Fields accumulated since the last blank line.
+        std::string m_buffer;             ///< Incoming bytes, including a consumed prefix until the next Parse().
+        std::size_t m_line_start{ 0 };    ///< Start of the next unprocessed line.
+        std::size_t m_scan_position{ 0 }; ///< Next byte to search, avoiding rescanning partial lines.
+        bool m_skip_lf{ false };          ///< Whether a preceding CR may be followed by a matching LF.
+        bool m_at_start{ true };          ///< Whether an initial UTF-8 BOM may still arrive.
+        ServerSentEvent m_current_event;  ///< Fields accumulated since the last blank line.
 
     public:
         /**
@@ -61,7 +61,7 @@ export namespace mcr {
         [[nodiscard]] auto Parse(std::string_view data, std::function<bool(ServerSentEvent&&)> const& callback) -> bool {
             m_buffer.erase(0, m_line_start);
             m_scan_position -= m_line_start;
-            m_line_start     = 0;
+            m_line_start = 0;
             m_buffer.append(data);
 
             if (m_at_start) {
@@ -70,7 +70,7 @@ export namespace mcr {
                     return true;
                 }
                 if (m_buffer.starts_with(BOM)) {
-                    m_line_start    = BOM.size();
+                    m_line_start = BOM.size();
                     m_scan_position = m_line_start;
                 }
                 m_at_start = false;
@@ -92,8 +92,8 @@ export namespace mcr {
                     break;
                 }
                 std::string_view const line{ m_buffer.data() + m_line_start, line_end - m_line_start };
-                m_skip_lf       = m_buffer[line_end] == '\r';
-                m_line_start    = line_end + 1;
+                m_skip_lf = m_buffer[line_end] == '\r';
+                m_line_start = line_end + 1;
                 m_scan_position = m_line_start;
                 if (!processLine(line, callback)) {
                     return false;
@@ -108,10 +108,10 @@ export namespace mcr {
          */
         auto Reset() -> void {
             m_buffer.clear();
-            m_line_start    = 0;
+            m_line_start = 0;
             m_scan_position = 0;
-            m_skip_lf       = false;
-            m_at_start      = true;
+            m_skip_lf = false;
+            m_at_start = true;
             m_current_event = ServerSentEvent{};
         }
 
@@ -130,8 +130,8 @@ export namespace mcr {
                 return true;
             }
 
-            auto const       colon{ line.find(':') };
-            auto const       field{ line.substr(0, colon) };
+            auto const colon{ line.find(':') };
+            auto const field{ line.substr(0, colon) };
             std::string_view value;
             if (colon != std::string_view::npos) {
                 value = line.substr(colon + 1);
@@ -222,8 +222,8 @@ export namespace mcr {
             return m_parser.Parse(data, [this](ServerSentEvent&& event) { return (*this)(std::move(event)); });
         }
 
-        std::intptr_t                                         userdata{}; ///< Publicly mutable opaque value passed to the callback.
-        std::function<bool(ServerSentEvent&&, std::intptr_t)> callback;   ///< Consumer; an empty function accepts events.
+        std::intptr_t userdata{};                                       ///< Publicly mutable opaque value passed to the callback.
+        std::function<bool(ServerSentEvent&&, std::intptr_t)> callback; ///< Consumer; an empty function accepts events.
     };
 
 } // namespace mcr

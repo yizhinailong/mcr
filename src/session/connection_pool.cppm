@@ -24,8 +24,8 @@ export namespace mcr {
     private:
         using Mutexes = std::array<std::mutex, CURL_LOCK_DATA_LAST>;
 
-        std::shared_ptr<Mutexes> m_mutexes;    ///< Locks by curl data type; outlive the share handle.
-        std::shared_ptr<CURLSH>  m_curl_share; ///< Shared caches, cleaned up when the final copy is destroyed.
+        std::shared_ptr<Mutexes> m_mutexes;   ///< Locks by curl data type; outlive the share handle.
+        std::shared_ptr<CURLSH> m_curl_share; ///< Shared caches, cleaned up when the final copy is destroyed.
 
     public:
         /**
@@ -63,7 +63,7 @@ export namespace mcr {
          * @brief Share the same caches and locks with another pool, following cpr.
          * @param other Pool whose shared state is retained; rvalues are also copied.
          */
-        ConnectionPool(ConnectionPool const& other) noexcept     = default;
+        ConnectionPool(ConnectionPool const& other) noexcept = default;
         auto operator=(ConnectionPool const&) -> ConnectionPool& = delete;
 
         /**

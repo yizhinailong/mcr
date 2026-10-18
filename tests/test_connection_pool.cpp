@@ -50,7 +50,7 @@ namespace {
             }
         }
 
-        Socket(Socket const&)                    = delete;
+        Socket(Socket const&) = delete;
         auto operator=(Socket const&) -> Socket& = delete;
 
         ~Socket() {
@@ -67,18 +67,18 @@ namespace {
      */
     class HttpServer {
     private:
-        Socket             m_listener{ socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) };
-        std::string        m_url;
-        std::atomic_int    m_connections{ 0 };
+        Socket m_listener{ socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) };
+        std::string m_url;
+        std::atomic_int m_connections{ 0 };
         std::exception_ptr m_failure;
-        std::jthread       m_worker; ///< Stops and joins before any socket or worker state is destroyed.
+        std::jthread m_worker; ///< Stops and joins before any socket or worker state is destroyed.
 
     public:
         HttpServer() {
             sockaddr_in address{};
-            address.sin_family      = AF_INET;
+            address.sin_family = AF_INET;
             address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            address.sin_port        = 0;
+            address.sin_port = 0;
             if (bind(m_listener.handle, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 || listen(m_listener.handle, 8) != 0) {
                 throw std::runtime_error{ "fixture bind/listen failed" };
             }
@@ -86,7 +86,7 @@ namespace {
             if (getsockname(m_listener.handle, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
                 throw std::runtime_error{ "fixture getsockname failed" };
             }
-            m_url    = std::format("http://127.0.0.1:{}/pool", ntohs(address.sin_port));
+            m_url = std::format("http://127.0.0.1:{}/pool", ntohs(address.sin_port));
             m_worker = std::jthread{ [this](std::stop_token stop) {
                 try {
                     while (!stop.stop_requested()) {
@@ -136,7 +136,7 @@ namespace {
         }
 
         static auto serve(NativeSocket socket, std::stop_token stop) -> void {
-            std::string            request;
+            std::string request;
             std::array<char, 2048> buffer{};
             while (!stop.stop_requested()) {
                 if (!readable(socket)) {
@@ -169,7 +169,7 @@ namespace {
 
     std::atomic<std::ptrdiff_t> g_live_allocations{ 0 };
     std::atomic<std::ptrdiff_t> g_allocation_budget{ -1 };
-    std::atomic<std::size_t>    g_allocation_attempts{ 0 };
+    std::atomic<std::size_t> g_allocation_attempts{ 0 };
 
     auto fail_allocation() noexcept -> bool {
         ++g_allocation_attempts;
@@ -214,7 +214,7 @@ namespace {
 
     auto tracked_strdup(char const* input) noexcept -> char* {
         auto const length{ std::strlen(input) + 1 };
-        auto*      result{ static_cast<char*>(tracked_malloc(length)) };
+        auto* result{ static_cast<char*>(tracked_malloc(length)) };
         if (result) {
             std::memcpy(result, input, length);
         }
@@ -250,26 +250,26 @@ namespace {
         g_allocation_attempts.store(0);
         { auto pool = mcr::ConnectionPool::Create().value(); }
         auto const allocations{ g_allocation_attempts.load() };
-        bool       passed{ check(allocations > 0 && g_live_allocations.load() == before, "a pool must allocate and then release its curl state") };
-        bool       saw_init_failure{ false };
-        bool       saw_option_failure{ false };
+        bool passed{ check(allocations > 0 && g_live_allocations.load() == before, "a pool must allocate and then release its curl state") };
+        bool saw_init_failure{ false };
+        bool saw_option_failure{ false };
         for (std::size_t budget{ 0 }; budget < allocations; ++budget) {
             {
                 FailAfterAllocations fail{ budget };
                 {
-                    auto const failure  = mcr::ConnectionPool::Create();
-                    saw_init_failure   |= !failure && failure.error().message.find("curl_share_init") != std::string::npos;
+                    auto const failure = mcr::ConnectionPool::Create();
+                    saw_init_failure |= !failure && failure.error().message.find("curl_share_init") != std::string::npos;
                     saw_option_failure |= !failure && failure.error().message.find("curl_share_setopt") != std::string::npos;
-                    passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
+                    passed &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
                 }
             }
             passed &= check(g_live_allocations.load() == before, "failure at each allocation point must release partially initialized curl state");
         }
-        passed         &= check(saw_init_failure && saw_option_failure, "failure injection must exercise both share initialization and cache configuration");
-        auto recovered  = mcr::ConnectionPool::Create().value();
+        passed &= check(saw_init_failure && saw_option_failure, "failure injection must exercise both share initialization and cache configuration");
+        auto recovered = mcr::ConnectionPool::Create().value();
         {
-            auto const failure  = recovered.SetupHandler(nullptr);
-            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
+            auto const failure = recovered.SetupHandler(nullptr);
+            passed &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
         }
         auto holder = mcr::curl::CurlHolder::Create().value();
         recovered.SetupHandler(holder.handle).value();
@@ -278,8 +278,8 @@ namespace {
 
     auto check_attached_lifetime() -> bool {
         std::optional<mcr::ConnectionPool> original{ mcr::ConnectionPool::Create().value() };
-        mcr::ConnectionPool const          survivor{ *original };
-        auto                               holder = mcr::curl::CurlHolder::Create().value();
+        mcr::ConnectionPool const survivor{ *original };
+        auto holder = mcr::curl::CurlHolder::Create().value();
         original->SetupHandler(holder.handle).value();
         original.reset();
         survivor.SetupHandler(holder.handle).value();
@@ -298,7 +298,7 @@ namespace {
         if (pool) {
             pool->SetupHandler(holder.handle).value();
         }
-        std::string         body;
+        std::string body;
         curl_write_callback writer{ +[](char* bytes, std::size_t size, std::size_t count, void* userdata) noexcept -> std::size_t {
             auto const length{ size * count };
             try {
@@ -318,20 +318,20 @@ namespace {
         long status{ 0 };
         long connections{ -1 };
         return check(curl_easy_getinfo(holder.handle, CURLINFO_RESPONSE_CODE, &status) == CURLE_OK && status == 200 && body == "Hello pool!", "the local fixture must return a complete HTTP response") &&
-               check(curl_easy_getinfo(holder.handle, CURLINFO_NUM_CONNECTS, &connections) == CURLE_OK && connections == expected_connections, "each transfer must report the expected new-connection count");
+            check(curl_easy_getinfo(holder.handle, CURLINFO_NUM_CONNECTS, &connections) == CURLE_OK && connections == expected_connections, "each transfer must report the expected new-connection count");
     }
 
     auto check_connection_reuse() -> bool {
         HttpServer server;
-        bool       passed{ true };
+        bool passed{ true };
         for (int i{ 0 }; i < 3; ++i) {
             passed &= request(server.Url(), nullptr, 1);
         }
         passed &= check(server.Connections() == 3, "three independent easy handles must open three connections");
         {
             auto survivor = [&] {
-                auto original  = mcr::ConnectionPool::Create().value();
-                passed        &= request(server.Url(), &original, 1);
+                auto original = mcr::ConnectionPool::Create().value();
+                passed &= request(server.Url(), &original, 1);
                 return mcr::ConnectionPool{ original };
             }();
             passed &= request(server.Url(), &survivor, 0);

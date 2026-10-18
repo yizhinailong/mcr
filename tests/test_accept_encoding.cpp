@@ -23,7 +23,7 @@ namespace {
     }
 
     auto has_names(mcr::options::AcceptEncoding const& option, std::vector<std::string> expected) -> bool {
-        std::string const        text{ option.GetString() };
+        std::string const text{ option.GetString() };
         std::vector<std::string> actual;
         for (auto const part : text | std::views::split(std::string_view{ ", " })) {
             actual.emplace_back(part.begin(), part.end());
@@ -43,12 +43,12 @@ namespace {
         passed &= check(mcr::options::ACCEPT_ENCODING_METHODS_STRING_MAP.size() == names.size(), "the exported map must contain all five built-in names");
         for (std::size_t index{ 0 }; index < names.size(); ++index) {
             auto const method{ static_cast<Methods>(index) };
-            auto const option  = mcr::options::AcceptEncoding::Create({ method, method }).value();
-            passed            &= check(!option.Empty() && option.GetString() == names[index], "enum values must retain cpr's numeric mapping and deduplicate repeated methods");
-            passed            &= check(option.Disabled().value() == (method == Methods::disabled), "only the disabled enum must disable encoding handling");
+            auto const option = mcr::options::AcceptEncoding::Create({ method, method }).value();
+            passed &= check(!option.Empty() && option.GetString() == names[index], "enum values must retain cpr's numeric mapping and deduplicate repeated methods");
+            passed &= check(option.Disabled().value() == (method == Methods::disabled), "only the disabled enum must disable encoding handling");
         }
-        auto const built_in  = mcr::options::AcceptEncoding::Create({ Methods::deflate, Methods::gzip, Methods::zlib, Methods::gzip }).value();
-        passed              &= check(has_names(built_in, { "deflate", "gzip", "zlib" }) && !built_in.Disabled().value(), "enum lists must serialize unique names with comma-space separators in any order");
+        auto const built_in = mcr::options::AcceptEncoding::Create({ Methods::deflate, Methods::gzip, Methods::zlib, Methods::gzip }).value();
+        passed &= check(has_names(built_in, { "deflate", "gzip", "zlib" }) && !built_in.Disabled().value(), "enum lists must serialize unique names with comma-space separators in any order");
         mcr::options::AcceptEncoding const custom{ "gzip", "br", "GZIP", "gzip", "x-custom;q=0.5" };
         passed &= check(has_names(custom, { "gzip", "br", "GZIP", "x-custom;q=0.5" }) && !custom.Disabled().value(), "custom names must be case-sensitive, deduplicated, and preserved verbatim");
         mcr::options::AcceptEncoding const empty_name{ std::string{} };
@@ -56,9 +56,9 @@ namespace {
         mcr::options::AcceptEncoding const with_empty_name{ "", "gzip" };
         passed &= check(has_names(with_empty_name, { "", "gzip" }), "an empty name must retain its element separator");
 
-        std::string                  name{ "br" };
+        std::string name{ "br" };
         mcr::options::AcceptEncoding owned{ name };
-        name    = "gzip";
+        name = "gzip";
         passed &= check(owned.GetString() == "br", "custom names must be copied into owned storage");
         mcr::options::AcceptEncoding copied{ owned };
         owned = mcr::options::AcceptEncoding{ "deflate" };
@@ -71,7 +71,7 @@ namespace {
 
     auto check_validation() -> bool {
         mcr::options::AcceptEncoding const disabled{ "disabled", "disabled" };
-        bool                               passed{ check(disabled.Disabled().value() && disabled.GetString() == "disabled", "duplicate disabled strings must be accepted as one sentinel") };
+        bool passed{ check(disabled.Disabled().value() && disabled.GetString() == "disabled", "duplicate disabled strings must be accepted as one sentinel") };
         mcr::options::AcceptEncoding const distinct{ "Disabled", " disabled", "disabled " };
         passed &= check(!distinct.Disabled().value(), "disabled detection must not normalize spelling or whitespace");
 
@@ -84,15 +84,15 @@ namespace {
             std::string const text{ option.GetString() };
             passed &= check(!option.Empty(), "mixed disabled options must remain constructible and serializable before validation");
             {
-                auto const failure  = option.Disabled();
-                passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
+                auto const failure = option.Disabled();
+                passed &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
             }
             passed &= check(option.GetString() == text, "validation failure must leave the stored names unchanged");
         }
 
         {
-            auto const failure  = mcr::options::AcceptEncoding::Create({ Methods::gzip, static_cast<Methods>(255) });
-            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
+            auto const failure = mcr::options::AcceptEncoding::Create({ Methods::gzip, static_cast<Methods>(255) });
+            passed &= check(!failure && failure.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "failure must return the expected error code");
         }
         return passed;
     }

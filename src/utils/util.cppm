@@ -50,17 +50,17 @@ export namespace mcr::utils {
      * and a response without a reason clears a previous reason, correcting cpr's stale output.
      */
     [[nodiscard]] auto parse_header(std::string_view headers, std::string* status_line = nullptr, std::string* reason = nullptr) -> Header {
-        Header      result;
+        Header result;
         std::string parsed_status;
         std::string parsed_reason;
-        bool        found_status{ false };
+        bool found_status{ false };
         while (!headers.empty()) {
             auto const end{ headers.find('\n') };
-            auto       line{ headers.substr(0, end) };
+            auto line{ headers.substr(0, end) };
             headers.remove_prefix(end == std::string_view::npos ? headers.size() : end + 1);
             if (line.starts_with("HTTP/")) {
                 found_status = true;
-                line         = detail::trim_header_end(line);
+                line = detail::trim_header_end(line);
                 if (status_line) {
                     parsed_status = line;
                 }
@@ -82,7 +82,7 @@ export namespace mcr::utils {
             if (colon == std::string_view::npos) {
                 continue;
             }
-            auto       value{ line.substr(colon + 1) };
+            auto value{ line.substr(colon + 1) };
             auto const first{ value.find_first_not_of("\t ") };
             value.remove_prefix(first == std::string_view::npos ? value.size() : first);
             result[std::string{ line.substr(0, colon) }] = detail::trim_header_end(value);
@@ -148,7 +148,7 @@ export namespace mcr::utils {
             };
         }
         std::uintmax_t magnitude{};
-        auto const     parsed = std::from_chars(timestamp.data(), timestamp.data() + timestamp.size(), magnitude);
+        auto const parsed = std::from_chars(timestamp.data(), timestamp.data() + timestamp.size(), magnitude);
         if (parsed.ec != std::errc{}) {
             return std::unexpected{
                 Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::utils::s_timestamp_to_t: invalid or overflowing timestamp." }
@@ -182,7 +182,7 @@ export namespace mcr::utils {
      */
     [[nodiscard]] auto parse_cookies(curl_slist const* raw_cookies) -> Result<Cookies> {
         constexpr std::size_t COOKIE_FIELD_COUNT{ 7 };
-        Cookies               result;
+        Cookies result;
         for (auto const* node{ raw_cookies }; node; node = node->next) {
             auto fields{ split(node->data, '\t') };
             fields.resize(COOKIE_FIELD_COUNT);
@@ -301,7 +301,7 @@ export namespace mcr::utils {
      */
     template <typename T = ProgressCallback>
     auto progress_user_function(
-        T const*  progress,
+        T const* progress,
         CprPfArgT download_total,
         CprPfArgT download_now,
         CprPfArgT upload_total,

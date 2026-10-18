@@ -30,21 +30,21 @@ export namespace mcr {
         std::vector<CertInfo> m_cert_infos; ///< Certificate snapshot, empty when unavailable.
 
     public:
-        long          status_code{};      ///< HTTP status, or zero when no response was received.
-        std::string   text;               ///< Buffered response body, including binary bytes.
-        Header        header;             ///< Case-insensitive headers from the final response.
-        Url           url;                ///< Effective URL after redirects.
-        double        elapsed{};          ///< Total transfer duration in seconds.
-        Cookies       cookies;            ///< Snapshot of curl's cookie engine.
-        Error         error;              ///< Transport error; HTTP 4xx and 5xx do not set this.
-        std::string   raw_header;         ///< All received header blocks, including redirects.
-        std::string   status_line;        ///< Final HTTP status line.
-        std::string   reason;             ///< Final HTTP reason phrase, if present.
-        CprOffT       uploaded_bytes{};   ///< Uploaded body bytes reported by curl.
-        CprOffT       downloaded_bytes{}; ///< Downloaded body bytes reported by curl.
-        long          redirect_count{};   ///< Number of redirects followed.
-        std::string   primary_ip;         ///< Address of the connected peer.
-        std::uint16_t primary_port{};     ///< Port of the connected peer.
+        long status_code{};           ///< HTTP status, or zero when no response was received.
+        std::string text;             ///< Buffered response body, including binary bytes.
+        Header header;                ///< Case-insensitive headers from the final response.
+        Url url;                      ///< Effective URL after redirects.
+        double elapsed{};             ///< Total transfer duration in seconds.
+        Cookies cookies;              ///< Snapshot of curl's cookie engine.
+        Error error;                  ///< Transport error; HTTP 4xx and 5xx do not set this.
+        std::string raw_header;       ///< All received header blocks, including redirects.
+        std::string status_line;      ///< Final HTTP status line.
+        std::string reason;           ///< Final HTTP reason phrase, if present.
+        CprOffT uploaded_bytes{};     ///< Uploaded body bytes reported by curl.
+        CprOffT downloaded_bytes{};   ///< Downloaded body bytes reported by curl.
+        long redirect_count{};        ///< Number of redirects followed.
+        std::string primary_ip;       ///< Address of the connected peer.
+        std::uint16_t primary_port{}; ///< Port of the connected peer.
 
         /**
          * @brief Construct an empty response with a successful transport error code.
@@ -62,9 +62,9 @@ export namespace mcr {
          */
         [[nodiscard]] static auto FromCurl(std::shared_ptr<curl::CurlHolder> curl, std::string body, std::string headers, Cookies received_cookies = {}, Error transfer_error = {}) -> Result<Response> {
             Response result;
-            result.text       = std::move(body);
-            result.cookies    = std::move(received_cookies);
-            result.error      = std::move(transfer_error);
+            result.text = std::move(body);
+            result.cookies = std::move(received_cookies);
+            result.error = std::move(transfer_error);
             result.raw_header = std::move(headers);
             if (!curl || !curl->handle) {
                 return std::unexpected{

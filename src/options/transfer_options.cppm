@@ -92,8 +92,8 @@ export namespace mcr::options {
         LowSpeed(std::int32_t limit_param, std::chrono::seconds time_param)
             : limit{ limit_param }, time{ time_param } {}
 
-        std::int32_t         limit; ///< Publicly mutable minimum transfer rate in bytes per second.
-        std::chrono::seconds time;  ///< Publicly mutable observation duration in whole seconds.
+        std::int32_t limit;        ///< Publicly mutable minimum transfer rate in bytes per second.
+        std::chrono::seconds time; ///< Publicly mutable observation duration in whole seconds.
     };
 
     /**
@@ -192,8 +192,8 @@ export namespace mcr::options {
      */
     class Resolve {
     public:
-        std::string             host;  ///< Hostname to override.
-        std::string             addr;  ///< Address text associated with the hostname.
+        std::string host;              ///< Hostname to override.
+        std::string addr;              ///< Address text associated with the hostname.
         std::set<std::uint16_t> ports; ///< Ports to which the mapping applies.
 
         /**
@@ -204,8 +204,8 @@ export namespace mcr::options {
          * @note Default ports are inserted only during this constructor, not after public field updates.
          */
         Resolve(
-            std::string             host_param,
-            std::string             addr_param,
+            std::string host_param,
+            std::string addr_param,
             std::set<std::uint16_t> ports_param = { 80U, 443U }
         ) : host{ std::move(host_param) }, addr{ std::move(addr_param) }, ports{ std::move(ports_param) } {
             if (ports.empty()) {

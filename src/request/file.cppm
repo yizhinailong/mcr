@@ -59,7 +59,7 @@ export namespace mcr {
          * @brief Copy all file descriptors into independent storage.
          * @param other Collection to copy.
          */
-        Files(Files const& other)     = default;
+        Files(Files const& other) = default;
 
         /**
          * @brief Transfer the owned collection.
@@ -108,7 +108,7 @@ export namespace mcr {
             return *this;
         }
 
-        using iterator       = std::vector<File>::iterator;       ///< Mutable descriptor iterator.
+        using iterator = std::vector<File>::iterator;             ///< Mutable descriptor iterator.
         using const_iterator = std::vector<File>::const_iterator; ///< Read-only descriptor iterator.
 
         /**

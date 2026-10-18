@@ -16,8 +16,8 @@ export namespace mcr::utils {
      */
     template <typename T>
     struct SecureAllocator {
-        using value_type           = T;              ///< Element type used by allocator_traits.
-        using is_always_equal      = std::true_type; ///< All instances of this allocator are interchangeable.
+        using value_type = T;                   ///< Element type used by allocator_traits.
+        using is_always_equal = std::true_type; ///< All instances of this allocator are interchangeable.
 
         /**
          * @brief Construct an allocator without state.

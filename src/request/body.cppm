@@ -72,7 +72,7 @@ export namespace mcr {
          * @note Empty files produce an empty body. The stream is closed on success and failure.
          */
         [[nodiscard]] static auto FromFile(File const& file) -> Result<Body> {
-            Body          result;
+            Body result;
             std::ifstream stream{ file.filepath, std::ios::binary };
             if (!stream) {
                 return std::unexpected{
@@ -97,25 +97,25 @@ export namespace mcr {
          * @brief Copy body bytes into independent storage.
          * @param other Body to copy.
          */
-        Body(Body const& other)                        = default;
+        Body(Body const& other) = default;
 
         /**
          * @brief Move owned body storage.
          * @param other Body to move from.
          */
-        Body(Body&& other) noexcept                    = default;
+        Body(Body&& other) noexcept = default;
 
         /**
          * @brief Release owned body storage, including derived state when used polymorphically.
          */
-        ~Body() override                               = default;
+        ~Body() override = default;
 
         /**
          * @brief Copy body bytes.
          * @param other Source body.
          * @return This body after assignment.
          */
-        auto operator=(Body const& other) -> Body&     = default;
+        auto operator=(Body const& other) -> Body& = default;
 
         /**
          * @brief Move body storage.
@@ -170,18 +170,18 @@ export namespace mcr {
          * @brief Copy the borrowed address and length.
          * @param other View to copy.
          */
-        constexpr BodyView(BodyView const& other) noexcept                    = default;
+        constexpr BodyView(BodyView const& other) noexcept = default;
 
         /**
          * @brief Copy the borrowed address and length without transferring ownership.
          * @param other Source view.
          */
-        constexpr BodyView(BodyView&& other) noexcept                         = default;
+        constexpr BodyView(BodyView&& other) noexcept = default;
 
         /**
          * @brief Destroy the descriptor without releasing the source bytes.
          */
-        ~BodyView()                                                           = default;
+        ~BodyView() = default;
 
         /**
          * @brief Rebind to another view's bytes.
@@ -195,7 +195,7 @@ export namespace mcr {
          * @param other Source view.
          * @return This view after assignment.
          */
-        constexpr auto operator=(BodyView&& other) noexcept -> BodyView&      = default;
+        constexpr auto operator=(BodyView&& other) noexcept -> BodyView& = default;
 
         /**
          * @brief Return the borrowed address and length as a string view.

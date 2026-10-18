@@ -90,8 +90,8 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         static auto Startup(
-            std::size_t               min_threads = utils::DEFAULT_THREAD_POOL_MIN_THREAD_NUM,
-            std::size_t               max_threads = utils::DEFAULT_THREAD_POOL_MAX_THREAD_NUM,
+            std::size_t min_threads = utils::DEFAULT_THREAD_POOL_MIN_THREAD_NUM,
+            std::size_t max_threads = utils::DEFAULT_THREAD_POOL_MAX_THREAD_NUM,
             std::chrono::milliseconds max_idle_ms = utils::DEFAULT_THREAD_POOL_MAX_IDLE_TIME
         ) -> Result<void> {
             auto* pool{ GlobalThreadPool::GetInstance() };

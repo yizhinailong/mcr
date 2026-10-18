@@ -41,8 +41,8 @@ namespace {
     auto check_construction() -> bool {
         bool passed{ true };
         for (Mode const mode : { Mode::BASIC, Mode::DIGEST, Mode::NTLM, Mode::NEGOTIATE, Mode::ANY, Mode::ANYSAFE }) {
-            mcr::options::Authentication const auth  = { "user", "password", mode };
-            passed                         &= check(matches(auth, "user:password", mode), "every mode must retain the same unencoded credentials and its own policy");
+            mcr::options::Authentication const auth = { "user", "password", mode };
+            passed &= check(matches(auth, "user:password", mode), "every mode must retain the same unencoded credentials and its own policy");
         }
         passed &= check(matches(mcr::options::Authentication{ {}, {}, Mode::BASIC }, ":", Mode::BASIC), "empty views must still produce the colon separator");
         passed &= check(matches(mcr::options::Authentication{ {}, "password", Mode::NTLM }, ":password", Mode::NTLM), "an empty username must be preserved");
@@ -68,8 +68,8 @@ namespace {
         std::string const utf8{ "\xE4\xB8\xAD" };
         passed &= check(matches(mcr::options::Authentication{ utf8, utf8, Mode::ANY }, utf8 + ":" + utf8, Mode::ANY), "UTF-8 credentials must retain their original bytes");
 
-        std::string const         binary_user{ "u\0x", 3 };
-        std::string const         binary_password{ "p\0q", 3 };
+        std::string const binary_user{ "u\0x", 3 };
+        std::string const binary_password{ "p\0q", 3 };
         mcr::options::Authentication const binary{ binary_user, binary_password, Mode::BASIC };
         passed &= check(matches(binary, binary_user + ":" + binary_password, Mode::BASIC), "owned credentials must preserve all embedded null bytes");
         passed &= check(std::string_view{ binary.GetAuthString() } == "u", "C-string consumers must observe only the prefix before an embedded null");
@@ -81,23 +81,23 @@ namespace {
     auto check_ownership() -> bool {
         bool passed{ true };
         for (std::size_t const length : { 1U, 512U }) {
-            std::string         username(length, 'u');
-            std::string         password(length, 'p');
-            std::string const   expected{ username + ":" + password };
+            std::string username(length, 'u');
+            std::string password(length, 'p');
+            std::string const expected{ username + ":" + password };
             mcr::options::Authentication original{ username, password, Mode::ANYSAFE };
             username.assign(length, 'x');
             password.assign(length, 'y');
             passed &= check(matches(original, expected, Mode::ANYSAFE), "both short and heap-backed credentials must own their input views");
 
             mcr::options::Authentication copied{ original };
-            original  = mcr::options::Authentication{ "other", "value", Mode::BASIC };
-            passed   &= check(matches(copied, expected, Mode::ANYSAFE) && matches(original, "other:value", Mode::BASIC), "copy construction must retain independent credential storage and mode");
+            original = mcr::options::Authentication{ "other", "value", Mode::BASIC };
+            passed &= check(matches(copied, expected, Mode::ANYSAFE) && matches(original, "other:value", Mode::BASIC), "copy construction must retain independent credential storage and mode");
             mcr::options::Authentication moved{ std::move(copied) };
-            passed   &= check(matches(moved, expected, Mode::ANYSAFE) && copied.GetAuthString() != nullptr, "move construction must preserve credentials and leave the source queryable");
-            copied     = mcr::options::Authentication{ "reused", "source", Mode::DIGEST };
-            original  = moved;
-            moved     = std::move(copied);
-            passed   &= check(matches(original, expected, Mode::ANYSAFE) && matches(moved, "reused:source", Mode::DIGEST), "copy and move assignment must replace both credential bytes and mode");
+            passed &= check(matches(moved, expected, Mode::ANYSAFE) && copied.GetAuthString() != nullptr, "move construction must preserve credentials and leave the source queryable");
+            copied = mcr::options::Authentication{ "reused", "source", Mode::DIGEST };
+            original = moved;
+            moved = std::move(copied);
+            passed &= check(matches(original, expected, Mode::ANYSAFE) && matches(moved, "reused:source", Mode::DIGEST), "copy and move assignment must replace both credential bytes and mode");
         }
         auto retained = [] {
             std::string username{ "temporary user" };

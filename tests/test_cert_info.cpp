@@ -26,23 +26,23 @@ namespace {
     }
 
     auto check_construction_and_iteration() -> bool {
-        mcr::CertInfo       empty;
+        mcr::CertInfo empty;
         mcr::CertInfo const const_empty;
         mcr::CertInfo const empty_list(std::initializer_list<std::string>{});
-        bool                passed{ check(empty.begin() == empty.end() && empty.cbegin() == empty.cend() && const_empty.begin() == const_empty.end() && const_empty.cbegin() == const_empty.cend() && empty_list.begin() == empty_list.end(), "default and empty-list collections must expose empty mutable and const ranges") };
+        bool passed{ check(empty.begin() == empty.end() && empty.cbegin() == empty.cend() && const_empty.begin() == const_empty.end() && const_empty.cbegin() == const_empty.cend() && empty_list.begin() == empty_list.end(), "default and empty-list collections must expose empty mutable and const ranges") };
 
-        std::string                    subject{ "Subject:CN = test-server" };
-        std::string const              binary{ "Field:a\0b", 9 };
-        std::string const              multiline{ "Cert:line one\nline two\r\n" };
+        std::string subject{ "Subject:CN = test-server" };
+        std::string const binary{ "Field:a\0b", 9 };
+        std::string const multiline{ "Cert:line one\nline two\r\n" };
         std::vector<std::string> const expected{ subject, "Issuer:C = GB, O = Example, CN = Sub CA", "Version:2", "", subject, binary, multiline };
-        mcr::CertInfo                  entries = { subject, "Issuer:C = GB, O = Example, CN = Sub CA", "Version:2", "", subject, binary, multiline };
+        mcr::CertInfo entries = { subject, "Issuer:C = GB, O = Example, CN = Sub CA", "Version:2", "", subject, binary, multiline };
         subject.assign("changed");
         passed &= check(std::ranges::equal(entries, expected), "construction must copy cpr-style entries in order, preserving duplicates, empty entries, binary bytes, and line endings");
         mcr::CertInfo const& view{ entries };
-        passed             &= check(view.begin() == view.cbegin() && view.end() == view.cend() && std::ranges::equal(view, expected) && entries.end() - entries.begin() == 7 && *(view.begin() + 5) == binary, "const and random-access iteration must expose all stored entries");
+        passed &= check(view.begin() == view.cbegin() && view.end() == view.cend() && std::ranges::equal(view, expected) && entries.end() - entries.begin() == 7 && *(view.begin() + 5) == binary, "const and random-access iteration must expose all stored entries");
 
-        entries[0]          = "Subject:CN = updated";
-        entries.begin()[1]  = "Issuer:updated";
+        entries[0] = "Subject:CN = updated";
+        entries.begin()[1] = "Issuer:updated";
         for (auto& entry : entries) {
             entry += "!";
         }
@@ -52,7 +52,7 @@ namespace {
 
     auto check_append_and_remove() -> bool {
         mcr::CertInfo entries;
-        std::string   source{ "Subject:copied" };
+        std::string source{ "Subject:copied" };
         entries.emplace_back(source);
         entries.push_back(source);
         source.assign("changed");
@@ -75,12 +75,12 @@ namespace {
 
     auto check_copy_move_and_chain() -> bool {
         std::string const large_entry(256, 'x');
-        mcr::CertInfo     original{ "Subject:leaf", large_entry };
-        mcr::CertInfo     copied{ original };
+        mcr::CertInfo original{ "Subject:leaf", large_entry };
+        mcr::CertInfo copied{ original };
         original[0] = "Subject:changed";
         original.pop_back();
         mcr::CertInfo moved{ std::move(copied) };
-        bool          passed{ check(original[0] == "Subject:changed" && std::ranges::distance(original) == 1 && moved[0] == "Subject:leaf" && moved[1] == large_entry, "copy and move construction must retain independent owned strings") };
+        bool passed{ check(original[0] == "Subject:changed" && std::ranges::distance(original) == 1 && moved[0] == "Subject:leaf" && moved[1] == large_entry, "copy and move construction must retain independent owned strings") };
 
         std::vector<mcr::CertInfo> chain;
         chain.emplace_back(moved);

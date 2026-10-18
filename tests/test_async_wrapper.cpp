@@ -6,7 +6,7 @@ import std;
 import mcr;
 import mcr.threadpool;
 
-using PlainResult       = mcr::utils::AsyncWrapper<int>;
+using PlainResult = mcr::utils::AsyncWrapper<int>;
 using CancellableResult = mcr::utils::AsyncWrapper<int, true>;
 
 static_assert(std::is_same_v<decltype(mcr::utils::AsyncWrapper{ std::future<int>{} }), PlainResult>);
@@ -76,8 +76,8 @@ namespace {
         require(!invalid.Share().valid(), "sharing an invalid future must return an invalid shared future without throwing");
 
         std::promise<int> promise;
-        auto              future{ promise.get_future() };
-        auto              wrapper{ wrap<Cancellable>(std::move(future)) };
+        auto future{ promise.get_future() };
+        auto wrapper{ wrap<Cancellable>(std::move(future)) };
         require(!future.valid() && wrapper.Valid(), "construction must move exclusive future ownership");
         require(std::as_const(wrapper).WaitFor(0ms) == std::future_status::timeout, "a pending promise must report a relative timeout");
         require(std::as_const(wrapper).WaitUntil(std::chrono::steady_clock::now() - 1s) == std::future_status::timeout, "a pending promise must report a past steady-clock deadline");
@@ -88,11 +88,11 @@ namespace {
         require(wrapper.Get() == 42, "Get must return the completed result");
         check_rejected_access(wrapper, "invalid");
 
-        std::promise<int>  blocked_promise;
-        auto               blocked{ wrap<Cancellable>(blocked_promise.get_future()) };
+        std::promise<int> blocked_promise;
+        auto blocked{ wrap<Cancellable>(blocked_promise.get_future()) };
         std::promise<void> entering_wait;
-        auto               entered{ entering_wait.get_future() };
-        auto               waiter{ std::async(std::launch::async, [&] {
+        auto entered{ entering_wait.get_future() };
+        auto waiter{ std::async(std::launch::async, [&] {
             entering_wait.set_value();
             std::as_const(blocked).Wait();
             return blocked.Get();
@@ -103,16 +103,16 @@ namespace {
         auto const result{ waiter.get() };
         require(was_pending && result == 73, "Wait must keep a consumer blocked until its promise is fulfilled");
 
-        int  deferred_calls{ 0 };
+        int deferred_calls{ 0 };
         auto deferred{ wrap<Cancellable>(std::async(std::launch::deferred, [&] { ++deferred_calls; return 9; })) };
         require(deferred.WaitFor(0ms) == std::future_status::deferred && deferred.WaitUntil(std::chrono::steady_clock::now()) == std::future_status::deferred && deferred_calls == 0, "timed waits must preserve deferred execution");
         deferred.Wait();
         require(deferred_calls == 1 && deferred.Valid() && deferred.Get() == 9, "Wait must run deferred work once without consuming its result");
 
         std::promise<std::string> shared_promise;
-        auto                      shareable{ wrap<Cancellable>(shared_promise.get_future()) };
-        auto                      shared{ shareable.Share() };
-        auto                      shared_copy{ shared };
+        auto shareable{ wrap<Cancellable>(shared_promise.get_future()) };
+        auto shared{ shareable.Share() };
+        auto shared_copy{ shared };
         check_rejected_access(shareable, "invalid");
         require(shared.valid() && !shareable.Share().valid(), "Share must transfer the state only once");
         shared_promise.set_value("shared result");
@@ -122,27 +122,27 @@ namespace {
     template <bool Cancellable>
     auto check_result_types_and_exceptions() -> void {
         std::promise<void> void_promise;
-        auto               void_result{ wrap<Cancellable>(void_promise.get_future()) };
+        auto void_result{ wrap<Cancellable>(void_promise.get_future()) };
         void_promise.set_value();
         void_result.Get();
         require(!void_result.Valid(), "Get must consume void futures");
 
-        int                referent{ 11 };
+        int referent{ 11 };
         std::promise<int&> reference_promise;
-        auto               reference{ wrap<Cancellable>(reference_promise.get_future()) };
+        auto reference{ wrap<Cancellable>(reference_promise.get_future()) };
         reference_promise.set_value(referent);
         auto& result{ reference.Get() };
         result = 12;
         require(&result == &referent && referent == 12 && !reference.Valid(), "reference results must preserve identity and writability");
 
         std::promise<std::unique_ptr<int>> owner_promise;
-        auto                               owner{ wrap<Cancellable>(owner_promise.get_future()) };
+        auto owner{ wrap<Cancellable>(owner_promise.get_future()) };
         owner_promise.set_value(std::make_unique<int>(99));
         auto owned{ owner.Get() };
         require(owned && *owned == 99 && !owner.Valid(), "Get must transfer move-only results without copying");
 
         std::promise<int> failed_promise;
-        auto              failed{ wrap<Cancellable>(failed_promise.get_future()) };
+        auto failed{ wrap<Cancellable>(failed_promise.get_future()) };
         failed_promise.set_exception(std::make_exception_ptr(std::runtime_error{ "task failed" }));
         failed.Wait();
         bool propagated{ false };
@@ -187,14 +187,14 @@ namespace {
         }
         require(null_rejected && null_future.valid() && null_future.get() == 10, "a null cancellation flag must be rejected without consuming the source future");
 
-        auto              state{ std::make_shared<std::atomic_bool>(false) };
-        auto              transferred_state{ state };
+        auto state{ std::make_shared<std::atomic_bool>(false) };
+        auto transferred_state{ state };
         std::promise<int> promise;
-        auto              future{ promise.get_future() };
+        auto future{ promise.get_future() };
         CancellableResult wrapper{ std::move(future), std::move(transferred_state) };
         require(!future.valid() && !transferred_state && wrapper.Valid() && !wrapper.IsCancelled(), "cancellable construction must take both handles without setting the flag");
-        int                       progress_calls{ 0 };
-        mcr::ProgressCallback     progress{ [&](auto, auto, auto, auto, auto) { ++progress_calls; return true; } };
+        int progress_calls{ 0 };
+        mcr::ProgressCallback progress{ [&](auto, auto, auto, auto, auto) { ++progress_calls; return true; } };
         mcr::CancellationCallback observer{ std::shared_ptr{ state }, progress };
         require(observer(0, 0, 0, 0) && progress_calls == 1, "the existing cancellation callback must observe the wrapper's shared flag");
         require(wrapper.Cancel() == CancelResult::success && state->load() && wrapper.IsCancelled(), "the first cancellation must signal shared state");
@@ -204,22 +204,22 @@ namespace {
         auto shared_after_cancel{ wrapper.Share() };
         require(shared_after_cancel.get() == 42 && wrapper.Cancel() == CancelResult::invalid_operation, "Share must retain cpr's ability to transfer an underlying future after cancellation");
 
-        auto              preset{ std::make_shared<std::atomic_bool>(true) };
+        auto preset{ std::make_shared<std::atomic_bool>(true) };
         std::promise<int> preset_promise;
         preset_promise.set_value(1);
         CancellableResult already_cancelled{ preset_promise.get_future(), std::move(preset) };
         check_rejected_access(already_cancelled, "cancelled");
         require(already_cancelled.Cancel() == CancelResult::invalid_operation, "an initially set flag must be treated as already cancelled");
 
-        auto              external_state{ std::make_shared<std::atomic_bool>(false) };
+        auto external_state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<int> external_promise;
         external_promise.set_value(2);
         CancellableResult external{ external_promise.get_future(), std::shared_ptr{ external_state } };
-        std::jthread      cancelling_thread{ [external_state] { external_state->store(true); } };
+        std::jthread cancelling_thread{ [external_state] { external_state->store(true); } };
         cancelling_thread.join();
         check_rejected_access(external, "cancelled");
 
-        auto              ready_state{ std::make_shared<std::atomic_bool>(false) };
+        auto ready_state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<int> ready_promise;
         ready_promise.set_value(3);
         CancellableResult ready{ ready_promise.get_future(), std::shared_ptr{ ready_state } };
@@ -235,9 +235,9 @@ namespace {
         }
         require(consumed_state->load(), "destruction must signal cancellation even after successful Get");
 
-        auto                    shared_state{ std::make_shared<std::atomic_bool>(false) };
+        auto shared_state{ std::make_shared<std::atomic_bool>(false) };
         std::shared_future<int> shared;
-        std::promise<int>       shared_promise;
+        std::promise<int> shared_promise;
         {
             CancellableResult shareable{ shared_promise.get_future(), std::shared_ptr{ shared_state } };
             shared = shareable.Share();
@@ -249,7 +249,7 @@ namespace {
     }
 
     auto check_cancellable_moves() -> void {
-        auto              state{ std::make_shared<std::atomic_bool>(false) };
+        auto state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<int> promise;
         promise.set_value(31);
         std::optional<CancellableResult> destination;
@@ -266,8 +266,8 @@ namespace {
         destination.reset();
         require(state->load(), "only the owning wrapper's destructor must signal the flag");
 
-        auto              first_state{ std::make_shared<std::atomic_bool>(false) };
-        auto              second_state{ std::make_shared<std::atomic_bool>(false) };
+        auto first_state{ std::make_shared<std::atomic_bool>(false) };
+        auto second_state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<int> first_promise;
         std::promise<int> second_promise;
         first_promise.set_value(1);
@@ -282,16 +282,16 @@ namespace {
     }
 
     auto check_concurrent_cancellation() -> void {
-        auto              state{ std::make_shared<std::atomic_bool>(false) };
+        auto state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<int> promise;
         std::promise<int> peer_promise;
         promise.set_value(1);
         peer_promise.set_value(2);
-        CancellableResult           wrapper{ promise.get_future(), std::shared_ptr{ state } };
-        CancellableResult           peer{ peer_promise.get_future(), std::shared_ptr{ state } };
+        CancellableResult wrapper{ promise.get_future(), std::shared_ptr{ state } };
+        CancellableResult peer{ peer_promise.get_future(), std::shared_ptr{ state } };
         std::array<CancelResult, 8> results{};
-        std::barrier                start{ static_cast<std::ptrdiff_t>(results.size() + 1) };
-        std::vector<std::jthread>   threads;
+        std::barrier start{ static_cast<std::ptrdiff_t>(results.size() + 1) };
+        std::vector<std::jthread> threads;
         for (std::size_t index{ 0 }; index < results.size(); ++index) {
             threads.emplace_back([&, index] {
                 start.arrive_and_wait();
@@ -306,7 +306,7 @@ namespace {
     auto cooperative_future(std::shared_ptr<std::atomic_bool> state, std::promise<void>& started, std::atomic_bool& observed) -> std::future<int> {
         return std::async(std::launch::async, [state = std::move(state), &started, &observed] {
             mcr::CancellationCallback callback{ std::shared_ptr{ state } };
-            auto const                deadline{ std::chrono::steady_clock::now() + 3s };
+            auto const deadline{ std::chrono::steady_clock::now() + 3s };
             started.set_value();
             while (callback(0, 0, 0, 0) && std::chrono::steady_clock::now() < deadline) {
                 std::this_thread::yield();
@@ -317,22 +317,22 @@ namespace {
     }
 
     auto check_running_task_lifetime() -> void {
-        auto               destruction_state{ std::make_shared<std::atomic_bool>(false) };
+        auto destruction_state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<void> destruction_started;
-        auto               destruction_entered{ destruction_started.get_future() };
-        std::atomic_bool   destruction_observed{ false };
+        auto destruction_entered{ destruction_started.get_future() };
+        std::atomic_bool destruction_observed{ false };
         {
             CancellableResult wrapper{ cooperative_future(destruction_state, destruction_started, destruction_observed), std::shared_ptr{ destruction_state } };
             destruction_entered.wait();
         }
         require(destruction_state->load() && destruction_observed.load(), "destruction must signal before std::future releases and joins a running cooperative task");
 
-        auto               old_state{ std::make_shared<std::atomic_bool>(false) };
-        auto               incoming_state{ std::make_shared<std::atomic_bool>(false) };
+        auto old_state{ std::make_shared<std::atomic_bool>(false) };
+        auto incoming_state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<void> replacement_started;
-        auto               replacement_entered{ replacement_started.get_future() };
-        std::atomic_bool   replacement_observed{ false };
-        CancellableResult  replacement{ cooperative_future(old_state, replacement_started, replacement_observed), std::shared_ptr{ old_state } };
+        auto replacement_entered{ replacement_started.get_future() };
+        std::atomic_bool replacement_observed{ false };
+        CancellableResult replacement{ cooperative_future(old_state, replacement_started, replacement_observed), std::shared_ptr{ old_state } };
         replacement_entered.wait();
         std::promise<int> incoming_promise;
         incoming_promise.set_value(77);
@@ -342,12 +342,12 @@ namespace {
     }
 
     auto check_cancellation_during_wait() -> void {
-        auto               state{ std::make_shared<std::atomic_bool>(false) };
+        auto state{ std::make_shared<std::atomic_bool>(false) };
         std::promise<void> task_entered;
-        auto               entered{ task_entered.get_future() };
+        auto entered{ task_entered.get_future() };
         std::promise<void> release_task;
-        auto               release{ release_task.get_future() };
-        CancellableResult  wrapper{ std::async(std::launch::deferred, [&] {
+        auto release{ release_task.get_future() };
+        CancellableResult wrapper{ std::async(std::launch::deferred, [&] {
                                        task_entered.set_value();
                                        release.wait();
                                        return 6;
@@ -366,7 +366,7 @@ namespace {
 
     auto check_thread_pool_results() -> void {
         mcr::utils::ThreadPool pool{ 1, 1 };
-        auto                   result{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 84; }).value() } };
+        auto result{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 84; }).value() } };
         require(result.Get() == 84, "wrappers must accept futures returned by the existing thread pool");
         (void)pool.Pause();
         auto cancelled{ mcr::utils::AsyncWrapper{ pool.Submit([] { return 0; }).value() } };

@@ -51,8 +51,8 @@ export namespace mcr {
             : data{ bytes }, datalen{ size }, filename{ std::move(name) } {}
 
     public:
-        data_t                      data;     ///< Borrowed byte address, null for an empty range at construction.
-        std::size_t                 datalen;  ///< Number of bytes, including any embedded nulls in the range.
+        data_t data;                          ///< Borrowed byte address, null for an empty range at construction.
+        std::size_t datalen;                  ///< Number of bytes, including any embedded nulls in the range.
         std::filesystem::path const filename; ///< Owned, immutable upload filename, stored without normalization.
     };
 

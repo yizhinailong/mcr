@@ -31,7 +31,7 @@ namespace {
     }
 
     auto methods(HttpServer const& server) -> void {
-        auto args  = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
+        auto args = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
         auto check = [](mcr::Task<mcr::Result<mcr::Response>> task, std::string_view method) {
             auto response = mcr::sync_wait(std::move(task)).value();
             require(!response.error && response.status_code == 200 && response.header.at("X-Method") == method, "coroutine requests must preserve their HTTP method");
@@ -64,20 +64,20 @@ namespace {
     }
 
     auto sequential(HttpServer const& server) -> mcr::Task<int> {
-        auto first  = co_await get(server, "/hello");
+        auto first = co_await get(server, "/hello");
         auto second = co_await get(server, "/hello");
         co_return first.value().status_code + second.value().status_code;
     }
 
     auto concurrent(HttpServer const& server) -> void {
-        std::mutex                threads_mutex;
+        std::mutex threads_mutex;
         std::set<std::thread::id> io_threads;
-        auto                      observer = mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
+        auto observer = mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
             std::lock_guard lock{ threads_mutex };
             io_threads.insert(std::this_thread::get_id());
             return true;
         } };
-        auto first  = get(server, "/barrier", observer);
+        auto first = get(server, "/barrier", observer);
         auto second = get(server, "/barrier", observer);
         first.Start();
         second.Start();
@@ -120,21 +120,21 @@ namespace {
     }
 
     auto cancellation(HttpServer const& server) -> void {
-        auto before    = server.Connections();
+        auto before = server.Connections();
         auto cancelled = get(server, "/hello");
         require(cancelled.Cancel() && !cancelled.Cancel(), "Cancel must signal once, including before Start");
         require(mcr::sync_wait(std::move(cancelled)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK && server.Connections() == before, "cancellation before submission must not contact the server");
 
         std::promise<void> arrived;
-        auto               seen = arrived.get_future();
-        std::atomic_bool   signalled{};
-        auto               parent = parent_request(server, mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
+        auto seen = arrived.get_future();
+        std::atomic_bool signalled{};
+        auto parent = parent_request(server, mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
                                          if (!signalled.exchange(true)) {
                                              arrived.set_value();
                                          }
                                          return true;
-                                                   } });
-        auto               source = parent.GetStopSource();
+                                     } });
+        auto source = parent.GetStopSource();
         parent.Start();
         require(seen.wait_for(3s) == std::future_status::ready, "stream must start before cancellation");
         source.request_stop();
@@ -165,18 +165,18 @@ namespace {
 
     auto independent_io(HttpServer const& server) -> void {
         std::promise<void> entered, release, header;
-        auto               began    = entered.get_future();
-        auto               received = header.get_future();
-        auto               held     = held_continuation(server, entered, release.get_future().share());
+        auto began = entered.get_future();
+        auto received = header.get_future();
+        auto held = held_continuation(server, entered, release.get_future().share());
         held.Start();
         require(began.wait_for(3s) == std::future_status::ready, "continuation must start");
         std::atomic_bool signalled{};
-        auto             next = get(server, "/hello", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
+        auto next = get(server, "/hello", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
                             if (!signalled.exchange(true)) {
                                 header.set_value();
                             }
                             return true;
-                                    } });
+                        } });
         next.Start();
         bool progressed = received.wait_for(2s) == std::future_status::ready;
         release.set_value();
@@ -198,9 +198,9 @@ namespace {
 
         auto download = mcr::DownloadCoro(path, server.Url("/binary"), proxies(), mcr::options::Timeout{ 3s });
         require(!std::filesystem::exists(path), "a cold download must not create its destination");
-        auto          response = mcr::sync_wait(std::move(download)).value();
+        auto response = mcr::sync_wait(std::move(download)).value();
         std::ifstream file{ path, std::ios::binary };
-        std::string   bytes{ std::istreambuf_iterator<char>{ file }, {} };
+        std::string bytes{ std::istreambuf_iterator<char>{ file }, {} };
         require(response.status_code == 200 && !response.error && response.text.empty() && bytes.size() == 256, "download must close its output before publishing metadata");
         for (std::size_t index{}; index < bytes.size(); ++index) {
             require(static_cast<unsigned char>(bytes[index]) == index, "download must preserve binary bytes");
@@ -211,21 +211,21 @@ namespace {
 
     auto shutdown(HttpServer const& server) -> void {
         std::promise<void> arrived;
-        auto               seen = arrived.get_future();
+        auto seen = arrived.get_future();
         std::promise<void> release;
-        auto               gate = release.get_future().share();
-        std::atomic_bool   signalled{};
-        auto               active = get(server, "/stream", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
+        auto gate = release.get_future().share();
+        std::atomic_bool signalled{};
+        auto active = get(server, "/stream", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
                               if (!signalled.exchange(true)) {
                                   arrived.set_value();
                                   (void)gate.wait_for(3s);
                               }
                               return true;
-                                        } });
+                          } });
         active.Start();
         require(seen.wait_for(3s) == std::future_status::ready, "request must be active at shutdown");
         // Hold the I/O thread inside a bounded callback, making the pending queue deterministic.
-        std::atomic_int                                    queued_callbacks{};
+        std::atomic_int queued_callbacks{};
         std::vector<mcr::Task<mcr::Result<mcr::Response>>> queued;
         for (int index{}; index < 8; ++index) {
             queued.push_back(get(server, "/hello", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
@@ -235,8 +235,8 @@ namespace {
             queued.back().Start();
         }
         std::jthread cleanup{ [] { mcr::Coro::Cleanup().value(); } };
-        bool         stopping{};
-        auto         deadline = std::chrono::steady_clock::now() + 2s;
+        bool stopping{};
+        auto deadline = std::chrono::steady_clock::now() + 2s;
         while (!stopping && std::chrono::steady_clock::now() < deadline) {
             stopping = !mcr::Coro::Startup();
             std::this_thread::yield();
@@ -262,7 +262,7 @@ int main() {
     try {
         mcr::Coro::Startup().value();
         HttpServer server;
-        auto       before = server.Connections();
+        auto before = server.Connections();
         { auto lazy = get(server, "/hello"); }
         require(server.Connections() == before, "discarded cold HTTP tasks must not start requests");
         methods(server);

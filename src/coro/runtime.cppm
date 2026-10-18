@@ -21,29 +21,29 @@ export namespace mcr::detail {
      */
     struct WakeCoroRuntime {
         CoroRuntime* runtime;
-        auto         operator()() const noexcept -> void;
+        auto operator()() const noexcept -> void;
     };
 
     /**
      * @brief Own one transfer until its awaiting coroutine has resumed.
      */
     struct CoroTransfer {
-        std::shared_ptr<Session>                           session;
-        std::function<Result<void>(Session&)>              prepare;
-        std::stop_token                                    stop;
+        std::shared_ptr<Session> session;
+        std::function<Result<void>(Session&)> prepare;
+        std::stop_token stop;
         std::optional<std::stop_callback<WakeCoroRuntime>> wake;
-        std::coroutine_handle<>                            continuation;
-        CURLcode                                           result{ CURLE_OK };
-        std::exception_ptr                                 error;
-        Result<void>                                       setup_result;            ///< Configuration failure returned before publication.
-        CURLMcode                                          multi_error{ CURLM_OK }; ///< Multi failure recorded without allocating diagnostics on the I/O thread.
-        bool                                               prepared{ false };
-        std::shared_ptr<CoroTransfer>                      next;                    ///< Intrusive pending/completion queue link; no allocation at completion.
+        std::coroutine_handle<> continuation;
+        CURLcode result{ CURLE_OK };
+        std::exception_ptr error;
+        Result<void> setup_result;          ///< Configuration failure returned before publication.
+        CURLMcode multi_error{ CURLM_OK };  ///< Multi failure recorded without allocating diagnostics on the I/O thread.
+        bool prepared{ false };
+        std::shared_ptr<CoroTransfer> next; ///< Intrusive pending/completion queue link; no allocation at completion.
 
         CoroTransfer(
-            std::shared_ptr<Session>              owned_session,
+            std::shared_ptr<Session> owned_session,
             std::function<Result<void>(Session&)> prepare_request,
-            std::stop_token                       token
+            std::stop_token token
         ) : session{ std::move(owned_session) }, prepare{ std::move(prepare_request) }, stop{ token } {}
     };
 
@@ -53,19 +53,19 @@ export namespace mcr::detail {
      * Internal transfer entry points accept only exclusively owned, freshly configured sessions.
      */
     class CoroRuntime {
-        std::mutex                             m_mutex;
-        std::mutex                             m_cleanup_mutex;
-        std::condition_variable                m_completion_ready;
+        std::mutex m_mutex;
+        std::mutex m_cleanup_mutex;
+        std::condition_variable m_completion_ready;
         std::unique_ptr<curl::CurlMultiHolder> m_multi;
-        std::shared_ptr<CoroTransfer>          m_pending_head;
-        std::shared_ptr<CoroTransfer>          m_pending_tail;
-        std::shared_ptr<CoroTransfer>          m_completed_head;
-        std::shared_ptr<CoroTransfer>          m_completed_tail;
-        Result<void>                           m_initialization; ///< Curl initialization result, retained for later submissions.
-        bool                                   m_stopping{ false };
-        bool                                   m_io_done{ false };
-        std::jthread                           m_io_thread;
-        std::jthread                           m_completion_thread;
+        std::shared_ptr<CoroTransfer> m_pending_head;
+        std::shared_ptr<CoroTransfer> m_pending_tail;
+        std::shared_ptr<CoroTransfer> m_completed_head;
+        std::shared_ptr<CoroTransfer> m_completed_tail;
+        Result<void> m_initialization; ///< Curl initialization result, retained for later submissions.
+        bool m_stopping{ false };
+        bool m_io_done{ false };
+        std::jthread m_io_thread;
+        std::jthread m_completion_thread;
 
     public:
         /**
@@ -76,7 +76,7 @@ export namespace mcr::detail {
             return runtime;
         }
 
-        CoroRuntime(CoroRuntime const&)                    = delete;
+        CoroRuntime(CoroRuntime const&) = delete;
         auto operator=(CoroRuntime const&) -> CoroRuntime& = delete;
 
         /**
@@ -156,7 +156,7 @@ export namespace mcr::detail {
             m_multi = std::make_unique<curl::CurlMultiHolder>(std::move(*holder));
             try {
                 m_completion_thread = std::jthread{ [this] { runCompletions(); } };
-                m_io_thread         = std::jthread{ [this] { runIo(); } };
+                m_io_thread = std::jthread{ [this] { runIo(); } };
             } catch (...) {
                 {
                     std::lock_guard lock{ m_mutex };
@@ -199,7 +199,7 @@ export namespace mcr::detail {
         static auto append(
             std::shared_ptr<CoroTransfer>& head,
             std::shared_ptr<CoroTransfer>& tail,
-            std::shared_ptr<CoroTransfer>  value
+            std::shared_ptr<CoroTransfer> value
         ) noexcept -> void {
             if (tail) {
                 tail->next = value;
@@ -214,12 +214,12 @@ export namespace mcr::detail {
          */
         auto complete(
             std::shared_ptr<CoroTransfer> transfer,
-            CURLcode                      result,
-            std::exception_ptr            error       = {},
-            CURLMcode                     multi_error = CURLM_OK
+            CURLcode result,
+            std::exception_ptr error = {},
+            CURLMcode multi_error = CURLM_OK
         ) noexcept -> void {
-            transfer->result      = result;
-            transfer->error       = std::move(error);
+            transfer->result = result;
+            transfer->error = std::move(error);
             transfer->multi_error = multi_error;
             {
                 std::lock_guard lock{ m_mutex };
@@ -241,7 +241,7 @@ export namespace mcr::detail {
                     if (!m_completed_head) {
                         break;
                     }
-                    transfer         = std::move(m_completed_head);
+                    transfer = std::move(m_completed_head);
                     m_completed_head = std::move(transfer->next);
                     if (!m_completed_head) {
                         m_completed_tail.reset();
@@ -259,8 +259,8 @@ export namespace mcr::detail {
         auto runIo() noexcept -> void {
             coro_runtime_thread = true;
             std::unordered_map<CURL*, std::shared_ptr<CoroTransfer>> active;
-            std::exception_ptr                                       failure;
-            CURLMcode                                                multi_error{ CURLM_OK };
+            std::exception_ptr failure;
+            CURLMcode multi_error{ CURLM_OK };
             try {
                 for (;;) {
                     std::shared_ptr<CoroTransfer> pending;
@@ -274,7 +274,7 @@ export namespace mcr::detail {
                     }
                     while (pending) {
                         auto transfer = std::move(pending);
-                        pending       = std::move(transfer->next);
+                        pending = std::move(transfer->next);
                         if (transfer->stop.stop_requested()) {
                             complete(std::move(transfer), CURLE_ABORTED_BY_CALLBACK);
                             continue;
@@ -300,9 +300,9 @@ export namespace mcr::detail {
                     }
                     for (auto it = active.begin(); it != active.end();) {
                         if (it->second->stop.stop_requested()) {
-                            auto* handle   = it->first;
-                            auto  transfer = std::move(it->second);
-                            it             = active.erase(it);
+                            auto* handle = it->first;
+                            auto transfer = std::move(it->second);
+                            it = active.erase(it);
                             (void)curl_multi_remove_handle(m_multi->handle, handle);
                             complete(std::move(transfer), CURLE_ABORTED_BY_CALLBACK);
                         } else {
@@ -318,8 +318,8 @@ export namespace mcr::detail {
                     while (auto* message = curl_multi_info_read(m_multi->handle, &queued)) {
                         if (message->msg == CURLMSG_DONE) {
                             auto* handle = message->easy_handle;
-                            auto  result = message->data.result;
-                            auto  node   = active.extract(handle);
+                            auto result = message->data.result;
+                            auto node = active.extract(handle);
                             if (!node.empty()) {
                                 (void)curl_multi_remove_handle(m_multi->handle, handle);
                                 complete(std::move(node.mapped()), result);
@@ -338,7 +338,7 @@ export namespace mcr::detail {
             {
                 std::lock_guard lock{ m_mutex };
                 m_stopping = true;
-                pending    = std::move(m_pending_head);
+                pending = std::move(m_pending_head);
                 m_pending_tail.reset();
             }
             for (auto& [handle, transfer] : active) {
@@ -347,7 +347,7 @@ export namespace mcr::detail {
             }
             while (pending) {
                 auto transfer = std::move(pending);
-                pending       = std::move(transfer->next);
+                pending = std::move(transfer->next);
                 complete(std::move(transfer), CURLE_ABORTED_BY_CALLBACK, failure, multi_error);
             }
             {
@@ -376,8 +376,8 @@ export namespace mcr::detail {
         bool await_ready() const noexcept { return false; }
 
         bool await_suspend(std::coroutine_handle<> continuation) {
-            auto  transfer         = m_transfer;
-            auto& runtime          = CoroRuntime::Instance();
+            auto transfer = m_transfer;
+            auto& runtime = CoroRuntime::Instance();
             transfer->continuation = continuation;
             transfer->wake.emplace(transfer->stop, WakeCoroRuntime{ &runtime });
             auto status = runtime.Submit(transfer);

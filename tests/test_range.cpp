@@ -25,16 +25,16 @@ namespace {
 
     auto check_single_range() -> bool {
         mcr::options::Range const defaults;
-        bool                      passed{ check(defaults.resume_from == 0 && defaults.finish_at == -1 && defaults.Str() == "0-" && mcr::options::Range{ 7 }.Str() == "7-", "default and one-endpoint construction must retain cpr's zero-start and open-finish defaults") };
+        bool passed{ check(defaults.resume_from == 0 && defaults.finish_at == -1 && defaults.Str() == "0-" && mcr::options::Range{ 7 }.Str() == "7-", "default and one-endpoint construction must retain cpr's zero-start and open-finish defaults") };
 
         struct RangeCase {
             std::optional<std::int64_t> from;
             std::optional<std::int64_t> to;
-            std::string_view            expected;
+            std::string_view expected;
         };
 
-        constexpr auto  MINIMUM{ (std::numeric_limits<std::int64_t>::min)() };
-        constexpr auto  MAXIMUM{ (std::numeric_limits<std::int64_t>::max)() };
+        constexpr auto MINIMUM{ (std::numeric_limits<std::int64_t>::min)() };
+        constexpr auto MAXIMUM{ (std::numeric_limits<std::int64_t>::max)() };
         RangeCase const cases[]{
             {            std::nullopt,            std::nullopt,                                      "0-" },
             {                       1,            std::nullopt,                                      "1-" },
@@ -58,22 +58,22 @@ namespace {
         }
         std::optional<std::int64_t> start{ 123 };
         std::optional<std::int64_t> finish{ 456 };
-        mcr::options::Range         range{ start, finish };
+        mcr::options::Range range{ start, finish };
         start = 0;
         finish.reset();
-        passed            &= check(range.Str() == "123-456", "construction must copy optional endpoint values");
-        range.resume_from  = MINIMUM;
-        range.finish_at    = -2;
-        passed            &= check(range.resume_from == MINIMUM && range.finish_at == -2 && range.Str() == "-", "negative endpoints must remain stored verbatim while formatting omits their digits");
+        passed &= check(range.Str() == "123-456", "construction must copy optional endpoint values");
+        range.resume_from = MINIMUM;
+        range.finish_at = -2;
+        passed &= check(range.resume_from == MINIMUM && range.finish_at == -2 && range.Str() == "-", "negative endpoints must remain stored verbatim while formatting omits their digits");
         mcr::options::Range copied{ range };
         range.resume_from = 5;
-        range.finish_at   = 8;
+        range.finish_at = 8;
         mcr::options::Range moved{ std::move(copied) };
         mcr::options::Range assigned;
         assigned = moved;
         mcr::options::Range move_assigned;
-        move_assigned  = std::move(moved);
-        passed        &= check(range.Str() == "5-8" && assigned.Str() == "-" && move_assigned.Str() == "-", "copying, moving, and assignment must retain independent endpoints");
+        move_assigned = std::move(moved);
+        passed &= check(range.Str() == "5-8" && assigned.Str() == "-" && move_assigned.Str() == "-", "copying, moving, and assignment must retain independent endpoints");
         auto text{ range.Str() };
         text.clear();
         passed &= check(range.Str() == "5-8", "Str must return an independent string and observe public endpoint changes");
@@ -84,7 +84,7 @@ namespace {
         mcr::options::MultiRange const empty{};
         mcr::options::MultiRange const explicit_empty(std::initializer_list<mcr::options::Range>{});
         mcr::options::MultiRange const single{ mcr::options::Range{} };
-        bool                  passed{ check(empty.Str().empty() && explicit_empty.Str().empty() && single.Str() == "0-", "empty lists and single ranges must format without separators") };
+        bool passed{ check(empty.Str().empty() && explicit_empty.Str().empty() && single.Str() == "0-", "empty lists and single ranges must format without separators") };
         mcr::options::MultiRange const two{
             mcr::options::Range{ std::nullopt, 3 },
             mcr::options::Range{            5, 6 }
@@ -105,21 +105,21 @@ namespace {
         };
         passed &= check(mixed.Str() == "10-2, 1-8, 1-8, -500, -, 9-", "multi-ranges must retain order, overlap, duplicates, negative endpoints, and reversed ranges without normalization");
 
-        mcr::options::Range      source{ 1, 2 };
+        mcr::options::Range source{ 1, 2 };
         mcr::options::MultiRange owned = {
             source,
             mcr::options::Range{ 4, 5 }
         };
         source.resume_from = 100;
-        source.finish_at   = 200;
+        source.finish_at = 200;
         mcr::options::MultiRange copied{ owned };
         owned = mcr::options::MultiRange{ source };
         mcr::options::MultiRange moved{ std::move(copied) };
         mcr::options::MultiRange assigned{};
         assigned = moved;
         mcr::options::MultiRange move_assigned{};
-        move_assigned  = std::move(moved);
-        passed        &= check(owned.Str() == "100-200" && assigned.Str() == "1-2, 4-5" && move_assigned.Str() == "1-2, 4-5", "multi-ranges must own snapshots and support independent copy/move assignments");
+        move_assigned = std::move(moved);
+        passed &= check(owned.Str() == "100-200" && assigned.Str() == "1-2, 4-5" && move_assigned.Str() == "1-2, 4-5", "multi-ranges must own snapshots and support independent copy/move assignments");
         auto text{ assigned.Str() };
         text.clear();
         passed &= check(assigned.Str() == "1-2, 4-5", "multi-range strings must be independent of stored ranges");

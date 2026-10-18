@@ -42,9 +42,9 @@ export namespace mcr {
      * @brief Describe a JSON parsing failure independently of HTTP and transport outcomes.
      */
     struct JsonError {
-        int                        id{};    ///< Exception identifier supplied by nlohmann.
-        std::string                message; ///< Owned diagnostic message.
-        std::optional<std::size_t> byte;    ///< One-based parse-error byte, possibly input size + 1 at EOF; absent for other JSON errors.
+        int id{};                        ///< Exception identifier supplied by nlohmann.
+        std::string message;             ///< Owned diagnostic message.
+        std::optional<std::size_t> byte; ///< One-based parse-error byte, possibly input size + 1 at EOF; absent for other JSON errors.
     };
 
 } // namespace mcr

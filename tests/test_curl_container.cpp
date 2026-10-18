@@ -8,7 +8,7 @@ import std;
 import mcr;
 
 using Parameters = mcr::Parameters;
-using Pairs      = mcr::Payload;
+using Pairs = mcr::Payload;
 
 static_assert(std::derived_from<Parameters, mcr::curl::CurlContainer<mcr::Parameter>>);
 static_assert(!std::is_same_v<Parameters, mcr::curl::CurlContainer<mcr::Parameter>>);
@@ -53,11 +53,11 @@ namespace {
     }
 
     auto check_without_curl() -> bool {
-        Parameters       empty_parameters;
+        Parameters empty_parameters;
         Parameters const empty_list = std::initializer_list<mcr::Parameter>{};
-        Pairs            empty_pairs{};
-        bool             passed{ check(empty_parameters.encode && empty_list.encode && empty_pairs.encode && empty_parameters.GetContent().value().empty() && empty_list.GetContent().value().empty() && empty_pairs.GetContent().value().empty(), "empty parameter and payload collections must enable encoding and produce empty raw content") };
-        Parameters       parameters{
+        Pairs empty_pairs{};
+        bool passed{ check(empty_parameters.encode && empty_list.encode && empty_pairs.encode && empty_parameters.GetContent().value().empty() && empty_list.GetContent().value().empty() && empty_pairs.GetContent().value().empty(), "empty parameter and payload collections must enable encoding and produce empty raw content") };
+        Parameters parameters{
             { "key one", "hello world" },
             {    "flag",            "" },
             { "key one",         "x+y" }
@@ -67,11 +67,11 @@ namespace {
             {    "flag",            "" },
             { "key one",         "x+y" }
         };
-        passed            &= check(parameters.GetContent().value() == "key one=hello world&flag&key one=x+y", "holderless parameters must ignore the encoding flag and omit equals signs for empty values");
-        passed            &= check(pairs.GetContent().value() == "key one=hello world&flag=&key one=x+y", "holderless pairs must ignore the encoding flag and retain every equals sign");
-        parameters.encode  = false;
-        pairs.encode       = false;
-        passed            &= check(parameters.GetContent().value() == "key one=hello world&flag&key one=x+y" && pairs.GetContent().value() == "key one=hello world&flag=&key one=x+y", "holderless content must be independent of the encoding flag");
+        passed &= check(parameters.GetContent().value() == "key one=hello world&flag&key one=x+y", "holderless parameters must ignore the encoding flag and omit equals signs for empty values");
+        passed &= check(pairs.GetContent().value() == "key one=hello world&flag=&key one=x+y", "holderless pairs must ignore the encoding flag and retain every equals sign");
+        parameters.encode = false;
+        pairs.encode = false;
+        passed &= check(parameters.GetContent().value() == "key one=hello world&flag&key one=x+y" && pairs.GetContent().value() == "key one=hello world&flag=&key one=x+y", "holderless content must be independent of the encoding flag");
         return passed;
     }
 
@@ -96,7 +96,7 @@ namespace {
         passed &= check(from_list.GetContent().value() == "first=one&last=two" && reversed.GetContent().value() == "last=two&first=one", "payload ranges must support noncontiguous iterators and follow their traversal order");
 
         std::istringstream words{ "first second third" };
-        auto               input{
+        auto input{
             std::ranges::subrange{ std::istream_iterator<std::string>{ words }, std::istream_iterator<std::string>{} }
             |
             std::views::transform([](std::string const& word) { return mcr::Pair{ "word", word }; }
@@ -110,12 +110,12 @@ namespace {
             { std::string(64, 'k'), std::string(64, 'v') }
         };
         Pairs const from_move_iterators{ std::make_move_iterator(move_source.begin()), std::make_move_iterator(move_source.end()) };
-        passed                      &= check(move_source.front().key == std::string(64, 'k') && move_source.front().value == std::string(64, 'v') && from_move_iterators.GetContent().value() == std::string(64, 'k') + '=' + std::string(64, 'v'), "range construction must retain cpr's copy semantics even for move iterators");
+        passed &= check(move_source.front().key == std::string(64, 'k') && move_source.front().value == std::string(64, 'v') && from_move_iterators.GetContent().value() == std::string(64, 'k') + '=' + std::string(64, 'v'), "range construction must retain cpr's copy semantics even for move iterators");
 
-        Pairs const      empty_list  = std::initializer_list<mcr::Pair>{};
-        Pairs const      empty_range{ source.end(), source.end() };
+        Pairs const empty_list = std::initializer_list<mcr::Pair>{};
+        Pairs const empty_range{ source.end(), source.end() };
         mcr::Pair const* null_pair{ nullptr };
-        Pairs const      empty_pointers{ null_pair, null_pair };
+        Pairs const empty_pointers{ null_pair, null_pair };
         passed &= check(empty_list.encode && empty_range.encode && empty_pointers.encode && empty_list.GetContent().value().empty() && empty_range.GetContent().value().empty() && empty_pointers.GetContent().value().empty(), "empty lists and equal iterator ranges must produce empty payloads without dereferencing iterators");
         return passed;
     }
@@ -124,12 +124,12 @@ namespace {
     auto check_ownership(mcr::curl::CurlHolder const& holder) -> bool {
         std::string key{ "first" };
         std::string value{ "one" };
-        Element     element{ key, value };
-        key   = "changed";
+        Element element{ key, value };
+        key = "changed";
         value = "changed";
-        bool      passed{ check(element.key == "first" && element.value == "one", "element construction must own independent key and value strings") };
+        bool passed{ check(element.key == "first" && element.value == "one", "element construction must own independent key and value strings") };
         Container original{ element };
-        element.key   = "second";
+        element.key = "second";
         element.value = "two";
         original.Add(element);
         original.Add({
@@ -139,8 +139,8 @@ namespace {
         original.Add({});
         element.value = "changed again";
         std::string const expected{ "first=one&second=two&first=three&last=four" };
-        passed          &= check(original.GetContent().value() == expected && original.GetContent(holder).value() == expected, "construction and Add must copy in order, preserving duplicates and ignoring empty lists");
-        original.encode  = false;
+        passed &= check(original.GetContent().value() == expected && original.GetContent(holder).value() == expected, "construction and Add must copy in order, preserving duplicates and ignoring empty lists");
+        original.encode = false;
         Container copied{ original };
         original.Add(Element{ "extra", "five" });
         original.encode = true;
@@ -148,8 +148,8 @@ namespace {
         Container assigned{};
         assigned = moved;
         Container move_assigned{};
-        move_assigned  = std::move(assigned);
-        passed        &= check(!move_assigned.encode && move_assigned.GetContent().value() == expected && original.GetContent().value() == expected + "&extra=five", "copies and moves must preserve ordered content and the encoding flag without sharing state");
+        move_assigned = std::move(assigned);
+        passed &= check(!move_assigned.encode && move_assigned.GetContent().value() == expected && original.GetContent().value() == expected + "&extra=five", "copies and moves must preserve ordered content and the encoding flag without sharing state");
         return passed;
     }
 
@@ -168,14 +168,14 @@ namespace {
         std::string const raw_pairs{ "a b&==x+y/%&empty value=&=v v" };
         std::string const encoded_parameters{ "a%20b%26%3D=x%2By%2F%25&empty%20value&=v%20v" };
         std::string const encoded_pairs{ "a b&==x%2By%2F%25&empty value=&=v%20v" };
-        bool              passed{ check(parameters.GetContent(holder).value() == encoded_parameters && pairs.GetContent(holder).value() == encoded_pairs, "encoding must escape parameter keys and values, but only pair values") };
-        passed            &= check(parameters.GetContent().value() == raw_parameters && pairs.GetContent().value() == raw_pairs, "encoded serialization must not mutate stored bytes");
-        parameters.encode  = false;
-        pairs.encode       = false;
-        passed            &= check(parameters.GetContent(holder).value() == raw_parameters && pairs.GetContent(holder).value() == raw_pairs, "disabling encoding must emit all bytes verbatim even with a holder");
-        parameters.encode  = true;
-        pairs.encode       = true;
-        passed            &= check(parameters.GetContent(holder).value() == encoded_parameters && pairs.GetContent(holder).value() == encoded_pairs, "reenabling encoding must escape the original data without double encoding");
+        bool passed{ check(parameters.GetContent(holder).value() == encoded_parameters && pairs.GetContent(holder).value() == encoded_pairs, "encoding must escape parameter keys and values, but only pair values") };
+        passed &= check(parameters.GetContent().value() == raw_parameters && pairs.GetContent().value() == raw_pairs, "encoded serialization must not mutate stored bytes");
+        parameters.encode = false;
+        pairs.encode = false;
+        passed &= check(parameters.GetContent(holder).value() == raw_parameters && pairs.GetContent(holder).value() == raw_pairs, "disabling encoding must emit all bytes verbatim even with a holder");
+        parameters.encode = true;
+        pairs.encode = true;
+        passed &= check(parameters.GetContent(holder).value() == encoded_parameters && pairs.GetContent(holder).value() == encoded_pairs, "reenabling encoding must escape the original data without double encoding");
 
         std::string const utf8{ "\xE4\xB8\xAD" };
         passed &= check(Parameters{
@@ -187,7 +187,7 @@ namespace {
                         "UTF-8 must be encoded byte by byte with pair keys left raw");
         std::string const binary_key{ "a\0b", 3 };
         std::string const binary_value{ "x\0 y", 4 };
-        Parameters        binary_parameters{
+        Parameters binary_parameters{
             { binary_key, binary_value }
         };
         Pairs binary_pairs{
@@ -228,26 +228,26 @@ namespace {
         DerivedParameters derived{
             { "key", "value" }
         };
-        derived.First().value  = "updated value";
-        passed                &= check(derived.GetContent(holder).value() == "key=updated%20value", "derived containers must be able to update the protected ordered storage");
+        derived.First().value = "updated value";
+        passed &= check(derived.GetContent(holder).value() == "key=updated%20value", "derived containers must be able to update the protected ordered storage");
         return passed;
     }
 
     template <typename Container>
     auto check_holder_lifetime() -> bool {
-        auto                  source = mcr::curl::CurlHolder::Create().value();
+        auto source = mcr::curl::CurlHolder::Create().value();
         mcr::curl::CurlHolder owner{ std::move(source) };
-        Container             empty{};
-        bool                  passed{ check(empty.GetContent(source).value().empty(), "empty containers must not consult the supplied holder") };
-        Container             values{
+        Container empty{};
+        bool passed{ check(empty.GetContent(source).value().empty(), "empty containers must not consult the supplied holder") };
+        Container values{
             { "key", "a b" }
         };
-        values.encode  = false;
-        passed        &= check(values.GetContent(source).value() == "key=a b", "disabled encoding must not consult a moved-from holder");
-        values.encode  = true;
+        values.encode = false;
+        passed &= check(values.GetContent(source).value() == "key=a b", "disabled encoding must not consult a moved-from holder");
+        values.encode = true;
         {
-            auto const failure  = values.GetContent(source);
-            passed             &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
+            auto const failure = values.GetContent(source);
+            passed &= check(!failure && failure.error().code == mcr::ErrorCode::FAILED_INIT, "failure must return the expected error code");
         }
         passed &= check(values.GetContent(owner).value() == "key=a%20b" && values.GetContent().value() == "key=a b", "failed encoding must leave the container usable and unchanged");
         return passed;
@@ -263,13 +263,13 @@ int main() {
         return 1;
     }
     try {
-        auto holder  = mcr::curl::CurlHolder::Create().value();
-        passed      &= check_ownership<Parameters, mcr::Parameter>(holder);
-        passed      &= check_ownership<Pairs, mcr::Pair>(holder);
-        passed      &= check_encoding(holder);
-        passed      &= check_empty_entries(holder);
-        passed      &= check_holder_lifetime<Parameters>();
-        passed      &= check_holder_lifetime<Pairs>();
+        auto holder = mcr::curl::CurlHolder::Create().value();
+        passed &= check_ownership<Parameters, mcr::Parameter>(holder);
+        passed &= check_ownership<Pairs, mcr::Pair>(holder);
+        passed &= check_encoding(holder);
+        passed &= check_empty_entries(holder);
+        passed &= check_holder_lifetime<Parameters>();
+        passed &= check_holder_lifetime<Pairs>();
     } catch (std::exception const& error) {
         std::println("test_curl_container: unexpected exception: {}", error.what());
         passed = false;

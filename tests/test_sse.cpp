@@ -23,9 +23,9 @@ namespace {
 
     auto make_event(std::string data, std::string type = "message", std::optional<std::string> id = {}, std::optional<std::size_t> retry = {}) -> Event {
         Event event;
-        event.data  = std::move(data);
+        event.data = std::move(data);
         event.event = std::move(type);
-        event.id    = std::move(id);
+        event.id = std::move(id);
         event.retry = retry;
         return event;
     }
@@ -38,7 +38,7 @@ namespace {
 
     struct Collector {
         mcr::ServerSentEventParser parser;
-        std::vector<Event>         events;
+        std::vector<Event> events;
 
         auto Parse(std::string_view data) -> bool {
             return parser.Parse(data, [this](Event&& event) {
@@ -50,10 +50,10 @@ namespace {
 
     auto check_fields() -> bool {
         Event const defaults;
-        bool        passed{ check(!defaults.id && defaults.event == "message" && defaults.data.empty() && !defaults.retry, "event defaults must match cpr") };
+        bool passed{ check(!defaults.id && defaults.event == "message" && defaults.data.empty() && !defaults.retry, "event defaults must match cpr") };
 
         struct FieldCase {
-            std::string_view   input;
+            std::string_view input;
             std::vector<Event> expected;
         };
 
@@ -87,7 +87,7 @@ namespace {
             "\xEF\xBB\xBF" ": comment\r\n" "id: ignored\r\n\r\n" "id: 42\r\nretry: 3000\r\nretry: 12x\r\nevent: custom\r\n" "data: first\r\ndata:\r\ndata: \xE9\x9B\xAA\r\n\r\n" "data: next\n\n" "event:\rdata\r\r"
         };
         std::vector<Event> const expected{ make_event("first\n\n\xE9\x9B\xAA", "custom", "42", 3000), make_event("next"), make_event("") };
-        bool                     passed{ true };
+        bool passed{ true };
         for (std::size_t split{ 0 }; split <= stream.size(); ++split) {
             Collector collector;
             passed &= check(collector.Parse(stream.substr(0, split)) && collector.Parse({}) && collector.Parse(stream.substr(split)) && same_events(collector.events, expected), "every two-chunk split must preserve mixed line endings, BOM, UTF-8 bytes, and metadata");
@@ -98,7 +98,7 @@ namespace {
         }
         passed &= check(same_events(bytewise.events, expected), "single-byte chunks must produce the same complete events");
 
-        Collector   partial;
+        Collector partial;
         std::string chunk{ "data: owned" };
         passed &= check(partial.Parse(chunk) && partial.events.empty(), "incomplete data must be buffered without dispatch");
         chunk.assign("changed");
@@ -125,7 +125,7 @@ namespace {
     }
 
     auto check_control_flow() -> bool {
-        Collector  collector;
+        Collector collector;
         bool const continued{ collector.parser.Parse("data: first\r\n\r\ndata: second\r\n\r\ndata: third\r\n\r\n", [&](Event&& event) {
             collector.events.push_back(std::move(event));
             return collector.events.size() < 2;
@@ -168,9 +168,9 @@ namespace {
 
     auto check_callback_adapter() -> bool {
         mcr::ServerSentEventCallback empty;
-        bool                         passed{ check(empty.userdata == 0 && !empty.callback && empty(Event{}) && empty.HandleData("data: discarded\n\n"), "default callback must accept events and raw data") };
-        std::vector<Event>           events;
-        std::vector<std::intptr_t>   values;
+        bool passed{ check(empty.userdata == 0 && !empty.callback && empty(Event{}) && empty.HandleData("data: discarded\n\n"), "default callback must accept events and raw data") };
+        std::vector<Event> events;
+        std::vector<std::intptr_t> values;
         mcr::ServerSentEventCallback callback{
             [&](Event&& event, std::intptr_t userdata) {
                 events.push_back(std::move(event));
@@ -179,19 +179,19 @@ namespace {
             },
             42
         };
-        passed            &= check(callback.HandleData("data: par") && events.empty(), "adapter must retain partial data between chunks");
-        callback.userdata  = -7;
-        passed            &= check(!callback.HandleData("tial\n\ndata: second\n\ndata: third\n\n") && same_events(events, { make_event("partial"), make_event("second") }) && values == std::vector<std::intptr_t>{ -7, -7 }, "adapter must forward current user data and callback abort results");
-        callback.callback  = [&](Event&& event, std::intptr_t userdata) {
+        passed &= check(callback.HandleData("data: par") && events.empty(), "adapter must retain partial data between chunks");
+        callback.userdata = -7;
+        passed &= check(!callback.HandleData("tial\n\ndata: second\n\ndata: third\n\n") && same_events(events, { make_event("partial"), make_event("second") }) && values == std::vector<std::intptr_t>{ -7, -7 }, "adapter must forward current user data and callback abort results");
+        callback.callback = [&](Event&& event, std::intptr_t userdata) {
             events.push_back(std::move(event));
             values.push_back(userdata);
             return true;
         };
-        callback.userdata  = 9;
-        passed            &= check(callback.HandleData({}) && same_events(events, { make_event("partial"), make_event("second"), make_event("third") }) && values.back() == 9, "replacing a public callback must preserve buffered stream state");
-        passed            &= check(std::as_const(callback)(make_event("direct")) && events.back().data == "direct" && values.back() == 9, "const direct invocation must forward an event and user data");
-        callback.callback  = {};
-        passed            &= check(callback.HandleData("data: ignored\n\n") && events.size() == 4, "clearing a callback must restore no-op acceptance");
+        callback.userdata = 9;
+        passed &= check(callback.HandleData({}) && same_events(events, { make_event("partial"), make_event("second"), make_event("third") }) && values.back() == 9, "replacing a public callback must preserve buffered stream state");
+        passed &= check(std::as_const(callback)(make_event("direct")) && events.back().data == "direct" && values.back() == 9, "const direct invocation must forward an event and user data");
+        callback.callback = {};
+        passed &= check(callback.HandleData("data: ignored\n\n") && events.size() == 4, "clearing a callback must restore no-op acceptance");
         return passed;
     }
 

@@ -15,7 +15,7 @@ export namespace mcr {
     /**
      * @brief Curl's transfer offset type, available without including curl headers.
      */
-    using CprOffT   = curl_off_t;
+    using CprOffT = curl_off_t;
 
     /**
      * @brief Integral progress callback argument type used by the current curl dependency.
@@ -71,13 +71,13 @@ export namespace mcr {
             }
         }
 
-        StringHolder(StringHolder const& other)     = default;
+        StringHolder(StringHolder const& other) = default;
         StringHolder(StringHolder&& other) noexcept = default;
 
     public:
-        virtual ~StringHolder()                                = default;
+        virtual ~StringHolder() = default;
 
-        StringHolder& operator=(StringHolder const& other)     = default;
+        StringHolder& operator=(StringHolder const& other) = default;
         StringHolder& operator=(StringHolder&& other) noexcept = default;
 
         /**
@@ -282,11 +282,11 @@ export namespace mcr {
          */
         Url(std::initializer_list<std::string> args) : StringHolder<Url>(args) {}
 
-        Url(Url const& other)                = default;
-        Url(Url&& other) noexcept            = default;
-        ~Url() override                      = default;
+        Url(Url const& other) = default;
+        Url(Url&& other) noexcept = default;
+        ~Url() override = default;
 
-        Url& operator=(Url const& other)     = default;
+        Url& operator=(Url const& other) = default;
         Url& operator=(Url&& other) noexcept = default;
     };
 
@@ -331,11 +331,11 @@ export namespace mcr {
          */
         UserAgent(std::initializer_list<std::string> args) : StringHolder<UserAgent>(args) {}
 
-        UserAgent(UserAgent const& other)                = default;
-        UserAgent(UserAgent&& other) noexcept            = default;
-        ~UserAgent() override                            = default;
+        UserAgent(UserAgent const& other) = default;
+        UserAgent(UserAgent&& other) noexcept = default;
+        ~UserAgent() override = default;
 
-        UserAgent& operator=(UserAgent const& other)     = default;
+        UserAgent& operator=(UserAgent const& other) = default;
         UserAgent& operator=(UserAgent&& other) noexcept = default;
     };
 
