@@ -56,8 +56,6 @@ namespace {
         auto response = mcr::sync_wait(std::move(task)).value();
         require(response.text == "owned before suspension", "request options must be owned before initial suspension");
         require(response.header.at("X-Request-X-Custom") == "one" && response.header.at("X-Request-X-Empty") == "two", "header arguments must be merged");
-        auto json = mcr::sync_wait(mcr::PostCoro(server.Url("/json/echo"), proxies(), mcr::JsonBody{ mcr::Json{ { "value", 42 } } })).value();
-        require(json.Json()["value"] == 42, "JSON requests must use the existing serialization and response APIs");
     }
 
     auto sequential(HttpServer const& server) -> mcr::Task<int> {

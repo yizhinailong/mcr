@@ -38,7 +38,7 @@ if (!text) {
 mcr::Coro::Cleanup().value(); // 所有协程工作结束后，在 curl_global_cleanup() 之前调用。
 ```
 
-HTTP 方法和选项沿用同步 API，包括 Header 合并、Body / JsonBody / Payload、
+HTTP 方法和选项沿用同步 API，包括 Header 合并、Body / Payload、
 代理、TLS、重定向、回调和响应解析。每次调用拥有自己的 Session。
 这批 API 提供一次性请求；Session 的同步拦截器不能直接作为协程调度器使用。
 

@@ -2,7 +2,7 @@
 
 基于 libcurl 的 C++23 模块化 HTTP 客户端库，使用 [mcpp](https://github.com/mcpp-community/mcpp) 构建和管理依赖，API 设计参考 [cpr](https://github.com/libcpr/cpr)。
 
-通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载。库还提供可复用的 Session、JSON 请求与响应、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
+通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载。库还提供可复用的 Session、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
 
 [快速开始](#快速开始) · [文档索引](docs/README.md) · [可运行示例](example/README.md) · [源码结构](docs/structure.md) · [expected 接口迁移](docs/expected_migration.md)
 
@@ -15,7 +15,6 @@
 | 依赖 | 版本 | 用途 |
 | --- | --- | --- |
 | `compat.curl` | `8.21.0` | HTTP 传输 |
-| `nlohmann.json` | `3.12.0` | JSON 序列化与解析 |
 | `compat.openssl` | `3.5.1` | Linux/macOS 的 OpenSSL 上下文支持 |
 
 Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
@@ -32,7 +31,7 @@ mcpp build
 mcpp test
 ```
 
-根项目是库，没有默认可执行程序。运行示例需要进入 `example/`，该目录提供 52 个独立请求示例和本地 HTTP 服务。准备好 [uv](https://docs.astral.sh/uv/) 后，在第一个终端从仓库根目录执行：
+根项目是库，没有默认可执行程序。运行示例需要进入 `example/`，该目录提供 46 个独立请求示例和本地 HTTP 服务。准备好 [uv](https://docs.astral.sh/uv/) 后，在第一个终端从仓库根目录执行：
 
 ```sh
 cd example
@@ -47,8 +46,6 @@ cd example
 mcpp run get -- http://127.0.0.1:8080/echo
 mcpp run post_async -- http://127.0.0.1:8080/echo
 mcpp run get_coro -- http://127.0.0.1:8080/echo
-mcpp run post_json -- http://127.0.0.1:8080/json
-mcpp run post_json_coro -- http://127.0.0.1:8080/json
 ```
 
 GET 示例会输出 `Status code: 200` 和 `Text: GET single`。下载、批量请求和完整验证步骤见 [示例说明](example/README.md)。
@@ -120,16 +117,16 @@ auto main() -> int {
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |
 | 下载到文件或回调 | `Download`、`DownloadAsync`、`DownloadCoro` | 响应元数据 |
 
-JSON 使用 `JsonBody` 发送，通过 `Response::Json()` 或 `TryJson()` 解析；具体规则见 [JSON 文档](docs/json.md)，同步、异步、协程、回调和两种批量调用的运行目标见 [示例说明](example/README.md)。
+库只传输字节，不依赖具体 JSON 实现。发送 JSON 时由调用方序列化后放入 `Body` 并显式设置 `Content-Type`；响应正文保存在 `Response::text`，可用任意 JSON 库自行解析。同步、异步、协程、回调和两种批量调用都遵循相同语义，运行目标见 [示例说明](example/README.md)。
 
 使用时需要遵循以下约定：
 
 - 配置和本地操作失败通过 `Result` 返回。传输错误保存在 `Response::error`；HTTP 4xx/5xx 仍是普通响应，需要检查 `status_code`。用户回调与标准库资源异常继续传播。
-- `Body`、`JsonBody`、`Payload` 拥有数据；`BodyView` 和 Multipart 中的 `Buffer` 借用数据，底层存储必须有效到请求结束。
+- `Body`、`Payload` 拥有数据；`BodyView` 和 Multipart 中的 `Buffer` 借用数据，底层存储必须有效到请求结束。
 - 同一个 Session 的配置与请求串行使用；Session 的异步方法需要通过 `std::shared_ptr` 管理会话。
 - 在启动工作线程前初始化 curl，完成全部请求后关闭已使用的异步运行时，再销毁剩余句柄并清理 curl。`Async::Cleanup()` 和 `Coro::Cleanup()` 的生命周期相互独立，均为永久关闭，详见 [异步运行时](docs/async.md) 和 [协程请求](docs/coro.md)。
 
-mcr 采用 C++23 模块和独立命名空间，并增加 JSON、协程及基于 `std::expected` 的结果接口。与 cpr 有意保留的 API 和行为差异记录在各模块文档中。
+mcr 采用 C++23 模块和独立命名空间，并增加协程及基于 `std::expected` 的结果接口。与 cpr 有意保留的 API 和行为差异记录在各模块文档中。
 
 ## 开发与文档
 

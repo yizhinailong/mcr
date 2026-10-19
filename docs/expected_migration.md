@@ -91,5 +91,5 @@ HTTP 4xx/5xx 仍是普通响应。详见[错误处理](error.md)。
 
 这不是关闭 C++ 异常支持：标准库分配和线程创建失败、用户回调异常继续传播。
 通用 Task、AsyncWrapper 的无效状态操作、线程池配置与自身等待、Singleton 生命周期误用，
-以及容器越界和 `Response::Json()` 保留原异常语义；JSON 解析可以使用已有的 `TryJson()`。
+以及容器越界保留原异常语义。
 不要在失败结果上调用 `.value()`；先检查结果，再使用 `*result`、`result->member` 或 `result.error()`。

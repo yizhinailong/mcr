@@ -290,20 +290,6 @@ namespace mcr::test {
                         status = "407 Proxy Authentication Required";
                         extra = "Proxy-Authenticate: Basic realm=\"local-test\"\r\n";
                     }
-                } else if (target.starts_with("/json/")) {
-                    content_type = "application/json";
-                    if (target == "/json/echo") {
-                        output = body;
-                    } else if (target == "/json/error") {
-                        status = "422 Unprocessable Content";
-                        output = R"({"error":"invalid input"})";
-                        content_type = "application/problem+json";
-                    } else if (target == "/json/empty") {
-                        status = "204 No Content";
-                        output.clear();
-                    } else {
-                        output = "{invalid";
-                    }
                 } else if (target.starts_with("/echo")) {
                     output = body;
                 } else if (target == "/redirect" || target == "/loop") {

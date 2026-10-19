@@ -47,9 +47,9 @@ auto length = mcr::GetCallback(
 std::println("{} bytes", length.Get());
 ```
 
-JSON 请求可将上面的 `Header` 和 `Body` 换成 `mcr::JsonBody{ mcr::Json{ { "message", "hello" } } }`，
-自动设置默认 JSON 媒体类型。响应通过 `response.Json()` 或 `response.TryJson()` 按需解析，
-同步、异步、回调及批量入口均支持，详见 [JSON 请求与响应](json.md)。
+`Body` 只传输字节，库不依赖任何 JSON 实现。发送 JSON 时由调用方选择序列化库，
+把序列化结果放入 `Body` 并显式设置 `Content-Type`；响应正文保存在 `Response::text`，
+可用同一套 JSON 库自行解析。同步、异步、回调和批量入口的正文语义一致。
 
 - 选项按参数顺序应用。重复 Header 合并，名称忽略大小写，后面的同名值覆盖前面；
   空 Header 不清除前面参数中的字段。其他重复选项沿用对应 Session setter 的行为。

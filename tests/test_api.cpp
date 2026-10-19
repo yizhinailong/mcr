@@ -114,6 +114,17 @@ namespace {
         MoveOnlyUrl(MoveOnlyUrl&&) = default;
     };
 
+    auto check_content_options(HttpServer const& server) -> bool {
+        auto const url{ server.Url("/echo") };
+        mcr::options::Proxies const proxies{
+            { "http", "" },
+            { "no_proxy", "*" }
+        };
+        mcr::options::Timeout const timeout{ 3000ms };
+        auto response{ mcr::Post(url, proxies, timeout, mcr::Body{ "discarded" }, mcr::Body{ "last" }).value() };
+        return check(!response.error && response.text == "last", "the last content option must win in one-shot APIs");
+    }
+
     auto check_batches(HttpServer const& server) -> bool {
         HttpServer concurrent;
         auto batch{ mcr::MultiGet(options(concurrent, "/barrier"), options(concurrent, "/barrier")).value() };
@@ -276,6 +287,7 @@ auto main() -> int {
         HttpServer server;
         passed &= check_methods(server);
         passed &= check_headers_and_ownership(server);
+        passed &= check_content_options(server);
         passed &= check_batches(server);
         passed &= check_callbacks(server);
         passed &= check_cancellation(server);

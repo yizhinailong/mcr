@@ -7,7 +7,7 @@
 | 位置 | 文件 | 职责 |
 | --- | --- | --- |
 | `src/` | `mcr.cppm`、`api.cppm` | 库入口和一次性请求 API |
-| `src/request/` | `body.cppm`、`json.cppm`、`buffer.cppm`、`file.cppm`、`multipart.cppm`、`fields.cppm` | 请求正文、JSON、上传数据、查询参数和表单 |
+| `src/request/` | `body.cppm`、`buffer.cppm`、`file.cppm`、`multipart.cppm`、`fields.cppm` | 请求正文、上传数据、查询参数和表单 |
 | `src/http/` | `response.cppm`、`cookies.cppm`、`cert_info.cppm`、`status_code.cppm`、`sse.cppm` | 响应、HTTP 元数据和事件流 |
 | `src/session/` | `session.cppm`、`async.cppm`、`callback.cppm`、`connection_pool.cppm` | 会话、异步运行时、回调、连接共享和批量执行 |
 | `src/coro/` | `task.cppm`、`runtime.cppm` | `mcr::Task<T>` 与 curl multi 协程运行时，公共请求函数仍位于 `src/api.cppm`，详见[协程请求](coro.md) |
@@ -32,7 +32,6 @@
 
 ```cpp
 import mcr.body;       // src/request/body.cppm
-import mcr.json;       // src/request/json.cppm：JSON 值、正文和解析诊断
 import mcr.fields;     // src/request/fields.cppm
 import mcr.response;   // src/http/response.cppm
 import mcr.session;    // src/session/session.cppm

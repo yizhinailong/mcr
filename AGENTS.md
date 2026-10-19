@@ -17,7 +17,7 @@
 
 - `src/`：库入口 `mcr.cppm` 和一次性请求 API `api.cppm`。
 - `src/request/`：mcr.body 中的正文和借用视图，mcr.fields 中的查询参数与表单，
-  以及 JSON、上传缓冲区、文件和分段表单；公开类型位于 mcr。
+  以及上传缓冲区、文件和分段表单；公开类型位于 mcr。
 - `src/http/`：响应、Cookie、证书信息、状态码和服务端发送事件（SSE）。
   公开类型位于 mcr，状态常量位于 mcr::status，保留 mcr.response、mcr.sse 等现有模块名。
 - `src/session/`：会话、异步运行时、回调和连接池。

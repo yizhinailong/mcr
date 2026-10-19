@@ -21,7 +21,6 @@ export import mcr.connection_pool;
 export import mcr.fields;
 export import mcr.http;
 export import mcr.interface;
-export import mcr.json;
 export import mcr.multipart;
 export import mcr.proxy;
 export import mcr.response;
@@ -36,8 +35,8 @@ import std;
 
 export namespace mcr {
 
-    using AsyncResponse = utils::AsyncWrapper<Result<Response>>;                                ///< Asynchronous transfer result.
-    using Content = std::variant<std::monostate, Payload, Body, BodyView, Multipart, JsonBody>; ///< Persistent request content.
+    using AsyncResponse = utils::AsyncWrapper<Result<Response>>;                      ///< Asynchronous transfer result.
+    using Content = std::variant<std::monostate, Payload, Body, BodyView, Multipart>; ///< Persistent request content.
 
     class Session;
     class MultiPerform;
@@ -560,26 +559,6 @@ export namespace mcr {
          */
         auto SetBodyView(BodyView body) -> Result<void> {
             m_content = body;
-            return {};
-        }
-
-        /**
-         * @brief Copy serialized JSON for subsequent requests.
-         * @param body JSON bytes to own; supplies a default Content-Type only when sent.
-         * @return Success or the first operation error.
-         */
-        auto SetJsonBody(JsonBody const& body) -> Result<void> {
-            m_content = body;
-            return {};
-        }
-
-        /**
-         * @brief Move serialized JSON for subsequent requests.
-         * @param body JSON bytes to own; supplies a default Content-Type only when sent.
-         * @return Success or the first operation error.
-         */
-        auto SetJsonBody(JsonBody&& body) -> Result<void> {
-            m_content = std::move(body);
             return {};
         }
 
@@ -1667,30 +1646,6 @@ export namespace mcr {
         }
 
         /**
-         * @brief Forward a copied JsonBody option to its setter.
-         * @param value Serialized JSON option.
-         * @return Success or the first operation error.
-         */
-        auto SetOption(JsonBody const& value) -> Result<void> {
-            if (auto status = SetJsonBody(value); !status) {
-                return std::unexpected{ std::move(status.error()) };
-            }
-            return {};
-        }
-
-        /**
-         * @brief Forward a moved JsonBody option to its setter.
-         * @param value Serialized JSON option.
-         * @return Success or the first operation error.
-         */
-        auto SetOption(JsonBody&& value) -> Result<void> {
-            if (auto status = SetJsonBody(std::move(value)); !status) {
-                return std::unexpected{ std::move(status.error()) };
-            }
-            return {};
-        }
-
-        /**
          * @brief Forward a ReadCallback option to its setter.
          * @param value Option to apply.
          * @return Success or the first operation error.
@@ -2058,18 +2013,12 @@ export namespace mcr {
         /**
          * @brief Rebuild headers, preserving explicit values ahead of inferred defaults.
          * @param chunked Whether an unknown-sized upload needs chunking.
-         * @param json_body Whether this transfer sends a JSON body.
          * @return Success or the first operation error.
          */
-        auto prepareHeader(bool chunked, bool json_body) -> Result<void> {
+        auto prepareHeader(bool chunked) -> Result<void> {
             CurlList list{ nullptr, &curl_slist_free_all };
             for (auto const& [name, value] : m_header) {
                 if (auto status = appendList(list, name + (value.empty() ? ";" : ": " + value)); !status) {
-                    return std::unexpected{ std::move(status.error()) };
-                }
-            }
-            if (json_body && !m_header.contains("Content-Type")) {
-                if (auto status = appendList(list, "Content-Type: application/json"); !status) {
                     return std::unexpected{ std::move(status.error()) };
                 }
             }
@@ -2278,10 +2227,6 @@ export namespace mcr {
                     if (auto status = prepareBytes(body->Str(), true); !status) {
                         return std::unexpected{ std::move(status.error()) };
                     }
-                } else if (auto const* json{ std::get_if<JsonBody>(&m_content) }) {
-                    if (auto status = prepareBytes(json->Str(), true); !status) {
-                        return std::unexpected{ std::move(status.error()) };
-                    }
                 } else if (auto const* view{ std::get_if<BodyView>(&m_content) }) {
                     if (auto status = prepareBytes(view->Str(), false); !status) {
                         return std::unexpected{ std::move(status.error()) };
@@ -2317,7 +2262,7 @@ export namespace mcr {
                     return std::unexpected{ std::move(status.error()) };
                 }
             }
-            if (auto status = prepareHeader(read_upload && m_read.size == -1, !download && method != "HEAD" && std::holds_alternative<JsonBody>(m_content)); !status) {
+            if (auto status = prepareHeader(read_upload && m_read.size == -1); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
             auto url = GetFullRequestUrl();

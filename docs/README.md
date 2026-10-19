@@ -11,7 +11,6 @@
 | --- | --- |
 | [请求 API](api.md) | 同步、异步、回调、批量与下载入口，以及版本常量 |
 | [Session](session.md) | 会话复用、响应、TLS、代理认证、拦截器和批量执行 |
-| [JSON 请求与响应](json.md) | `JsonBody`、序列化、响应解析与诊断 |
 | [异步运行时](async.md) | 全局线程池、任务提交和清理 |
 | [协程请求](coro.md) | `Task`、并发传输、取消和运行时生命周期 |
 | [expected 接口迁移](expected_migration.md) | 工厂、返回类型、错误传播和保留的异常边界 |
