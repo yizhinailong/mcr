@@ -20,17 +20,17 @@ auto main(int argc, char** argv) -> int {
         "post_json_async",
         [](example::Arguments const& args) {
             mcr::Json const document{
-                {    "name",       "Alice" },
-                { "enabled",          true },
+                { "name", "Alice" },
+                { "enabled", true },
                 { "message", "你好，JSON!" }
             };
             auto pending{
                 mcr::PostAsync(
-                    mcr::Url{                     args.url },
+                    mcr::Url{ args.url },
                     mcr::Parameters{ { "message", "hello world" } },
-                    mcr::JsonBody{                     document },
-                    mcr::UserAgent{                "mcr_example" },
-                    mcr::options::Timeout{   std::chrono::seconds{ 10 } }
+                    mcr::JsonBody{ document },
+                    mcr::UserAgent{ "mcr_example" },
+                    mcr::options::Timeout{ std::chrono::seconds{ 10 } }
                 )
             };
             if (!pending) {

@@ -14,8 +14,7 @@ import mcr_example.support;
 auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     co_return co_await mcr::OptionsCoro(
         mcr::Url{
-            std::move(url)
-    },
+            std::move(url) },
         mcr::Parameters{ { "message", "hello world" } },
         mcr::UserAgent{ "mcr_example" },
         mcr::options::Timeout{ std::chrono::seconds{ 10 } }

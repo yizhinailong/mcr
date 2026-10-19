@@ -19,10 +19,7 @@ namespace {
 
     auto configure(mcr::Session& session, HttpServer const& server) -> void {
         session.SetUrl(server.Url("/json/echo")).value();
-        session.SetProxies(mcr::options::Proxies{
-                               {     "http",  "" },
-                               { "no_proxy", "*" }
-        })
+        session.SetProxies(mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } })
             .value();
         session.SetTimeout(mcr::options::Timeout{ 3000ms }).value();
     }
@@ -58,9 +55,7 @@ namespace {
         passed &= check(!response.error && downloaded.empty() && response.text.empty() && response.header.at("X-Request-Content-Type").empty(), "Download must ignore stored JSON and its inferred media type");
         passed &= json_response(session.Post().value(), document);
 
-        session.SetHeader(mcr::Header{
-                              { "content-type", "application/vnd.example+json" }
-        })
+        session.SetHeader(mcr::Header{ { "content-type", "application/vnd.example+json" } })
             .value();
         response = session.Post().value();
         passed &= check(!response.error && response.header.at("X-Request-Content-Type") == "application/vnd.example+json", "explicit media types must override the inferred type case-insensitively");
@@ -71,9 +66,7 @@ namespace {
         response = session.Post().value();
         passed &= check(!response.error && response.text == "plain" && response.header.at("X-Request-Content-Type") != "application/json", "plain bodies must replace JSON without inheriting its media type");
         session.SetJsonBody(mcr::JsonBody{ document }).value();
-        session.SetPayload(mcr::Payload{
-                               { "field", "value" }
-        })
+        session.SetPayload(mcr::Payload{ { "field", "value" } })
             .value();
         response = session.Post().value();
         passed &= check(!response.error && response.text == "field=value" && response.header.at("X-Request-Content-Type") == "application/x-www-form-urlencoded", "form payloads must replace JSON and retain form media types");
@@ -82,9 +75,7 @@ namespace {
         response = session.Post().value();
         passed &= check(!response.error && response.text == "borrowed" && response.header.at("X-Request-Content-Type") != "application/json", "borrowed bodies must clear the inferred JSON media type");
         session.SetJsonBody(mcr::JsonBody{ document }).value();
-        session.SetMultipart(mcr::Multipart{
-                                 { "field", "value" }
-        })
+        session.SetMultipart(mcr::Multipart{ { "field", "value" } })
             .value();
         response = session.Post().value();
         passed &= check(!response.error && response.text.find("value") != std::string::npos && response.header.at("X-Request-Content-Type").starts_with("multipart/form-data;"), "multipart must replace JSON and generate its own boundary and media type");
@@ -111,7 +102,7 @@ namespace {
     auto check_options(HttpServer const& server) -> bool {
         auto const url{ server.Url("/echo") };
         mcr::options::Proxies const proxies{
-            {     "http",  "" },
+            { "http", "" },
             { "no_proxy", "*" }
         };
         mcr::options::Timeout const timeout{ 3000ms };
@@ -126,15 +117,10 @@ namespace {
         auto after{ mcr::Post(url, proxies, timeout, body, header).value() };
         bool passed{ check(!before.error && !after.error && before.header.at("X-Request-Content-Type") == "application/custom+json" && after.header.at("X-Request-Content-Type") == "application/custom+json" && before.Json() == document && after.Json() == document, "explicit headers must win regardless of their position relative to JsonBody") };
         auto response{
-            mcr::Post(url, proxies, timeout, body, mcr::Header{ { "Content-Type", "" } }
-                ).value()
+            mcr::Post(url, proxies, timeout, body, mcr::Header{ { "Content-Type", "" } }).value()
         };
         passed &= check(!response.error && response.header.at("X-Request-Content-Type").empty() && response.Json() == document, "explicit empty media types must suppress inference");
-        response = mcr::Post(url, proxies, timeout, mcr::Body{
-                                                        "discarded"
-        },
-                             body,
-                             mcr::Header{ { "X-Custom", "kept" } })
+        response = mcr::Post(url, proxies, timeout, mcr::Body{ "discarded" }, body, mcr::Header{ { "X-Custom", "kept" } })
                        .value();
         passed &= json_response(response, document);
         passed &= check(response.header.at("X-Request-X-Custom") == "kept" && response.header.at("Content-Type") == "text/plain", "unrelated headers must coexist with inferred types, and parsing may ignore the response media type");

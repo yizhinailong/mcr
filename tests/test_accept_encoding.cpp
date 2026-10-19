@@ -76,11 +76,9 @@ namespace {
         passed &= check(!distinct.Disabled().value(), "disabled detection must not normalize spelling or whitespace");
 
         for (mcr::options::AcceptEncoding const& option : {
-                 mcr::options::AcceptEncoding::Create({ Methods::disabled, Methods::gzip }
-                 ).value(),
-                 mcr::options::AcceptEncoding{        "disabled",        "gzip" },
-                 mcr::options::AcceptEncoding{        "disabled",            "" }
-        }) {
+                 mcr::options::AcceptEncoding::Create({ Methods::disabled, Methods::gzip }).value(),
+                 mcr::options::AcceptEncoding{ "disabled", "gzip" },
+                 mcr::options::AcceptEncoding{ "disabled", "" } }) {
             std::string const text{ option.GetString() };
             passed &= check(!option.Empty(), "mixed disabled options must remain constructible and serializable before validation");
             {

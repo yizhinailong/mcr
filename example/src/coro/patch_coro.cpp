@@ -14,8 +14,7 @@ import mcr_example.support;
 auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     co_return co_await mcr::PatchCoro(
         mcr::Url{
-            std::move(url)
-    },
+            std::move(url) },
         mcr::Parameters{ { "message", "hello world" } },
         mcr::Body{ "hello from PATCH" },
         mcr::Header{ { "Content-Type", "text/plain" } },

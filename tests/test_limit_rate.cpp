@@ -16,13 +16,13 @@ int main() {
     static_assert(std::is_same_v<Rate, decltype(mcr::options::LimitRate::uprate)>);
 
     std::pair<Rate, Rate> const cases[]{
-        {                                  0,                                  0 },
-        {                               1024,                               1024 },
-        {                               1024,                               2048 },
-        {                                  0,                               4096 },
-        {                               8192,                                  0 },
-        {                                 -1,                                 -2 },
-        {                    Rate{ 1 } << 32,                    Rate{ 1 } << 33 },
+        { 0, 0 },
+        { 1024, 1024 },
+        { 1024, 2048 },
+        { 0, 4096 },
+        { 8192, 0 },
+        { -1, -2 },
+        { Rate{ 1 } << 32, Rate{ 1 } << 33 },
         { (std::numeric_limits<Rate>::min)(), (std::numeric_limits<Rate>::max)() },
         { (std::numeric_limits<Rate>::max)(), (std::numeric_limits<Rate>::min)() },
     };

@@ -20,13 +20,13 @@ int main() {
     using Seconds = std::chrono::seconds;
 
     std::pair<std::int32_t, Seconds> const cases[]{
-        {                                          0,               0s },
-        {                                          1,               1s },
-        {                                       1000,               1s },
-        {                                       1024,              30s },
-        {                                          0,              10s },
-        {                                       1000,               0s },
-        {                                         -1,              -2s },
+        { 0, 0s },
+        { 1, 1s },
+        { 1000, 1s },
+        { 1024, 30s },
+        { 0, 10s },
+        { 1000, 0s },
+        { -1, -2s },
         { (std::numeric_limits<std::int32_t>::min)(), (Seconds::max)() },
         { (std::numeric_limits<std::int32_t>::max)(), (Seconds::min)() },
     };

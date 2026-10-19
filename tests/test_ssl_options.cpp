@@ -157,10 +157,7 @@ namespace {
         auto session_owner = mcr::Session::Create().value();
         auto& session = *session_owner;
         session.SetUrl(fixture.Url()).value();
-        session.SetProxies({
-                               {    "https",  "" },
-                               { "no_proxy", "*" }
-        })
+        session.SetProxies({ { "https", "" }, { "no_proxy", "*" } })
             .value();
         session.SetTimeout(mcr::options::Timeout{ 3000ms }).value();
         bool passed{ check(bool(session.Get().value().error), "untrusted generated certificates must be rejected by default") };

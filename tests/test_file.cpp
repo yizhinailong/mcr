@@ -85,7 +85,7 @@ namespace {
         std::array<mcr::File, 4> const expected{ mcr::File{ "file1" }, mcr::File{ "file2" }, mcr::File{ "" }, mcr::File{ "file1" } };
         passed &= check(std::ranges::equal(paths, expected, same_file), "path lists must preserve order, duplicates, and empty paths without overrides");
         mcr::Files files{
-            mcr::File{ "file1",  "applefile" },
+            mcr::File{ "file1", "applefile" },
             mcr::File{ "file2", "bananafile" }
         };
         mcr::Files const& view{ files };

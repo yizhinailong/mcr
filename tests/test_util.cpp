@@ -55,12 +55,12 @@ namespace {
         };
 
         StatusCase const cases[]{
-            {              "HTTP/1.1 407 Proxy Authentication Required\n",         "HTTP/1.1 407 Proxy Authentication Required",    "Proxy Authentication Required" },
-            {                                          "HTTP/1.1 200\r\n",                                       "HTTP/1.1 200",                                 "" },
-            {                                             "HTTP/3 200 \n",                                         "HTTP/3 200",                                 "" },
+            { "HTTP/1.1 407 Proxy Authentication Required\n", "HTTP/1.1 407 Proxy Authentication Required", "Proxy Authentication Required" },
+            { "HTTP/1.1 200\r\n", "HTTP/1.1 200", "" },
+            { "HTTP/3 200 \n", "HTTP/3 200", "" },
             { "HTTP/1.1\t 503\t  Service: temporarily unavailable \t\r\n", "HTTP/1.1\t 503\t  Service: temporarily unavailable", "Service: temporarily unavailable" },
-            {                                                   "HTTP/\n",                                              "HTTP/",                                 "" },
-            {                                              "HTTP/ \t\r\n",                                              "HTTP/",                                 "" },
+            { "HTTP/\n", "HTTP/", "" },
+            { "HTTP/ \t\r\n", "HTTP/", "" },
         };
         for (auto const& entry : cases) {
             for (int outputs{ 0 }; outputs != 4; ++outputs) {

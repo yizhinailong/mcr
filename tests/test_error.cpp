@@ -55,22 +55,22 @@ int main() {
     };
 
     MappingCase const cases[]{
-        {                                   CURLE_OK,                       mcr::ErrorCode::OK },
-        {                 CURLE_UNSUPPORTED_PROTOCOL,     mcr::ErrorCode::UNSUPPORTED_PROTOCOL },
-        {                        CURLE_URL_MALFORMAT,            mcr::ErrorCode::URL_MALFORMAT },
-        {                CURLE_COULDNT_RESOLVE_PROXY,    mcr::ErrorCode::COULDNT_RESOLVE_PROXY },
-        {                 CURLE_COULDNT_RESOLVE_HOST,     mcr::ErrorCode::COULDNT_RESOLVE_HOST },
-        {                      CURLE_COULDNT_CONNECT,          mcr::ErrorCode::COULDNT_CONNECT },
-        {                                CURLE_HTTP2,                    mcr::ErrorCode::HTTP2 },
-        {                         CURLE_PARTIAL_FILE,             mcr::ErrorCode::PARTIAL_FILE },
-        {                   CURLE_OPERATION_TIMEDOUT,       mcr::ErrorCode::OPERATION_TIMEDOUT },
-        {             CURLE_PEER_FAILED_VERIFICATION, mcr::ErrorCode::PEER_FAILED_VERIFICATION },
-        {                 CURLE_SETOPT_OPTION_SYNTAX,     mcr::ErrorCode::SETOPT_OPTION_SYNTAX },
-        {                                CURLE_HTTP3,                    mcr::ErrorCode::HTTP3 },
-        {                            CURLE_TOO_LARGE,                mcr::ErrorCode::TOO_LARGE },
-        {                 CURLE_FTP_WEIRD_PASS_REPLY,            mcr::ErrorCode::UNKNOWN_ERROR },
-        {                                         -1,            mcr::ErrorCode::UNKNOWN_ERROR },
-        { (std::numeric_limits<std::int32_t>::max)(),            mcr::ErrorCode::UNKNOWN_ERROR },
+        { CURLE_OK, mcr::ErrorCode::OK },
+        { CURLE_UNSUPPORTED_PROTOCOL, mcr::ErrorCode::UNSUPPORTED_PROTOCOL },
+        { CURLE_URL_MALFORMAT, mcr::ErrorCode::URL_MALFORMAT },
+        { CURLE_COULDNT_RESOLVE_PROXY, mcr::ErrorCode::COULDNT_RESOLVE_PROXY },
+        { CURLE_COULDNT_RESOLVE_HOST, mcr::ErrorCode::COULDNT_RESOLVE_HOST },
+        { CURLE_COULDNT_CONNECT, mcr::ErrorCode::COULDNT_CONNECT },
+        { CURLE_HTTP2, mcr::ErrorCode::HTTP2 },
+        { CURLE_PARTIAL_FILE, mcr::ErrorCode::PARTIAL_FILE },
+        { CURLE_OPERATION_TIMEDOUT, mcr::ErrorCode::OPERATION_TIMEDOUT },
+        { CURLE_PEER_FAILED_VERIFICATION, mcr::ErrorCode::PEER_FAILED_VERIFICATION },
+        { CURLE_SETOPT_OPTION_SYNTAX, mcr::ErrorCode::SETOPT_OPTION_SYNTAX },
+        { CURLE_HTTP3, mcr::ErrorCode::HTTP3 },
+        { CURLE_TOO_LARGE, mcr::ErrorCode::TOO_LARGE },
+        { CURLE_FTP_WEIRD_PASS_REPLY, mcr::ErrorCode::UNKNOWN_ERROR },
+        { -1, mcr::ErrorCode::UNKNOWN_ERROR },
+        { (std::numeric_limits<std::int32_t>::max)(), mcr::ErrorCode::UNKNOWN_ERROR },
     };
     for (auto const& entry : cases) {
         mcr::Error const error{ entry.curl_code, "curl diagnostic" };

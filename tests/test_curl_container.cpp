@@ -59,13 +59,13 @@ namespace {
         bool passed{ check(empty_parameters.encode && empty_list.encode && empty_pairs.encode && empty_parameters.GetContent().value().empty() && empty_list.GetContent().value().empty() && empty_pairs.GetContent().value().empty(), "empty parameter and payload collections must enable encoding and produce empty raw content") };
         Parameters parameters{
             { "key one", "hello world" },
-            {    "flag",            "" },
-            { "key one",         "x+y" }
+            { "flag", "" },
+            { "key one", "x+y" }
         };
         Pairs pairs{
             { "key one", "hello world" },
-            {    "flag",            "" },
-            { "key one",         "x+y" }
+            { "flag", "" },
+            { "key one", "x+y" }
         };
         passed &= check(parameters.GetContent().value() == "key one=hello world&flag&key one=x+y", "holderless parameters must ignore the encoding flag and omit equals signs for empty values");
         passed &= check(pairs.GetContent().value() == "key one=hello world&flag=&key one=x+y", "holderless pairs must ignore the encoding flag and retain every equals sign");
@@ -78,9 +78,9 @@ namespace {
     auto check_payload_ranges() -> bool {
         std::vector<mcr::Pair> source{
             { "outside", "prefix" },
-            {     "key",  "first" },
-            {     "key", "second" },
-            {   "empty",       "" },
+            { "key", "first" },
+            { "key", "second" },
+            { "empty", "" },
             { "outside", "suffix" }
         };
         Pairs const subrange{ source.cbegin() + 1, source.cend() - 1 };
@@ -89,7 +89,7 @@ namespace {
 
         std::list<mcr::Pair> const linked{
             { "first", "one" },
-            {  "last", "two" }
+            { "last", "two" }
         };
         Pairs const from_list{ linked.begin(), linked.end() };
         Pairs const reversed{ linked.rbegin(), linked.rend() };
@@ -97,10 +97,8 @@ namespace {
 
         std::istringstream words{ "first second third" };
         auto input{
-            std::ranges::subrange{ std::istream_iterator<std::string>{ words }, std::istream_iterator<std::string>{} }
-            |
-            std::views::transform([](std::string const& word) { return mcr::Pair{ "word", word }; }
-            )
+            std::ranges::subrange{ std::istream_iterator<std::string>{ words }, std::istream_iterator<std::string>{} } |
+            std::views::transform([](std::string const& word) { return mcr::Pair{ "word", word }; })
         };
         static_assert(std::input_iterator<decltype(input.begin())> && !std::forward_iterator<decltype(input.begin())>);
         Pairs const from_input{ input.begin(), input.end() };
@@ -132,10 +130,7 @@ namespace {
         element.key = "second";
         element.value = "two";
         original.Add(element);
-        original.Add({
-            { "first", "three" },
-            {  "last",  "four" }
-        });
+        original.Add({ { "first", "three" }, { "last", "four" } });
         original.Add({});
         element.value = "changed again";
         std::string const expected{ "first=one&second=two&first=three&last=four" };
@@ -155,14 +150,14 @@ namespace {
 
     auto check_encoding(mcr::curl::CurlHolder const& holder) -> bool {
         Parameters parameters{
-            {       "a b&=", "x+y/%" },
-            { "empty value",      "" },
-            {            "",   "v v" }
+            { "a b&=", "x+y/%" },
+            { "empty value", "" },
+            { "", "v v" }
         };
         Pairs pairs{
-            {       "a b&=", "x+y/%" },
-            { "empty value",      "" },
-            {            "",   "v v" }
+            { "a b&=", "x+y/%" },
+            { "empty value", "" },
+            { "", "v v" }
         };
         std::string const raw_parameters{ "a b&==x+y/%&empty value&=v v" };
         std::string const raw_pairs{ "a b&==x+y/%&empty value=&=v v" };
@@ -178,13 +173,7 @@ namespace {
         passed &= check(parameters.GetContent(holder).value() == encoded_parameters && pairs.GetContent(holder).value() == encoded_pairs, "reenabling encoding must escape the original data without double encoding");
 
         std::string const utf8{ "\xE4\xB8\xAD" };
-        passed &= check(Parameters{
-                            { utf8, utf8 }
-        }
-                                    .GetContent(holder)
-                                    .value() == "%E4%B8%AD=%E4%B8%AD" &&
-                            Pairs{ { utf8, utf8 } }.GetContent(holder).value() == utf8 + "=%E4%B8%AD",
-                        "UTF-8 must be encoded byte by byte with pair keys left raw");
+        passed &= check(Parameters{ { utf8, utf8 } }.GetContent(holder).value() == "%E4%B8%AD=%E4%B8%AD" && Pairs{ { utf8, utf8 } }.GetContent(holder).value() == utf8 + "=%E4%B8%AD", "UTF-8 must be encoded byte by byte with pair keys left raw");
         std::string const binary_key{ "a\0b", 3 };
         std::string const binary_value{ "x\0 y", 4 };
         Parameters binary_parameters{
@@ -200,31 +189,24 @@ namespace {
 
     auto check_empty_entries(mcr::curl::CurlHolder const& holder) -> bool {
         Parameters parameters{
-            {      "",  "" },
-            {      "",  "" },
-            { "first",  "" },
-            {      "",  "" },
-            {  "last", "x" },
-            {      "",  "" }
+            { "", "" },
+            { "", "" },
+            { "first", "" },
+            { "", "" },
+            { "last", "x" },
+            { "", "" }
         };
         Pairs pairs{
-            {      "",  "" },
-            {      "",  "" },
-            { "first",  "" },
-            {      "",  "" },
-            {  "last", "x" },
-            {      "",  "" }
+            { "", "" },
+            { "", "" },
+            { "first", "" },
+            { "", "" },
+            { "last", "x" },
+            { "", "" }
         };
         bool passed{ check(parameters.GetContent().value() == "first&&last=x&" && parameters.GetContent(holder).value() == "first&&last=x&", "parameter separators must follow cpr's emitted-content rule, including disappearing leading empties") };
         passed &= check(pairs.GetContent().value() == "=&=&first=&=&last=x&=" && pairs.GetContent(holder).value() == "=&=&first=&=&last=x&=", "empty pairs must always contribute an equals sign and retain their positions");
-        passed &= check(Parameters{
-                            { "", "" },
-                            { "", "" }
-        }
-                            .GetContent(holder)
-                            .value()
-                            .empty(),
-                        "entirely empty parameters must produce no text");
+        passed &= check(Parameters{ { "", "" }, { "", "" } }.GetContent(holder).value().empty(), "entirely empty parameters must produce no text");
         DerivedParameters derived{
             { "key", "value" }
         };

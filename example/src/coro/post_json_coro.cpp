@@ -14,16 +14,15 @@ import mcr_example.json_support;
  */
 auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     mcr::Json const document{
-        {    "name",       "Alice" },
-        { "enabled",          true },
+        { "name", "Alice" },
+        { "enabled", true },
         { "message", "你好，JSON!" }
     };
     mcr::Url endpoint{ std::move(url) };
     co_return co_await mcr::PostCoro(
         endpoint,
         mcr::Parameters{
-            { "message", "hello world" }
-    },
+            { "message", "hello world" } },
         mcr::JsonBody{ document },
         mcr::UserAgent{ "mcr_example" },
         mcr::options::Timeout{ std::chrono::seconds{ 10 } }

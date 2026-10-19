@@ -71,17 +71,14 @@ namespace {
 
     auto check_headers_and_ownership(HttpServer const& server) -> bool {
         mcr::Header first{
-            { "X-Custom",     "first" },
-            {  "X-Empty", "preserved" }
+            { "X-Custom", "first" },
+            { "X-Empty", "preserved" }
         };
         mcr::Header const second{
             { "x-custom", "second" }
         };
         auto response{ std::apply([&](auto const&... values) {
-            return mcr::Get(values..., first, second, mcr::Header{
-                                                          { "X-Custom", "last" }
-            },
-                            mcr::Header{})
+            return mcr::Get(values..., first, second, mcr::Header{ { "X-Custom", "last" } }, mcr::Header{})
                 .value();
         },
                                   options(server)) };
@@ -160,13 +157,7 @@ namespace {
         },
                                args) };
         bool passed{ check(*moved.Get() == 14, "continuations must support move-only captures and results") };
-        passed &= check(mcr::GetCallback(LvalueContinuation{
-        },
-                                         server.Url(),
-                                         mcr::options::Proxies{ { "http", "" } })
-                                .value()
-                                .Get() == 200,
-                        "owned continuations must be invoked as lvalues, as in cpr");
+        passed &= check(mcr::GetCallback(LvalueContinuation{}, server.Url(), mcr::options::Proxies{ { "http", "" } }).value().Get() == 200, "owned continuations must be invoked as lvalues, as in cpr");
         int value{};
         auto reference{ std::apply([&](auto const&... values) { return mcr::GetCallback([&](mcr::Result<mcr::Response>) -> int& { return value; }, values...).value(); }, args) };
         static_assert(std::same_as<decltype(reference), mcr::utils::AsyncWrapper<int&, true>>);
@@ -218,9 +209,7 @@ namespace {
         (void)pool->Pause();
         bool called{ false };
         auto callback{
-            mcr::GetCallback([&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  called = true; return response.status_code;             },
-              server.Url(), mcr::options::Proxies{ { "http", "" } }
-              ).value()
+            mcr::GetCallback([&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  called = true; return response.status_code; }, server.Url(), mcr::options::Proxies{ { "http", "" } }).value()
         };
         (void)callback.Cancel();
         auto callback_result{ callback.Share() };

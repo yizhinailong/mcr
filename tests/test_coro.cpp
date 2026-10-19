@@ -20,7 +20,7 @@ namespace {
 
     auto proxies() -> mcr::options::Proxies {
         return {
-            {     "http",  "" },
+            { "http", "" },
             { "no_proxy", "*" }
         };
     }
@@ -50,10 +50,7 @@ namespace {
         mcr::Task<mcr::Result<mcr::Response>> task;
         {
             mcr::Body body{ "owned before suspension" };
-            task = mcr::PostCoro(server.Url("/echo"), proxies(), body, mcr::Header{
-                                                                           { "X-Custom", "one" }
-            },
-                                 mcr::Header{ { "X-Empty", "two" } });
+            task = mcr::PostCoro(server.Url("/echo"), proxies(), body, mcr::Header{ { "X-Custom", "one" } }, mcr::Header{ { "X-Empty", "two" } });
             body = mcr::Body{ "changed" };
         }
         auto response = mcr::sync_wait(std::move(task)).value();
@@ -108,9 +105,7 @@ namespace {
         } catch (std::runtime_error const& error) {
             require(std::string_view{ error.what() } == "header failure", "original callback exception must be retained");
         }
-        auto preparation = mcr::sync_wait(mcr::PostCoro(server.Url("/echo"), proxies(), mcr::Multipart{
-                                                                                            { "missing", mcr::File{ "mcr_nonexistent_coro_upload_812905" } }
-        }));
+        auto preparation = mcr::sync_wait(mcr::PostCoro(server.Url("/echo"), proxies(), mcr::Multipart{ { "missing", mcr::File{ "mcr_nonexistent_coro_upload_812905" } } }));
         require(!preparation && preparation.error().code == mcr::ErrorCode::READ_ERROR, "preparation failures must complete the task with an error");
         require(mcr::sync_wait(get(server, "/hello")).value().status_code == 200, "one failed transfer must not stop the runtime");
     }

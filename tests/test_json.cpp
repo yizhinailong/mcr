@@ -17,8 +17,8 @@ namespace {
 auto main() -> int {
     try {
         mcr::Json source{
-            {   "name",                                                      "Alice" },
-            { "active",                                                         true },
+            { "name", "Alice" },
+            { "active", true },
             { "values", mcr::Json::array({ 1, nullptr, "\xe4\xbd\xa0\xe5\xa5\xbd" }) }
         };
         mcr::Json const expected = source;

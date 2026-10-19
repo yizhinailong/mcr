@@ -59,11 +59,11 @@ namespace {
         };
 
         DateCase const cases[]{
-            {                                  system_clock::from_time_t(0), "Thu, 01 Jan 1970 00:00:00 GMT" },
-            {                 sys_days{ 2015y / October / 21 } + 7h + 28min, "Wed, 21 Oct 2015 07:28:00 GMT" },
+            { system_clock::from_time_t(0), "Thu, 01 Jan 1970 00:00:00 GMT" },
+            { sys_days{ 2015y / October / 21 } + 7h + 28min, "Wed, 21 Oct 2015 07:28:00 GMT" },
             { sys_days{ 2024y / February / 29 } + 23h + 59min + 59s + 999ms, "Thu, 29 Feb 2024 23:59:59 GMT" },
-            {                               sys_days{ 2040y / January / 1 }, "Sun, 01 Jan 2040 00:00:00 GMT" },
-            {                          system_clock::from_time_t(0) - 500ms, "Wed, 31 Dec 1969 23:59:59 GMT" },
+            { sys_days{ 2040y / January / 1 }, "Sun, 01 Jan 2040 00:00:00 GMT" },
+            { system_clock::from_time_t(0) - 500ms, "Wed, 31 Dec 1969 23:59:59 GMT" },
         };
         bool passed{ true };
         for (auto const& entry : cases) {
@@ -86,10 +86,10 @@ namespace {
 
         mcr::Cookies cookies{
             {
-             { "SID", "first", "example.test", false, "/a" },
-             { "SID", "second", "example.test", false, "/b" },
-             { "lang", "en-US" },
-             },
+                { "SID", "first", "example.test", false, "/a" },
+                { "SID", "second", "example.test", false, "/b" },
+                { "lang", "en-US" },
+            },
             false
         };
         passed &= check(!cookies.encode && std::ranges::distance(cookies) == 3 && &cookies["SID"] == &cookies[0] && cookies[1].GetValue() == "second", "collection must retain order and duplicate names while lookup returns the first match");
@@ -129,8 +129,8 @@ namespace {
         passed &= check(moved.begin() == moved.end(), "removing every cookie must produce an empty range");
         std::string const binary_name{ "a\0b", 3 };
         mcr::Cookies binary{
-            { binary_name,      "value" },
-            {          "", "empty name" }
+            { binary_name, "value" },
+            { "", "empty name" }
         };
         passed &= check(binary[std::string_view{ binary_name }].GetValue() == "value" && binary[std::string_view{}].GetValue() == "empty name", "lookup must support embedded nulls and empty names");
         return passed;
@@ -139,7 +139,7 @@ namespace {
     auto check_encoding() -> bool {
         auto holder = mcr::curl::CurlHolder::Create().value();
         mcr::Cookies cookies{
-            {  "SID", "value" },
+            { "SID", "value" },
             { "lang", "en-US" }
         };
         bool passed{ check(cookies.GetEncoded(holder).value() == "SID=value; lang=en-US; ", "serialization must preserve insertion order and the trailing separator") };
@@ -151,14 +151,14 @@ namespace {
         passed &= check(reserved.GetEncoded(holder).value() == "a b=c+d;%&; ", "changing encode must select raw name/value serialization");
         mcr::Cookies quoted{
             { "quoted name", "\"hello world;=+%\"" },
-            {       "empty",                "\"\"" },
-            {      "single",                  "\"" },
-            {     "leading",              "\"open" },
-            {    "trailing",             "close\"" },
+            { "empty", "\"\"" },
+            { "single", "\"" },
+            { "leading", "\"open" },
+            { "trailing", "close\"" },
         };
         passed &= check(quoted.GetEncoded(holder).value() == "quoted%20name=\"hello world;=+%\"; empty=\"\"; single=\"; leading=%22open; trailing=close%22; ", "quoted values must bypass encoding exactly as in cpr while names and unmatched quotes are encoded");
         mcr::Cookies empty_values{
-            {    "", "" },
+            { "", "" },
             { "SID", "" }
         };
         passed &= check(empty_values.GetEncoded(holder).value() == "=; SID=; ", "empty names and values must still serialize as cookie pairs");

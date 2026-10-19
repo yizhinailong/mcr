@@ -39,8 +39,7 @@ auto main() -> int {
                  std::string{ "[1,]" },
                  std::string{ "/*comment*/{}" },
                  std::string{ "\"a\0b\"", 5 },
-                 std::string{ '"', static_cast<char>(0xff), '"' }
-        }) {
+                 std::string{ '"', static_cast<char>(0xff), '"' } }) {
             response.text = invalid;
             parsed = response.TryJson();
             passed &= check(!parsed && parsed.error().id == 101 && parsed.error().byte.has_value() && *parsed.error().byte >= 1 && !parsed.error().message.empty(), "malformed documents must return owned parse diagnostics with a one-based byte position");

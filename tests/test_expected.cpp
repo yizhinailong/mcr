@@ -26,7 +26,7 @@ namespace {
         mcr::test::HttpServer server;
         mcr::options::HttpVersion const invalid{ static_cast<mcr::options::HttpVersionCode>(255) };
         mcr::options::Proxies const proxies{
-            {     "http",  "" },
+            { "http", "" },
             { "no_proxy", "*" }
         };
         auto failed = mcr::Get(server.Url(), proxies, invalid);

@@ -337,7 +337,7 @@ export namespace mcr {
                 case options::AuthMode::ANYSAFE  : mode = static_cast<long>(CURLAUTH_ANYSAFE); break;
                 default                          : return std::unexpected{
                     Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: unknown authentication mode." }
- };
+                };
             }
             if (auto status = setOption(CURLOPT_HTTPAUTH, mode); !status) {
                 return std::unexpected{ std::move(status.error()) };
@@ -745,7 +745,7 @@ export namespace mcr {
                 case options::HttpVersionCode::VERSION_3_0_ONLY           : value = CURL_HTTP_VERSION_3ONLY; break;
                 default                                                   : return std::unexpected{
                     Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: unknown HTTP version." }
- };
+                };
             }
             if (auto status = setOption(CURLOPT_HTTP_VERSION, value); !status) {
                 return std::unexpected{ std::move(status.error()) };
@@ -2976,7 +2976,7 @@ namespace mcr {
             case ProceedHttpMethod::OPTIONS_REQUEST: return session.Options();
             default                                : return std::unexpected{
                 Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: this method requires a download destination." }
- };
+            };
         }
     }
 
@@ -3304,7 +3304,7 @@ namespace mcr {
                 }
                 default: return std::unexpected{
                     Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::MultiPerform: invalid HTTP method." }
- };
+                };
             }
         }
 

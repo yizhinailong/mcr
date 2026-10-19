@@ -14,8 +14,7 @@ import mcr_example.support;
 auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
     co_return co_await mcr::PostCoro(
         mcr::Url{
-            std::move(url)
-    },
+            std::move(url) },
         mcr::Parameters{ { "message", "hello world" } },
         mcr::Body{ "hello from POST" },
         mcr::Header{ { "Content-Type", "text/plain" } },

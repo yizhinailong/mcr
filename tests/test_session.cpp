@@ -30,10 +30,7 @@ namespace {
 
     auto configure(mcr::Session& session, HttpServer const& server, std::string_view path = "/hello") -> void {
         session.SetOption(server.Url(path)).value();
-        session.SetOption(mcr::options::Proxies{
-                              {     "http",  "" },
-                              { "no_proxy", "*" }
-        })
+        session.SetOption(mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } })
             .value();
         session.SetOption(mcr::options::Timeout{ 3000ms }).value();
         session.SetOption(mcr::options::HttpVersion{ mcr::options::HttpVersionCode::VERSION_1_1 }).value();
@@ -70,12 +67,12 @@ namespace {
         configure(session, server, "/echo");
         using Method = mcr::Result<mcr::Response> (mcr::Session::*)();
         std::pair<Method, std::string_view> const methods[]{
-            {    &mcr::Session::Post,    "POST" },
-            {     &mcr::Session::Get,     "GET" },
-            {     &mcr::Session::Put,     "PUT" },
+            { &mcr::Session::Post, "POST" },
+            { &mcr::Session::Get, "GET" },
+            { &mcr::Session::Put, "PUT" },
             { &mcr::Session::Options, "OPTIONS" },
-            {   &mcr::Session::Patch,   "PATCH" },
-            {  &mcr::Session::Delete,  "DELETE" }
+            { &mcr::Session::Patch, "PATCH" },
+            { &mcr::Session::Delete, "DELETE" }
         };
         bool passed{ true };
         std::string const binary{ "first\0last", 10 };
@@ -87,10 +84,7 @@ namespace {
             response = (session.*method)().value();
             passed &= check(!response.error && response.header["X-Method"] == name && response.text.empty(), "RemoveContent must detach the old body for every method");
         }
-        session.SetOption(mcr::Payload{
-                              { "space key", "x+y" },
-                              {     "empty",    "" }
-        })
+        session.SetOption(mcr::Payload{ { "space key", "x+y" }, { "empty", "" } })
             .value();
         auto payload{ session.Post().value() };
         passed &= check(payload.text == "space key=x%2By&empty=" && payload.header["X-Request-Content-Type"] == "application/x-www-form-urlencoded", "payloads must preserve cpr's raw keys and encode values using the session holder");
@@ -103,19 +97,14 @@ namespace {
         passed &= check(session.Post().value().text.empty(), "null empty BodyView must produce a zero-length body without reading stdin");
         session.SetBody(mcr::Body{ "retained" }).value();
         passed &= check(session.Head().value().text.empty() && session.Post().value().text == "retained", "HEAD must suppress but retain configured content");
-        session.SetOption(mcr::Multipart{
-                              {   "text", std::string_view{ binary } },
-                              { "number",                         42 }
-        })
+        session.SetOption(mcr::Multipart{ { "text", std::string_view{ binary } }, { "number", 42 } })
             .value();
         auto multipart{ session.Post().value() };
         passed &= check(!multipart.error && multipart.text.contains(binary) && multipart.text.contains("name=\"number\"") && multipart.header["X-Request-Content-Type"].starts_with("multipart/form-data; boundary="), "multipart must encode text fields including embedded nulls");
         passed &= check(session.Get().value().header["X-Method"] == "GET", "GET with retained multipart must remain GET");
         session.SetBody(mcr::Body{ "replacement" }).value();
         passed &= check(session.Post().value().text == "replacement", "switching MIME to a body must detach the MIME tree");
-        session.SetMultipart({
-                                 { "again", "value" }
-        })
+        session.SetMultipart({ { "again", "value" } })
             .value();
         passed &= check(session.Post().value().text.contains("name=\"again\""), "switching a body to MIME must detach the old POST fields");
         session.RemoveContent().value();
@@ -127,19 +116,11 @@ namespace {
         auto session_owner = mcr::Session::Create().value();
         auto& session = *session_owner;
         configure(session, server, "/echo?existing=1#fragment");
-        session.SetOption(mcr::Parameters{
-                              {  "a b", "x+y" },
-                              { "flag",    "" }
-        })
+        session.SetOption(mcr::Parameters{ { "a b", "x+y" }, { "flag", "" } })
             .value();
-        session.SetOption(mcr::Header{
-                              { "X-Custom", "old" },
-                              {  "X-Empty",    "" }
-        })
+        session.SetOption(mcr::Header{ { "X-Custom", "old" }, { "X-Empty", "" } })
             .value();
-        session.UpdateHeader({
-                                 { "x-custom", "new" }
-        })
+        session.UpdateHeader({ { "x-custom", "new" } })
             .value();
         session.GetHeader()["Another"] = "value";
         session.SetOption(mcr::UserAgent{ "session-test" }).value();
@@ -161,9 +142,7 @@ namespace {
         auto cookie{ session.Get().value() };
         session.SetUrl(server.Url("/echo")).value();
         passed &= check(!cookie.cookies.empty() && session.Get().value().header["X-Request-Cookie"] == "stored=yes", "cookies must persist in the session engine");
-        session.SetOption(mcr::Cookies{
-                              { "explicit", "a b" }
-        })
+        session.SetOption(mcr::Cookies{ { "explicit", "a b" } })
             .value();
         passed &= check(session.Get().value().header["X-Request-Cookie"] == "explicit=a%20b;", "SetCookies must replace stored cookies and retain cpr's trailing separator");
         session.SetUrl(server.Url("/range")).value();
@@ -172,9 +151,7 @@ namespace {
         passed &= check(range.status_code == 206 && range.text == "2345", "byte ranges must reach curl");
         session.SetUrl(server.Url("/echo")).value();
         passed &= check(session.Put().value().header["X-Request-Range"].empty(), "PUT must clear a previous range as in cpr");
-        session.SetHeader({
-                              { "Expect", "100-continue" }
-        })
+        session.SetHeader({ { "Expect", "100-continue" } })
             .value();
         session.SetBody(mcr::Body{ "continue" }).value();
         passed &= check(session.Post().value().text == "continue", "explicit Expect must be preserved and interim headers parsed");
@@ -311,25 +288,17 @@ namespace {
             std::ofstream file{ temporary.path, std::ios::binary };
             file.write(binary.data(), static_cast<std::streamsize>(binary.size()));
         }
-        session.SetMultipart({
-                                 { "file", mcr::File{ temporary.path.string(), "override.bin" }, "application/octet-stream" },
-                                 { "buffer", mcr::Buffer::Create(binary.begin(), binary.end(), std::filesystem::path{ "buffer.bin" }).value() },
-                                 { "empty", mcr::Buffer::Create(binary.begin(), binary.begin(), std::filesystem::path{ "empty.bin" }).value() }
-        })
+        session.SetMultipart({ { "file", mcr::File{ temporary.path.string(), "override.bin" }, "application/octet-stream" }, { "buffer", mcr::Buffer::Create(binary.begin(), binary.end(), std::filesystem::path{ "buffer.bin" }).value() }, { "empty", mcr::Buffer::Create(binary.begin(), binary.begin(), std::filesystem::path{ "empty.bin" }).value() } })
             .value();
         auto response{ session.Post().value() };
         bool passed{ check(!response.error && response.text.contains("filename=\"override.bin\"") && response.text.contains("filename=\"buffer.bin\"") && response.text.contains("filename=\"empty.bin\"") && response.text.contains(binary), "MIME must support files, filename overrides, and binary or empty borrowed buffers") };
         auto const first{ response.text.find(binary) };
         passed &= check(first != std::string::npos && response.text.find(binary, first + binary.size()) != std::string::npos, "both file and buffer parts must preserve embedded null bytes");
-        session.SetMultipart({
-                                 { "missing", mcr::File{ temporary.path.string() + ".missing" } }
-        })
+        session.SetMultipart({ { "missing", mcr::File{ temporary.path.string() + ".missing" } } })
             .value();
         auto missing = session.Post();
         passed &= check(!missing && missing.error().code == mcr::ErrorCode::READ_ERROR, "missing MIME files must fail preparation");
-        session.SetMultipart({
-                                 { "recovered", "text" }
-        })
+        session.SetMultipart({ { "recovered", "text" } })
             .value();
         passed &= check(session.Post().value().text.contains("name=\"recovered\""), "MIME may be replaced after a failed upload");
         return passed;
@@ -360,17 +329,12 @@ namespace {
         session.SetOption(std::vector<mcr::options::Resolve>{}).value();
         session.SetUrl(server.Url()).value();
         passed &= check(!session.Get().value().error, "clearing the configured resolve list must permit ordinary loopback requests");
-        session.SetProxies({
-                               {     "http", address },
-                               { "no_proxy",      "" }
-        })
+        session.SetProxies({ { "http", address }, { "no_proxy", "" } })
             .value();
         session.SetUrl(mcr::Url{ "http://proxy-target.test.invalid/hello" }).value();
         response = session.Get().value();
         passed &= check(!response.error && response.header["X-Target"] == "http://proxy-target.test.invalid/hello", "proxy and no_proxy options must route an absolute-form request through the fixture");
-        session.SetProxies({
-                               { "http", "" }
-        })
+        session.SetProxies({ { "http", "" } })
             .value();
         session.SetUrl(server.Url()).value();
         response = session.Get().value();
@@ -473,10 +437,7 @@ namespace {
         auto& session = *session_owner;
         configure(session, server);
         session.SetUrl(mcr::Url{ "http://proxy-target.test.invalid/proxy-auth" }).value();
-        session.SetProxies({
-                               {     "http", server.Url("").Str() },
-                               { "no_proxy",                   "" }
-        })
+        session.SetProxies({ { "http", server.Url("").Str() }, { "no_proxy", "" } })
             .value();
         session.SetOption(auth).value();
         auto response{ session.Get().value() };
@@ -484,15 +445,11 @@ namespace {
         session.SetProxyAuth({}).value();
         response = session.Get().value();
         passed &= check(response.status_code == 407 && response.header["X-Request-Proxy-Authorization"].empty(), "replacing proxy credentials must remove the previous authorization");
-        session.SetProxyAuth(mcr::options::ProxyAuthentication{
-                                 { "http", mcr::options::EncodedAuthentication::Create("u$er", "p@ss").value() }
-        })
+        session.SetProxyAuth(mcr::options::ProxyAuthentication{ { "http", mcr::options::EncodedAuthentication::Create("u$er", "p@ss").value() } })
             .value();
         passed &= check(session.Get().value().status_code == 200, "proxy authentication must recover after credentials are restored");
         session.SetUrl(server.Url()).value();
-        session.SetProxies({
-                               { "http", "" }
-        })
+        session.SetProxies({ { "http", "" } })
             .value();
         passed &= check(session.Get().value().header["X-Request-Proxy-Authorization"].empty(), "direct origin requests must never receive proxy credentials");
         return passed;

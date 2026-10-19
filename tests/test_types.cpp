@@ -211,7 +211,7 @@ namespace {
 
         mcr::Header headers{
             { "Content-Type", "Application/JSON" },
-            {      "X-Trace",            "Value" },
+            { "X-Trace", "Value" },
         };
         passed &= check(
             headers.at("content-type") == "Application/JSON" && headers.at("CONTENT-TYPE") == "Application/JSON",

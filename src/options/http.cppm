@@ -67,9 +67,9 @@ export namespace mcr::options {
      */
     inline std::map<AcceptEncodingMethods, std::string> const ACCEPT_ENCODING_METHODS_STRING_MAP{
         { AcceptEncodingMethods::identity, "identity" },
-        {  AcceptEncodingMethods::deflate,  "deflate" },
-        {     AcceptEncodingMethods::zlib,     "zlib" },
-        {     AcceptEncodingMethods::gzip,     "gzip" },
+        { AcceptEncodingMethods::deflate, "deflate" },
+        { AcceptEncodingMethods::zlib, "zlib" },
+        { AcceptEncodingMethods::gzip, "gzip" },
         { AcceptEncodingMethods::disabled, "disabled" },
     };
 

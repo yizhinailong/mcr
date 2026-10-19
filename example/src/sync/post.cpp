@@ -20,12 +20,12 @@ auto main(int argc, char** argv) -> int {
         [](example::Arguments const& args) {
             auto const response{
                 mcr::Post(
-                    mcr::Url{                         args.url },
-                    mcr::Parameters{     { "message", "hello world" } },
-                    mcr::Body{                "hello from POST" },
+                    mcr::Url{ args.url },
+                    mcr::Parameters{ { "message", "hello world" } },
+                    mcr::Body{ "hello from POST" },
                     mcr::Header{ { "Content-Type", "text/plain" } },
-                    mcr::UserAgent{                    "mcr_example" },
-                    mcr::options::Timeout{       std::chrono::seconds{ 10 } }
+                    mcr::UserAgent{ "mcr_example" },
+                    mcr::options::Timeout{ std::chrono::seconds{ 10 } }
                 )
             };
             return example::print_response(response);

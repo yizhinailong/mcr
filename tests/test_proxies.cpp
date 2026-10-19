@@ -32,16 +32,16 @@ namespace {
         std::string protocol{ "http" };
         std::string address{ "http://proxy.test:8080" };
         mcr::options::Proxies from_list = {
-            { protocol,                    address },
-            {  "https", "socks5://proxy.test:1080" }
+            { protocol, address },
+            { "https", "socks5://proxy.test:1080" }
         };
         protocol = "changed";
         address = "changed";
         passed &= check(from_list.Has("http") && from_list["http"] == "http://proxy.test:8080" && from_list["https"] == "socks5://proxy.test:1080" && !from_list.Has("changed"), "initializer-list construction must copy both protocol names and proxy addresses");
 
         ProxyMap source{
-            {     "http", "proxy.test:3128" },
-            { "no_proxy",                "" }
+            { "http", "proxy.test:3128" },
+            { "no_proxy", "" }
         };
         mcr::options::Proxies from_map{ source };
         source["http"] = "changed";
@@ -52,7 +52,7 @@ namespace {
         passed &= check(!source.contains("ftp"), "subscript insertion must not modify the source map");
 
         mcr::options::Proxies duplicate{
-            { "http",  "first" },
+            { "http", "first" },
             { "http", "second" }
         };
         passed &= check(duplicate.Has("http") && (duplicate["http"] == "first" || duplicate["http"] == "second"), "duplicate keys must retain one supplied mapping according to std::map initialization rules");
@@ -61,12 +61,12 @@ namespace {
 
     auto check_lookup() -> bool {
         mcr::options::Proxies proxies{
-            {              "http",                   "lower" },
-            {              "HTTP",                   "upper" },
-            {             "https",                        "" },
-            {          "no_proxy",                        "" },
-            {          "NO_PROXY", "localhost,.example.test" },
-            { " custom protocol ",   " unvalidated address " },
+            { "http", "lower" },
+            { "HTTP", "upper" },
+            { "https", "" },
+            { "no_proxy", "" },
+            { "NO_PROXY", "localhost,.example.test" },
+            { " custom protocol ", " unvalidated address " },
         };
         bool passed{ check(std::as_const(proxies).Has("http") && proxies["http"] == "lower" && proxies["HTTP"] == "upper" && !proxies.Has("Http"), "protocol matching must be exact and case-sensitive") };
         passed &= check(proxies.Has("https") && proxies["https"].empty() && proxies.Has("no_proxy") && proxies["no_proxy"].empty() && proxies["NO_PROXY"] == "localhost,.example.test", "empty addresses and both no_proxy spellings must remain distinct stored entries");

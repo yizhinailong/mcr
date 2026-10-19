@@ -36,21 +36,21 @@ namespace {
         constexpr auto MINIMUM{ (std::numeric_limits<std::int64_t>::min)() };
         constexpr auto MAXIMUM{ (std::numeric_limits<std::int64_t>::max)() };
         RangeCase const cases[]{
-            {            std::nullopt,            std::nullopt,                                      "0-" },
-            {                       1,            std::nullopt,                                      "1-" },
-            {            std::nullopt,                       5,                                     "0-5" },
-            {                       2,                       3,                                     "2-3" },
-            {                       0,                       0,                                     "0-0" },
-            {                      -1,                     500,                                    "-500" },
-            {                      -2,                       0,                                      "-0" },
-            {                      10,                      -2,                                     "10-" },
-            {                      -1,                      -1,                                       "-" },
-            {                 MINIMUM,                 MINIMUM,                                       "-" },
-            {                      10,                       2,                                    "10-2" },
-            { std::int64_t{ 1 } << 32, std::int64_t{ 1 } << 33,                   "4294967296-8589934592" },
-            {                 MAXIMUM,                 MAXIMUM, "9223372036854775807-9223372036854775807" },
-            {                 MAXIMUM,                 MINIMUM,                    "9223372036854775807-" },
-            {                 MINIMUM,                 MAXIMUM,                    "-9223372036854775807" },
+            { std::nullopt, std::nullopt, "0-" },
+            { 1, std::nullopt, "1-" },
+            { std::nullopt, 5, "0-5" },
+            { 2, 3, "2-3" },
+            { 0, 0, "0-0" },
+            { -1, 500, "-500" },
+            { -2, 0, "-0" },
+            { 10, -2, "10-" },
+            { -1, -1, "-" },
+            { MINIMUM, MINIMUM, "-" },
+            { 10, 2, "10-2" },
+            { std::int64_t{ 1 } << 32, std::int64_t{ 1 } << 33, "4294967296-8589934592" },
+            { MAXIMUM, MAXIMUM, "9223372036854775807-9223372036854775807" },
+            { MAXIMUM, MINIMUM, "9223372036854775807-" },
+            { MINIMUM, MAXIMUM, "-9223372036854775807" },
         };
         for (auto const& entry : cases) {
             mcr::options::Range const range{ entry.from, entry.to };
@@ -87,12 +87,12 @@ namespace {
         bool passed{ check(empty.Str().empty() && explicit_empty.Str().empty() && single.Str() == "0-", "empty lists and single ranges must format without separators") };
         mcr::options::MultiRange const two{
             mcr::options::Range{ std::nullopt, 3 },
-            mcr::options::Range{            5, 6 }
+            mcr::options::Range{ 5, 6 }
         };
         mcr::options::MultiRange const three{
             mcr::options::Range{ std::nullopt, 2 },
-            mcr::options::Range{            4, 5 },
-            mcr::options::Range{            7, 8 }
+            mcr::options::Range{ 4, 5 },
+            mcr::options::Range{ 7, 8 }
         };
         passed &= check(two.Str() == "0-3, 5-6" && three.Str() == "0-2, 4-5, 7-8", "cpr's multipart download examples must use exactly comma-space separators");
         mcr::options::MultiRange const mixed{

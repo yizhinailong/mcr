@@ -58,21 +58,21 @@ namespace {
         };
 
         FieldCase const cases[]{
-            {                                                               "data: Hello World\n\n",                                     { make_event("Hello World") } },
-            {                                             "data: First line\ndata: Second line\n\n",                         { make_event("First line\nSecond line") } },
-            {                              "id: 42\nevent: update\nretry: 3000\ndata: complete\n\n",                  { make_event("complete", "update", "42", 3000) } },
-            {  ": comment\nunknown: ignored\nevent: unused\nid: old\nretry: 10\n\n\ndata: next\n\n",                                            { make_event("next") } },
-            {                                                     "data\n\ndata:\n\ndata\ndata\n\n",              { make_event(""), make_event(""), make_event("\n") } },
-            {                                                       "data:\ndata: middle\ndata\n\n",                                      { make_event("\nmiddle\n") } },
-            {                                         "event: custom\nevent\nid\ndata: payload\n\n",                          { make_event("payload", "message", "") } },
-            {         "id: old\nid: new\nevent: old\nevent: new\nretry: 10\nretry: 20\ndata: x\n\n",                             { make_event("x", "new", "new", 20) } },
-            { "Data: ignored\n data: ignored\ndata:  leading:colon\ndata:\ttab\ndata:trailing \n\n",                { make_event(" leading:colon\n\ttab\ntrailing ") } },
-            {                                             "id: good\nid: bad\0id\ndata: a\0b\n\n"sv,       { make_event(std::string{ "a\0b", 3 }, "message", "good") } },
-            {                                                          "id: bad\0id\ndata: x\n\n"sv,                                               { make_event("x") } },
-            {                   "id: 42\nretry: 10\nevent: update\ndata: first\n\ndata: second\n\n", { make_event("first", "update", "42", 10), make_event("second") } },
-            {                                                                           "data: x\n",                                                                {} },
-            {                                                                             "data: x",                                                                {} },
-            {                                                              "data: \xEF\xBB\xBF\n\n",                                    { make_event("\xEF\xBB\xBF") } },
+            { "data: Hello World\n\n", { make_event("Hello World") } },
+            { "data: First line\ndata: Second line\n\n", { make_event("First line\nSecond line") } },
+            { "id: 42\nevent: update\nretry: 3000\ndata: complete\n\n", { make_event("complete", "update", "42", 3000) } },
+            { ": comment\nunknown: ignored\nevent: unused\nid: old\nretry: 10\n\n\ndata: next\n\n", { make_event("next") } },
+            { "data\n\ndata:\n\ndata\ndata\n\n", { make_event(""), make_event(""), make_event("\n") } },
+            { "data:\ndata: middle\ndata\n\n", { make_event("\nmiddle\n") } },
+            { "event: custom\nevent\nid\ndata: payload\n\n", { make_event("payload", "message", "") } },
+            { "id: old\nid: new\nevent: old\nevent: new\nretry: 10\nretry: 20\ndata: x\n\n", { make_event("x", "new", "new", 20) } },
+            { "Data: ignored\n data: ignored\ndata:  leading:colon\ndata:\ttab\ndata:trailing \n\n", { make_event(" leading:colon\n\ttab\ntrailing ") } },
+            { "id: good\nid: bad\0id\ndata: a\0b\n\n"sv, { make_event(std::string{ "a\0b", 3 }, "message", "good") } },
+            { "id: bad\0id\ndata: x\n\n"sv, { make_event("x") } },
+            { "id: 42\nretry: 10\nevent: update\ndata: first\n\ndata: second\n\n", { make_event("first", "update", "42", 10), make_event("second") } },
+            { "data: x\n", {} },
+            { "data: x", {} },
+            { "data: \xEF\xBB\xBF\n\n", { make_event("\xEF\xBB\xBF") } },
         };
         for (auto const& entry : cases) {
             Collector collector;

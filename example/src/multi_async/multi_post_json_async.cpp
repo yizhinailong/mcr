@@ -20,32 +20,32 @@ auto main(int argc, char** argv) -> int {
         "multi_post_json_async",
         [](example::Arguments const& args) {
             mcr::Json const first_document{
-                {    "name",       "Alice" },
-                { "enabled",          true },
+                { "name", "Alice" },
+                { "enabled", true },
                 { "message", "你好，JSON!" },
-                { "request",       "first" }
+                { "request", "first" }
             };
             mcr::Json const second_document{
-                {    "name",       "Alice" },
-                { "enabled",          true },
+                { "name", "Alice" },
+                { "enabled", true },
                 { "message", "你好，JSON!" },
-                { "request",      "second" }
+                { "request", "second" }
             };
             auto first{
                 std::tuple{
-                           mcr::Url{ args.url },
-                           mcr::Parameters{ { "request", "first" } },
-                           mcr::JsonBody{ first_document },
-                           mcr::UserAgent{ "mcr_example" },
-                           mcr::options::Timeout{ std::chrono::seconds{ 10 } } }
+                    mcr::Url{ args.url },
+                    mcr::Parameters{ { "request", "first" } },
+                    mcr::JsonBody{ first_document },
+                    mcr::UserAgent{ "mcr_example" },
+                    mcr::options::Timeout{ std::chrono::seconds{ 10 } } }
             };
             auto second{
                 std::tuple{
-                           mcr::Url{ args.url },
-                           mcr::Parameters{ { "request", "second" } },
-                           mcr::JsonBody{ second_document },
-                           mcr::UserAgent{ "mcr_example" },
-                           mcr::options::Timeout{ std::chrono::seconds{ 10 } } }
+                    mcr::Url{ args.url },
+                    mcr::Parameters{ { "request", "second" } },
+                    mcr::JsonBody{ second_document },
+                    mcr::UserAgent{ "mcr_example" },
+                    mcr::options::Timeout{ std::chrono::seconds{ 10 } } }
             };
             auto pending{ mcr::MultiPostAsync(std::move(first), std::move(second)) };
             if (!pending) {

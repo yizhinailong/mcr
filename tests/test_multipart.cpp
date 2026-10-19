@@ -56,11 +56,11 @@ namespace {
         passed &= check(is_text(empty) && empty.name.empty() && empty.value.empty() && empty.content_type.empty(), "empty text and an unspecified content type must be accepted");
 
         std::array<std::pair<std::int32_t, std::string_view>, 5> const numbers{
-            std::pair<std::int32_t, std::string_view>{                                        0,           "0" },
-            {                                       42,          "42" },
-            {                                       -7,          "-7" },
+            std::pair<std::int32_t, std::string_view>{ 0, "0" },
+            { 42, "42" },
+            { -7, "-7" },
             { std::numeric_limits<std::int32_t>::min(), "-2147483648" },
-            { std::numeric_limits<std::int32_t>::max(),  "2147483647" }
+            { std::numeric_limits<std::int32_t>::max(), "2147483647" }
         };
         for (auto const& [number, expected] : numbers) {
             mcr::Part const numeric{ "number", number, "application/number" };
@@ -122,10 +122,10 @@ namespace {
         std::array<char, 3> bytes{ 'a', '\0', 'b' };
         auto const buffer = mcr::Buffer::Create(bytes.begin(), bytes.end(), "bytes.bin").value();
         mcr::Multipart form{
-            {   "text",                                  "hello" },
-            { "number",                                        5 },
-            {   "file", mcr::File{ "missing.bin", "upload.bin" } },
-            { "buffer",                                   buffer }
+            { "text", "hello" },
+            { "number", 5 },
+            { "file", mcr::File{ "missing.bin", "upload.bin" } },
+            { "buffer", buffer }
         };
         bool passed{ check(form.parts.size() == 4 && form.parts[0].value == "hello" && form.parts[1].value == "5" && form.parts[2].is_file && form.parts[3].is_buffer, "nested initializer lists must retain the order and modes of mixed parts") };
         form.parts.emplace_back("text", "duplicate");

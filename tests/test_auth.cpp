@@ -57,14 +57,7 @@ namespace {
             Mode::BASIC
         };
         passed &= check(matches(bounded, "user:pass", Mode::BASIC), "input views must respect their lengths without requiring null terminators");
-        passed &= check(matches(mcr::options::Authentication{
-                                    { username.data(), 0 },
-                                    { password.data(), 0 },
-                                    Mode::BASIC
-        },
-                                ":",
-                                Mode::BASIC),
-                        "zero-length views must not fall back to reading input strings");
+        passed &= check(matches(mcr::options::Authentication{ { username.data(), 0 }, { password.data(), 0 }, Mode::BASIC }, ":", Mode::BASIC), "zero-length views must not fall back to reading input strings");
         std::string const utf8{ "\xE4\xB8\xAD" };
         passed &= check(matches(mcr::options::Authentication{ utf8, utf8, Mode::ANY }, utf8 + ":" + utf8, Mode::ANY), "UTF-8 credentials must retain their original bytes");
 
