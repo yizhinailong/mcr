@@ -24,6 +24,36 @@ Invoke-Item .\target\doxygen\html\index.html
 修改源码注释或 Markdown 后，再次运行 `doxygen Doxyfile` 即可更新。
 输出位于 Git 已忽略的 `target/` 下；`mcpp clean` 会一并移除这些生成文件。
 
+## GitHub Pages 自动发布
+
+[Documentation 工作流](../.github/workflows/docs.yml) 在推送到 `main`，且修改了
+`src/`、`docs/`、根目录或示例的 `README.md`、`AGENTS.md`、`Doxyfile` 或工作流本身时运行。
+它也支持从 Actions 页面手动运行；只有 `main` 分支的运行会发布网站。
+
+构建任务使用 `ubuntu-24.04`，下载 Doxygen 1.18.0 的官方 Linux 二进制包，
+按 [官方下载页](https://www.doxygen.nl/download.html) 的 SHA-256 校验后执行 `doxygen Doxyfile`，
+将 `target/doxygen/html/` 上传为 Pages artifact。独立部署任务在构建成功后发布该 artifact。
+生成的 HTML 通过工作流产物传递，无需提交到 Git，也无需安装 mcpp 或 C++ 工具链。
+升级 Doxygen 时，应同时更新工作流中的版本与校验和。
+
+首次启用时，在 GitHub 仓库中完成以下配置：
+
+1. 打开 **Settings → Pages**。
+2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
+3. 将工作流及相关文档推送到 `main`，或在 **Actions → Documentation → Run workflow**
+   中选择 `main` 并运行。
+4. 等待构建与部署任务成功，在 **Settings → Pages** 或工作流的 `github-pages` 部署环境中查看网站地址。
+
+仓库需允许 GitHub Actions 运行。工作流使用内置的 `GITHUB_TOKEN`：
+构建任务只有 `contents: read`，部署任务声明 `pages: write` 和 `id-token: write`，
+无需添加 PAT、Secrets 或修改仓库的默认令牌写权限。
+若现有的 `github-pages` 环境限制了部署分支，应允许 `main`；若配置了必需审批者，部署会等待审批。
+发布源、权限和环境的要求见
+[GitHub Pages 自定义工作流说明](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
+此方式直接部署静态文件，发布源选择由工作流控制，`docs/` 继续存放 Markdown 使用指南。
+源码中的注释警告仍按下文配置处理；生成或部署失败时，工作流会报告失败。
+
 ## 项目配置
 
 下面是影响本项目文档生成的主要配置，可在 Doxyfile 中搜索同名选项修改。
