@@ -60,7 +60,7 @@ auto main() -> int {
  */
 module;
 #include <curl/curlver.h>
-export module mcr.version;
+export module mcr:version;
 import std;
 export namespace mcr {{
     inline constexpr std::string_view VERSION{{ "{}" }}; ///< Full package version.

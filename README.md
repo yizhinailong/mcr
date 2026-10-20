@@ -102,7 +102,7 @@ auto main() -> int {
 }
 ```
 
-`import mcr;` 导出库的全部公开模块；直接调用 curl 的 C API 时仍需包含其头文件。也可以按需导入 `mcr.api`、`mcr.session` 等模块，见 [模块与命名空间说明](docs/structure.md)。
+`import mcr;` 导出库的全部公开接口；直接调用 curl 的 C API 时仍需包含其头文件。组件实现为 `mcr:api`、`mcr:session` 等模块分区，外部只需导入总入口，见 [模块与命名空间说明](docs/structure.md)。
 
 ## 选择请求方式
 

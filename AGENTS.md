@@ -11,46 +11,46 @@
 
 ## 项目结构与模块组织
 
-源码按职责分组，公开模块名独立于文件路径。
+源码按职责分组，组件是 `mcr` 的模块分区，分区名独立于文件路径。
 请求配置使用 `mcr::options`，TLS 标签使用 `mcr::options::ssl`，
 通用工具使用 `mcr::utils`，curl 后端接口使用 `mcr::curl`。
 
 - `src/`：库入口 `mcr.cppm` 和一次性请求 API `api.cppm`。
-- `src/request/`：mcr.body 中的正文和借用视图，mcr.fields 中的查询参数与表单，
+- `src/request/`：mcr:body 中的正文和借用视图，mcr:fields 中的查询参数与表单，
   以及上传缓冲区、文件和分段表单；公开类型位于 mcr。
 - `src/http/`：响应、Cookie、证书信息、状态码和服务端发送事件（SSE）。
-  公开类型位于 mcr，状态常量位于 mcr::status，保留 mcr.response、mcr.sse 等现有模块名。
+  公开类型位于 mcr，状态常量位于 mcr::status，保留 mcr:response、mcr:sse 等现有分区名。
 - `src/session/`：会话、异步运行时、回调和连接池。
   session.cppm 包含会话、TLS、拦截器和批量实现；
-  导入 mcr.session 使用 Session、Interceptor、InterceptorMulti 和 MultiPerform。
+  mcr:session 分区导出 Session、Interceptor、InterceptorMulti 和 MultiPerform。
 - `src/coro/`：Task 和 curl multi 协程运行时，公开请求函数仍位于 src/api.cppm。
-- `src/options/`：mcr::options 下的六个配置模块。
-  mcr.auth 提供用户名密码认证和 Bearer；mcr.proxy 提供代理地址和凭据；
-  mcr.http 提供协议版本、编码、重定向和范围；
-  mcr.transfer_options 提供时间、速率、连接选择、容量和诊断选项。
-  网络接口和 TLS 配置分别位于 mcr.interface、mcr.ssl_options。
+- `src/options/`：mcr::options 下的六个配置分区。
+  mcr:auth 提供用户名密码认证和 Bearer；mcr:proxy 提供代理地址和凭据；
+  mcr:http 提供协议版本、编码、重定向和范围；
+  mcr:transfer_options 提供时间、速率、连接选择、容量和诊断选项。
+  网络接口和 TLS 配置分别位于 mcr:interface、mcr:ssl_options。
   相关的小型选项类型应放在一起。
 - `src/utils/`：mcr::utils 下的安全字符串、单例生命周期、线程池、future 包装，
   以及 HTTP 解析和 curl 回调辅助函数。公共 HTTP 类型 types.cppm 和错误/结果 error.cppm
   也放在此目录，但公开接口仍位于 mcr。
-  模块名独立于路径，保留 mcr.types、mcr.error、mcr.threadpool、mcr.util 等名称。
+  分区名独立于路径，保留 mcr:types、mcr:error、mcr:threadpool、mcr:util 等名称。
 - `src/curl/`：mcr::curl 下的 easy/multi 句柄所有权、请求容器编码和 SSL 上下文支持，
-  包括模块接口及其实现。请求记录 Parameter 和 Pair 保留在 mcr，
-  与 `mcr::curl::CurlContainer<T>` 位于同一模块。
-  保留 mcr.curlholder、mcr.curl_container、mcr.ssl_ctx 等模块名。
+  包括分区接口及其实现。请求记录 Parameter 和 Pair 保留在 mcr，
+  与 `mcr::curl::CurlContainer<T>` 位于同一分区。
+  保留 mcr:curlholder、mcr:curl_container、mcr:ssl_ctx 等分区名。
 - `tests/test_*.cpp`：独立测试程序，共用的本地 HTTP 测试设施位于 tests/fixtures/。
 - `example/`：使用独立 mcpp.toml 的请求示例及本地验证脚本。
 - `mcpp.toml`：包元数据和依赖声明。
 - `.clang-format`：仓库格式配置。
 - 生成目录 `target/` 和 `.mcpp/`，以及编译数据库 `compile_commands.json`：Git 忽略的生成内容或本地状态，不得提交。
 
-目录内容及模块命名见 [源码结构](docs/structure.md)，使用文档见 [文档索引](docs/README.md)。
+目录内容及分区命名见 [源码结构](docs/structure.md)，使用文档见 [文档索引](docs/README.md)。
 
-保持 mcr.cppm 为完整公开入口：重新导出全部公开 mcr.* 模块，
+保持 mcr.cppm 为完整公开入口：通过 `export import :name;` 重新导出全部分区，
 包括请求 API、数据类型、选项、异步结果、状态码、版本信息、curl 后端和通用工具。
-外部代码及测试可以仅使用 `import mcr;`，也可以按需导入组件模块。
-组件内部对 curl 后端和通用工具依赖使用普通 import；
-mcr.fields 只选择性导出公开记录 Parameter、Pair，不重新导出 curl 容器模块。
+外部代码及测试只使用 `import mcr;`；分区不能被外部代码单独导入。
+组件分区内部对 curl 后端和通用工具依赖使用 `import :other;`；
+mcr:fields 只选择性导出公开记录 Parameter、Pair，不重新导出 curl 容器分区。
 
 ## 构建、测试与开发命令
 
