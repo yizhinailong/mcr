@@ -112,6 +112,7 @@ auto main() -> int {
 | 复用连接和配置 | `Session::Create()` | 创建结果及请求的 `Result<Response>` |
 | 在线程池执行请求 | `GetAsync` 等 | `Result<AsyncResponse>`，提交成功后通过 `Get()` 取请求结果 |
 | 在协程中等待请求 | `GetCoro` 等 | `Task<Result<Response>>`，支持 `co_await` 和 `sync_wait` |
+| 排队启动或让出协程执行 | `Coro::Spawn`、`Coro::Schedule` | `Result<Task<T>>`、可等待的 `Result<void>` |
 | 请求完成后执行回调 | `GetCallback` 等 | `Result<AsyncWrapper<回调返回类型, true>>` |
 | 同步并发批次 | `MultiGet` 等、`MultiPerform` | 按输入顺序排列的响应 |
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |

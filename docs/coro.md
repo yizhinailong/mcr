@@ -2,7 +2,8 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-`import mcr;` 提供 `mcr::Task<T>`、`mcr::sync_wait`、`mcr::Coro`，以及
+`import mcr;` 提供 `mcr::Task<T>`、`mcr::sync_wait`、`mcr::Coro`、
+`mcr::this_coro::stop_token`，以及
 `GetCoro` / `PostCoro` / `PutCoro` / `HeadCoro` / `DeleteCoro` /
 `OptionsCoro` / `PatchCoro` / `DownloadCoro`。
 
@@ -49,10 +50,12 @@ ConnectionPool 仍有借用语义，必须存活到请求结束。对用户自�
 ## Task 的启动、等待与所有权
 
 `Task<T>` 仅移动、单次消费，支持值、仅可移动的值、左值引用和 `void`；
-不支持右值引用结果。任务有三种使用方式：
+不支持右值引用结果。任务有四种使用方式：
 
 - `co_await task_expression`：在协程中启动并等待。
 - `task.Start()`：立即执行到挂起点，显式启动任务但保留结果；重复调用不重复执行。
+- `mcr::Coro::Spawn(std::move(task))`：排队启动并返回 `Result<Task<T>>`，
+  保留任务结果和取消入口；首次执行发生在后续处理线程。
 - `mcr::sync_wait(std::move(task))`：在普通线程中启动并阻塞等待结果。
 
 对命名对象使用 `co_await std::move(task)`；等待会转移其所有权。
@@ -76,6 +79,31 @@ auto a = mcr::sync_wait(std::move(first)).value();
 auto b = mcr::sync_wait(std::move(second)).value();
 ```
 
+## 排队启动与协作调度
+
+`Coro::Spawn` 在返回前将未启动任务的协程帧所有权交给运行时，
+提交成功后可以等待返回的 Task、保存其停止源，或丢弃结果让任务自行完成。
+任务可能在 `Spawn` 返回前已经由另一线程启动，但不会在提交调用栈中直接执行。
+已启动的任务只转移结果所有权，不重复启动或改变当前执行位置。
+空任务抛出 `std::logic_error`；运行时初始化或关闭导致的拒绝通过 Result 返回，
+被拒绝的未启动任务会释放协程帧，不执行函数体。
+
+```cpp
+auto first = mcr::Coro::Spawn(mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/first" })).value();
+auto second = mcr::Coro::Spawn(mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/second" })).value();
+auto a = mcr::sync_wait(std::move(first)).value();
+auto b = mcr::sync_wait(std::move(second)).value();
+```
+
+在协程中使用 `(co_await mcr::Coro::Schedule()).value()` 将后续代码排入同一恢复队列。
+从普通线程调用时切换到后续处理线程；已经位于该线程时，让排在前面的工作先执行。
+每次调用返回一个仅移动、单次使用的 awaiter。若运行时拒绝调度，等待立即结束，
+返回失败的 `Result<void>`，代码继续在当前线程运行，调用方应检查结果。
+
+`Spawn` 和 `Schedule` 调度任务执行位置；外部 awaiter 仍可能在其他线程恢复协程。
+需要再次进入后续处理线程时，显式等待 `Schedule()`。排队期间协程帧必须有效；
+`Task` 自行管理已启动帧，其他协程框架需要由调用方保证等待者的生命周期。
+
 ## 网络与恢复线程
 
 运行时首次提交时自动启动，也可以显式 `mcr::Coro::Startup()`。它拥有：
@@ -85,6 +113,8 @@ auto b = mcr::sync_wait(std::move(second)).value();
   无需等待同批的其他请求。
 - 一个后续处理线程，串行恢复完成请求的协程。用户在 `co_await` 之后的代码
   不保证回到原调用线程。连续等待下一个请求会再次挂起，从而释放该线程。
+  `Spawn` 的初始执行、`Schedule` 的恢复与已完成的 HTTP 请求共用先进先出的队列，
+  执行用户代码时不持有运行时锁。
 
 所有 curl 读写、Header、Progress、Debug 等传输回调在 I/O 线程执行，需及时返回。
 较长的后续计算会延迟其他协程恢复，适合交给应用自己的执行器处理；网络循环仍可推进。
@@ -111,6 +141,10 @@ cancellation.request_stop();
 auto response = mcr::sync_wait(std::move(request)).value();
 ```
 
+用户协程可以通过 `auto stop = co_await mcr::this_coro::stop_token;` 取得自己的停止令牌，
+并在计算循环或外部异步操作之间检查 `stop.stop_requested()`。查询不挂起，
+也不会因令牌已经取消而自动抛出异常。排队等待 `Spawn` 启动期间也可以请求取消。
+
 启动前取消的普通 HTTP 请求不会联系服务器。运行中的请求由 I/O 线程从 multi 中
 移除，随后恢复协程。取消结果位于 `Response::error`，代码为
 `ErrorCode::ABORTED_BY_CALLBACK`；已完成的结果不会被随后到达的取消信号改写。
@@ -132,6 +166,9 @@ HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl
 `ABORTED_BY_CALLBACK` 结束尚未完成的传输，已经完成的请求保留其结果。
 方法可重复调用，也可以和提交、取消并发调用；开始关闭之后的新提交返回 `FAILED_INIT`。
 关闭期间恢复的协程如再发起新请求，同样会收到该错误。
+清理还会排空已经接受的 `Spawn` 启动和 `Schedule` 恢复；任务继续发起 HTTP 请求或
+再次调度时会收到 `FAILED_INIT`。尚未开始的通用任务仍会执行其函数体，用户计算的停止由
+任务自身的协作取消逻辑负责。
 
 清理是永久关闭，随后 `Startup()` 或启动新的 HTTP 协程任务会失败。
 应用应先结束自己的工作链，在运行时线程之外调用清理，并在它返回之后才能执行
@@ -150,6 +187,14 @@ HTTP API、选项和错误语义参考
 [poll](https://curl.se/libcurl/c/curl_multi_poll.html) 和
 [wakeup](https://curl.se/libcurl/c/curl_multi_wakeup.html) 的约定。
 
+排队启动和协程上下文查询参考
+[Asio 1.38.2 co_spawn](https://github.com/chriskohlhoff/asio/blob/asio-1-38-2/include/asio/impl/co_spawn.hpp) 和
+[C++20 协程说明](https://think-async.com/Asio/asio-1.38.2/doc/asio/overview/composition/cpp20_coroutines.html)。
+mcr 使用 `Coro::Spawn` 返回可消费的 Task，通过 `Schedule` 显式调度；
+父子 Task 使用 C++ 协程句柄的对称转移，网络仍由 libcurl 驱动。
+这些接口不依赖 Asio 的完成令牌、executor 或 `awaitable_thread` 帧栈。
+
 `tests/test_task.cpp` 覆盖惰性执行、所有权、异常、父子取消和完成竞争；
 `tests/test_coro.cpp` 使用本地 HTTP 测试服务 验证各方法、并发传输、线程分工、
-取消、下载，以及关闭时的活动请求和排队请求。运行 `mcpp test` 验证整个库。
+排队启动、协作调度、取消、下载，以及关闭时的活动请求、排队请求和已接受的恢复工作。
+运行 `mcpp test` 验证整个库。

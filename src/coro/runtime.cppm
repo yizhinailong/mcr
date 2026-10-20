@@ -1,6 +1,6 @@
 /**
  * @file runtime.cppm
- * @brief Curl multi transfers with a separate coroutine continuation thread.
+ * @brief Curl multi transfers and queued task execution on a separate continuation thread.
  */
 module;
 #include <curl/curl.h>
@@ -25,9 +25,55 @@ export namespace mcr::detail {
     };
 
     /**
+     * @brief Link accepted work in the runtime's serialized continuation queue.
+     */
+    struct CoroWork {
+        std::shared_ptr<CoroWork> next; ///< Intrusive queue link, allocated before publication.
+
+        /**
+         * @brief Release the concrete work item through its queue owner.
+         */
+        virtual ~CoroWork() = default;
+
+        /**
+         * @brief Resume outside runtime locks on the continuation thread.
+         */
+        virtual auto Run() noexcept -> void = 0;
+    };
+
+    /**
+     * @brief Schedule a continuation and optionally own its unstarted frame.
+     */
+    struct CoroResume : CoroWork {
+        std::coroutine_handle<> continuation{}; ///< Frame to resume exactly once.
+        bool owns_frame{ false };               ///< Destroy an unstarted frame if posting fails.
+
+        CoroResume() = default;
+        CoroResume(CoroResume const&) = delete;
+        auto operator=(CoroResume const&) -> CoroResume& = delete;
+
+        /**
+         * @brief Release a cold task if the runtime did not accept ownership.
+         */
+        ~CoroResume() override {
+            if (owns_frame && continuation) {
+                continuation.destroy();
+            }
+        }
+
+        /**
+         * @brief Transfer execution to the task before it can destroy its frame.
+         */
+        auto Run() noexcept -> void override {
+            auto handle = std::exchange(continuation, {});
+            handle.resume();
+        }
+    };
+
+    /**
      * @brief Own one transfer until its awaiting coroutine has resumed.
      */
-    struct CoroTransfer {
+    struct CoroTransfer : CoroWork {
         std::shared_ptr<Session> session;
         std::function<Result<void>(Session&)> prepare;
         std::stop_token stop;
@@ -35,16 +81,25 @@ export namespace mcr::detail {
         std::coroutine_handle<> continuation;
         CURLcode result{ CURLE_OK };
         std::exception_ptr error;
-        Result<void> setup_result;          ///< Configuration failure returned before publication.
-        CURLMcode multi_error{ CURLM_OK };  ///< Multi failure recorded without allocating diagnostics on the I/O thread.
+        Result<void> setup_result;                  ///< Configuration failure returned before publication.
+        CURLMcode multi_error{ CURLM_OK };          ///< Multi failure recorded without allocating diagnostics on the I/O thread.
         bool prepared{ false };
-        std::shared_ptr<CoroTransfer> next; ///< Intrusive pending/completion queue link; no allocation at completion.
+        std::shared_ptr<CoroTransfer> pending_next; ///< Intrusive link used before submission to curl.
 
         CoroTransfer(
             std::shared_ptr<Session> owned_session,
             std::function<Result<void>(Session&)> prepare_request,
             std::stop_token token
         ) : session{ std::move(owned_session) }, prepare{ std::move(prepare_request) }, stop{ token } {}
+
+        /**
+         * @brief Disconnect cancellation before resuming outside curl's callback stack.
+         */
+        auto Run() noexcept -> void override {
+            wake.reset();
+            auto handle = std::exchange(continuation, {});
+            handle.resume();
+        }
     };
 
     /**
@@ -59,8 +114,8 @@ export namespace mcr::detail {
         std::unique_ptr<curl::CurlMultiHolder> m_multi;
         std::shared_ptr<CoroTransfer> m_pending_head;
         std::shared_ptr<CoroTransfer> m_pending_tail;
-        std::shared_ptr<CoroTransfer> m_completed_head;
-        std::shared_ptr<CoroTransfer> m_completed_tail;
+        std::shared_ptr<CoroWork> m_completed_head;
+        std::shared_ptr<CoroWork> m_completed_tail;
         Result<void> m_initialization; ///< Curl initialization result, retained for later submissions.
         bool m_stopping{ false };
         bool m_io_done{ false };
@@ -110,14 +165,41 @@ export namespace mcr::detail {
             std::lock_guard lock{ m_mutex };
             if (m_stopping) {
                 return std::unexpected{
-                    Error{ ErrorCode::FAILED_INIT, "mcr::GetCoro: runtime has been cleaned up." }
+                    Error{ ErrorCode::FAILED_INIT, "mcr::Coro: runtime has been cleaned up." }
                 };
             }
             if (!m_initialization) {
                 return m_initialization;
             }
-            append(m_pending_head, m_pending_tail, std::move(transfer));
+            if (m_pending_tail) {
+                m_pending_tail->pending_next = transfer;
+            } else {
+                m_pending_head = transfer;
+            }
+            m_pending_tail = std::move(transfer);
             (void)curl_multi_wakeup(m_multi->handle);
+            return {};
+        }
+
+        /**
+         * @brief Queue work without invoking it inline, synchronizing acceptance with shutdown.
+         * @param work Work whose frame and ownership are installed before publication.
+         * @return Success or an initialization/shutdown error; failed work is never queued.
+         */
+        auto Post(std::shared_ptr<CoroWork> work) -> Result<void> {
+            {
+                std::lock_guard lock{ m_mutex };
+                if (m_stopping) {
+                    return std::unexpected{
+                        Error{ ErrorCode::FAILED_INIT, "mcr::Coro: runtime has been cleaned up." }
+                    };
+                }
+                if (!m_initialization) {
+                    return m_initialization;
+                }
+                append(m_completed_head, m_completed_tail, std::move(work));
+            }
+            m_completion_ready.notify_one();
             return {};
         }
 
@@ -197,9 +279,9 @@ export namespace mcr::detail {
          * @brief Append without allocating; caller owns the relevant queue lock.
          */
         static auto append(
-            std::shared_ptr<CoroTransfer>& head,
-            std::shared_ptr<CoroTransfer>& tail,
-            std::shared_ptr<CoroTransfer> value
+            std::shared_ptr<CoroWork>& head,
+            std::shared_ptr<CoroWork>& tail,
+            std::shared_ptr<CoroWork> value
         ) noexcept -> void {
             if (tail) {
                 tail->next = value;
@@ -234,21 +316,20 @@ export namespace mcr::detail {
         auto runCompletions() noexcept -> void {
             coro_runtime_thread = true;
             for (;;) {
-                std::shared_ptr<CoroTransfer> transfer;
+                std::shared_ptr<CoroWork> work;
                 {
                     std::unique_lock lock{ m_mutex };
                     m_completion_ready.wait(lock, [this] { return m_completed_head || m_io_done; });
                     if (!m_completed_head) {
                         break;
                     }
-                    transfer = std::move(m_completed_head);
-                    m_completed_head = std::move(transfer->next);
+                    work = std::move(m_completed_head);
+                    m_completed_head = std::move(work->next);
                     if (!m_completed_head) {
                         m_completed_tail.reset();
                     }
                 }
-                transfer->wake.reset();
-                transfer->continuation.resume();
+                work->Run();
             }
             coro_runtime_thread = false;
         }
@@ -274,7 +355,7 @@ export namespace mcr::detail {
                     }
                     while (pending) {
                         auto transfer = std::move(pending);
-                        pending = std::move(transfer->next);
+                        pending = std::move(transfer->pending_next);
                         if (transfer->stop.stop_requested()) {
                             complete(std::move(transfer), CURLE_ABORTED_BY_CALLBACK);
                             continue;
@@ -347,7 +428,7 @@ export namespace mcr::detail {
             }
             while (pending) {
                 auto transfer = std::move(pending);
-                pending = std::move(transfer->next);
+                pending = std::move(transfer->pending_next);
                 complete(std::move(transfer), CURLE_ABORTED_BY_CALLBACK, failure, multi_error);
             }
             {
@@ -362,6 +443,55 @@ export namespace mcr::detail {
     auto WakeCoroRuntime::operator()() const noexcept -> void {
         runtime->Wake();
     }
+
+    /**
+     * @brief Resume an existing coroutine through the runtime's serialized queue.
+     */
+    class CoroScheduleAwaiter {
+        std::shared_ptr<CoroResume> m_work{ std::make_shared<CoroResume>() }; ///< Published continuation storage.
+        Result<void> m_status;                                                ///< Rejection returned without suspending or transferring execution.
+
+    public:
+        /**
+         * @brief Prepare a single-use queued resumption before its coroutine suspends.
+         */
+        CoroScheduleAwaiter() = default;
+
+        CoroScheduleAwaiter(CoroScheduleAwaiter const&) = delete;
+        CoroScheduleAwaiter(CoroScheduleAwaiter&&) = default;
+
+        /**
+         * @brief Validate ownership and enqueue even when already on the continuation thread.
+         * @throws std::logic_error If the awaiter was moved or already consumed.
+         */
+        auto await_ready() const -> bool {
+            if (!m_work) {
+                throw std::logic_error{ "mcr::Coro::Schedule: awaiter has been consumed." };
+            }
+            return false;
+        }
+
+        /**
+         * @brief Publish only fully initialized state and avoid accessing this after acceptance.
+         * @param continuation Already suspended coroutine to resume.
+         * @return Whether the runtime accepted responsibility for resumption.
+         */
+        auto await_suspend(std::coroutine_handle<> continuation) -> bool {
+            auto work = std::move(m_work);
+            work->continuation = continuation;
+            auto status = CoroRuntime::Instance().Post(std::move(work));
+            if (!status) {
+                m_status = std::move(status);
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * @brief Report success on the continuation thread or rejection on the calling thread.
+         */
+        auto await_resume() -> Result<void> { return std::move(m_status); }
+    };
 
     /**
      * @brief Await one exclusively owned session through the shared curl multi runtime.
@@ -416,6 +546,37 @@ export namespace mcr {
      */
     class Coro {
     public:
+        /**
+         * @brief Start a cold task on the continuation thread and retain its result and cancellation.
+         * @tparam T Value, lvalue reference, or void result type.
+         * @param task Task consumed by this call; started tasks keep their existing execution.
+         * @return Started task or an initialization/shutdown error before starting a cold task.
+         * @throws std::logic_error If the task is empty or has already been consumed.
+         * @note Accepted work runs outside runtime locks. External awaiters may change subsequent threads.
+         */
+        template <typename T>
+        [[nodiscard]] static auto Spawn(Task<T> task) -> Result<Task<T>> {
+            if (!task.m_state) {
+                throw std::logic_error{ "mcr::Coro::Spawn: task is empty." };
+            }
+            if (task.m_coroutine) {
+                auto work = std::make_shared<detail::CoroResume>();
+                work->continuation = std::exchange(task.m_coroutine, {});
+                work->owns_frame = true;
+                if (auto status = detail::CoroRuntime::Instance().Post(std::move(work)); !status) {
+                    return std::unexpected{ std::move(status.error()) };
+                }
+            }
+            return std::move(task);
+        }
+
+        /**
+         * @brief Yield to the continuation thread using a queued resumption.
+         * @return Awaiter yielding Result<void>; rejection continues on the calling thread.
+         * @note The waiting coroutine must remain alive until the queued resumption runs.
+         */
+        [[nodiscard]] static auto Schedule() -> detail::CoroScheduleAwaiter { return {}; }
+
         /**
          * @brief Start lazily and return FAILED_INIT after permanent cleanup.
          * @return Success or the first operation error.

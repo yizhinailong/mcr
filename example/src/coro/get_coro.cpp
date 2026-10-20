@@ -1,6 +1,6 @@
 /**
  * @file get_coro.cpp
- * @brief Demonstrate mcr::GetCoro with an explicit call to this public request API.
+ * @brief Start a GET coroutine on the runtime's continuation thread and consume its result.
  */
 import std;
 import mcr;
@@ -28,5 +28,10 @@ auto request(std::string url) -> mcr::Task<mcr::Result<mcr::Response>> {
  * @return Zero for success or help, one for failure, and two for invalid arguments.
  */
 auto main(int argc, char** argv) -> int {
-    return example::run(argc, argv, "get_coro", [](example::Arguments const& args) { return example::print_response(mcr::sync_wait(request(args.url))); }, example::RuntimeKind::Coroutine);
+    return example::run(argc, argv, "get_coro", [](example::Arguments const& args) {
+        auto started = mcr::Coro::Spawn(request(args.url));
+        if (!started) {
+            return example::print_response(std::unexpected{ std::move(started.error()) });
+        }
+        return example::print_response(mcr::sync_wait(std::move(*started))); }, example::RuntimeKind::Coroutine);
 }

@@ -88,7 +88,7 @@ namespace {
     }
 
     auto cancellation(Gate& gate) -> mcr::Task<bool> {
-        auto stop = co_await mcr::detail::TaskStopToken{};
+        auto stop = co_await mcr::this_coro::stop_token;
         co_await gate;
         co_return stop.stop_requested();
     }

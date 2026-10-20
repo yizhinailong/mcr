@@ -137,7 +137,7 @@ namespace mcr::detail {
         if (auto status = apply_options(*session, std::move(options)); !status) {
             co_return std::unexpected{ std::move(status.error()) };
         }
-        auto token = co_await TaskStopToken{};
+        auto token = co_await this_coro::stop_token;
         co_return co_await CoroTransferAwaiter{ std::move(session), Prepare, token };
     }
 
@@ -866,7 +866,7 @@ export namespace mcr {
         if (auto status = detail::set_options(*session, std::move(options)...); !status) {
             co_return std::unexpected{ std::move(status.error()) };
         }
-        auto token = co_await detail::TaskStopToken{};
+        auto token = co_await this_coro::stop_token;
         auto response = co_await detail::CoroTransferAwaiter{
             std::move(session),
             [&file](Session& current) { return current.PrepareDownload(file); },

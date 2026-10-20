@@ -129,6 +129,21 @@ namespace mcr::detail {
     };
 } // namespace mcr::detail
 
+export namespace mcr::this_coro {
+    /**
+     * @brief Obtain the current task's cooperative cancellation token.
+     */
+    struct StopToken {
+        /**
+         * @brief Read the enclosing promise's stop token without suspending.
+         * @return An awaiter requiring the promise to provide GetStopToken().
+         */
+        [[nodiscard]] auto operator co_await() const noexcept -> detail::TaskStopToken { return {}; }
+    };
+
+    inline constexpr StopToken stop_token{}; ///< Await to access the current task's stop token.
+} // namespace mcr::this_coro
+
 export namespace mcr {
     template <typename T>
     class Task;
@@ -199,6 +214,8 @@ export namespace mcr {
 
         template <typename U>
         friend auto sync_wait(Task<U> task) -> U;
+
+        friend class Coro;
 
     public:
         Task() = default;

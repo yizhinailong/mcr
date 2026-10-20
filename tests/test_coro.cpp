@@ -64,6 +64,153 @@ namespace {
         co_return first.value().status_code + second.value().status_code;
     }
 
+    /**
+     * @brief Record the task's initial thread and return an owned result.
+     */
+    auto spawned_value(std::thread::id& thread, std::shared_ptr<int> value) -> mcr::Task<std::unique_ptr<int>> {
+        thread = std::this_thread::get_id();
+        co_return std::make_unique<int>(*value);
+    }
+
+    /**
+     * @brief Preserve reference result identity when starting through the runtime.
+     */
+    auto spawned_reference(int& value) -> mcr::Task<int&> {
+        co_return value;
+    }
+
+    /**
+     * @brief Raise an exception from a task started on the continuation thread.
+     */
+    auto spawned_failure() -> mcr::Task<int> {
+        throw std::runtime_error{ "spawned failure" };
+        co_return 0;
+    }
+
+    /**
+     * @brief Append a step only after the scheduler starts this task.
+     */
+    auto record_step(std::vector<int>& order, int step) -> mcr::Task<void> {
+        order.push_back(step);
+        co_return;
+    }
+
+    /**
+     * @brief Switch threads and yield behind an already queued peer.
+     */
+    auto scheduled_chain(std::thread::id caller, std::vector<int>& order) -> mcr::Task<void> {
+        require(std::this_thread::get_id() == caller, "ordinary task startup must retain its calling thread");
+        (co_await mcr::Coro::Schedule()).value();
+        require(std::this_thread::get_id() != caller, "Schedule must switch to the continuation thread");
+        auto peer = mcr::Coro::Spawn(record_step(order, 2)).value();
+        require(order.empty(), "Spawn must enqueue a peer without running it inline");
+        order.push_back(1);
+        (co_await mcr::Coro::Schedule()).value();
+        order.push_back(3);
+        co_await std::move(peer);
+    }
+
+    /**
+     * @brief Hold the continuation thread to observe accepted work before it starts.
+     */
+    auto hold_scheduler(std::promise<void>& entered, std::shared_future<void> release) -> mcr::Task<void> {
+        entered.set_value();
+        require(release.wait_for(3s) == std::future_status::ready, "scheduler test must release its continuation");
+        co_return;
+    }
+
+    /**
+     * @brief Observe cancellation before any task-specific asynchronous operation.
+     */
+    auto stop_requested() -> mcr::Task<bool> {
+        co_return (co_await mcr::this_coro::stop_token).stop_requested();
+    }
+
+    /**
+     * @brief Preserve scheduling rejection as a Result for the caller.
+     */
+    auto schedule_result() -> mcr::Task<mcr::Result<void>> {
+        co_return co_await mcr::Coro::Schedule();
+    }
+
+    /**
+     * @brief Reject reuse of moved or consumed scheduling state without registering another resume.
+     */
+    auto schedule_ownership() -> mcr::Task<void> {
+        auto source = mcr::Coro::Schedule();
+        static_assert(!std::is_copy_constructible_v<decltype(source)>);
+        auto destination = std::move(source);
+        try {
+            (co_await source).value();
+            require(false, "a moved scheduling awaiter must be rejected");
+        } catch (std::logic_error const&) {}
+        (co_await destination).value();
+        try {
+            (co_await destination).value();
+            require(false, "a consumed scheduling awaiter must be rejected");
+        } catch (std::logic_error const&) {}
+    }
+
+    /**
+     * @brief Count tasks that were accepted concurrently with runtime shutdown.
+     */
+    auto count_start(std::atomic_int& runs) -> mcr::Task<void> {
+        ++runs;
+        co_return;
+    }
+
+    /**
+     * @brief Verify queued startup, result types, exceptions, and cooperative scheduling.
+     */
+    auto scheduling(HttpServer const& server) -> void {
+        std::thread::id started;
+        auto value = mcr::Coro::Spawn(spawned_value(started, std::make_shared<int>(17))).value();
+        require(*mcr::sync_wait(std::move(value)) == 17 && started != std::this_thread::get_id(), "Spawn must start cold tasks on the continuation thread and retain move-only results");
+        int referenced{ 5 };
+        mcr::sync_wait(mcr::Coro::Spawn(spawned_reference(referenced)).value()) = 9;
+        require(referenced == 9, "Spawn must preserve reference results");
+        try {
+            (void)mcr::sync_wait(mcr::Coro::Spawn(spawned_failure()).value());
+            require(false, "spawned exceptions must reach the result consumer");
+        } catch (std::runtime_error const& error) {
+            require(std::string_view{ error.what() } == "spawned failure", "Spawn must preserve the original exception");
+        }
+        try {
+            (void)mcr::Coro::Spawn(mcr::Task<void>{});
+            require(false, "Spawn must reject empty tasks");
+        } catch (std::logic_error const&) {}
+        auto completed = spawned_reference(referenced);
+        completed.Start();
+        require(&mcr::sync_wait(mcr::Coro::Spawn(std::move(completed)).value()) == &referenced, "Spawn must accept an already started task without restarting it");
+
+        std::vector<int> order;
+        mcr::sync_wait(scheduled_chain(std::this_thread::get_id(), order));
+        require(order == std::vector<int>{ 1, 2, 3 }, "Schedule on the continuation thread must yield behind queued work");
+        mcr::sync_wait(schedule_ownership());
+
+        std::promise<void> entered, release;
+        auto began = entered.get_future();
+        auto held = mcr::Coro::Spawn(hold_scheduler(entered, release.get_future().share())).value();
+        require(began.wait_for(3s) == std::future_status::ready, "scheduler must be held before posting cancellable tasks");
+        auto before = server.Connections();
+        auto request = mcr::Coro::Spawn(get(server, "/hello")).value();
+        auto observed = mcr::Coro::Spawn(stop_requested()).value();
+        auto owned = std::make_shared<int>(29);
+        std::weak_ptr<int> weak = owned;
+        std::thread::id abandoned_thread;
+        {
+            auto abandoned = mcr::Coro::Spawn(spawned_value(abandoned_thread, std::move(owned))).value();
+        }
+        require(!weak.expired(), "discarding a queued task must leave its cold frame owned by the scheduler");
+        require(request.Cancel() && observed.Cancel(), "queued tasks must expose their cancellation sources");
+        release.set_value();
+        mcr::sync_wait(std::move(held));
+        require(mcr::sync_wait(std::move(request)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK && server.Connections() == before, "cancelling a spawned request before startup must prevent network I/O");
+        require(mcr::sync_wait(std::move(observed)), "the public stop-token query must observe queued cancellation");
+        mcr::sync_wait(schedule_result()).value();
+        require(weak.expired() && abandoned_thread == started, "an abandoned queued task must run once and release its frame on the continuation thread");
+    }
+
     auto concurrent(HttpServer const& server) -> void {
         std::mutex threads_mutex;
         std::set<std::thread::id> io_threads;
@@ -217,6 +364,17 @@ namespace {
                           } });
         active.Start();
         require(seen.wait_for(3s) == std::future_status::ready, "request must be active at shutdown");
+        std::promise<void> scheduler_entered, scheduler_release;
+        auto scheduler_began = scheduler_entered.get_future();
+        auto held = mcr::Coro::Spawn(hold_scheduler(scheduler_entered, scheduler_release.get_future().share())).value();
+        require(scheduler_began.wait_for(3s) == std::future_status::ready, "scheduler must be held before queuing shutdown work");
+        std::vector<int> steps;
+        std::vector<mcr::Task<void>> scheduled;
+        for (int index{}; index < 8; ++index) {
+            scheduled.push_back(mcr::Coro::Spawn(record_step(steps, index)).value());
+        }
+        auto yielded = schedule_result();
+        yielded.Start();
         // Hold the I/O thread inside a bounded callback, making the pending queue deterministic.
         std::atomic_int queued_callbacks{};
         std::vector<mcr::Task<mcr::Result<mcr::Response>>> queued;
@@ -227,7 +385,29 @@ namespace {
                                  } }));
             queued.back().Start();
         }
-        std::jthread cleanup{ [] { mcr::Coro::Cleanup().value(); } };
+        std::latch race{ 2 };
+        std::atomic_int runs{};
+        std::vector<mcr::Task<void>> racing;
+        std::exception_ptr post_error;
+        std::jthread poster{ [&] {
+            race.arrive_and_wait();
+            try {
+                for (int index{}; index < 200; ++index) {
+                    auto posted = mcr::Coro::Spawn(count_start(runs));
+                    if (posted) {
+                        racing.push_back(std::move(*posted));
+                    } else {
+                        require(posted.error().code == mcr::ErrorCode::FAILED_INIT, "shutdown races must reject startup with FAILED_INIT");
+                    }
+                }
+            } catch (...) {
+                post_error = std::current_exception();
+            }
+        } };
+        std::jthread cleanup{ [&] {
+            race.arrive_and_wait();
+            mcr::Coro::Cleanup().value();
+        } };
         bool stopping{};
         auto deadline = std::chrono::steady_clock::now() + 2s;
         while (!stopping && std::chrono::steady_clock::now() < deadline) {
@@ -235,8 +415,22 @@ namespace {
             std::this_thread::yield();
         }
         release.set_value();
+        scheduler_release.set_value();
         cleanup.join();
+        poster.join();
+        if (post_error) {
+            std::rethrow_exception(post_error);
+        }
         require(stopping, "cleanup must close submissions before joining I/O");
+        mcr::sync_wait(std::move(held));
+        for (auto& task : scheduled) {
+            mcr::sync_wait(std::move(task));
+        }
+        require(steps == std::vector<int>{ 0, 1, 2, 3, 4, 5, 6, 7 } && mcr::sync_wait(std::move(yielded)), "cleanup must drain all accepted startup and scheduling work in queue order");
+        for (auto& task : racing) {
+            mcr::sync_wait(std::move(task));
+        }
+        require(runs == static_cast<int>(racing.size()), "every startup racing shutdown must either be rejected or execute exactly once");
         require(mcr::sync_wait(std::move(active)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK, "shutdown must finish active tasks before returning");
         for (auto& task : queued) {
             require(mcr::sync_wait(std::move(task)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK, "shutdown must complete every queued task");
@@ -244,6 +438,12 @@ namespace {
         require(queued_callbacks == 0, "queued requests must not enter curl after shutdown begins");
         mcr::Coro::Cleanup().value();
         require(!mcr::sync_wait(get(server, "/hello")), "submissions after cleanup must return an error");
+        require(!mcr::sync_wait(schedule_result()), "Schedule after cleanup must return an error without suspending");
+        auto owned = std::make_shared<int>(23);
+        std::weak_ptr<int> weak = owned;
+        std::thread::id unstarted;
+        auto rejected = mcr::Coro::Spawn(spawned_value(unstarted, std::move(owned)));
+        require(!rejected && rejected.error().code == mcr::ErrorCode::FAILED_INIT && weak.expired() && unstarted == std::thread::id{}, "rejected startup must release its cold frame without running the task");
     }
 } // namespace
 
@@ -260,6 +460,7 @@ int main() {
         require(server.Connections() == before, "discarded cold HTTP tasks must not start requests");
         methods(server);
         ownership(server);
+        scheduling(server);
         concurrent(server);
         errors(server);
         cancellation(server);
