@@ -47,6 +47,7 @@ jobs:
 
       - name: Generate documentation
         run: |
+          mkdir -p target/doxygen
           doxygen Doxyfile
           test -s target/doxygen/html/index.html
 

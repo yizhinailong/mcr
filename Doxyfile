@@ -1,6 +1,7 @@
 # Doxyfile 1.18.0
 
 # 从仓库根目录运行：doxygen Doxyfile
+# 首次检出或清理后先创建 target/doxygen。
 # 项目配置与使用说明：docs/doxygen.md
 
 # This file describes the settings to be used by the documentation system

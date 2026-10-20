@@ -12,12 +12,17 @@ Doxygen 从源码注释生成类、函数、参数和返回值说明，并将 Ma
 
 ```sh
 doxygen --version
+mkdir -p target/doxygen
 doxygen Doxyfile
 ```
 
-使用浏览器打开 `target/doxygen/html/index.html`。在 Windows PowerShell 中可以执行：
+Doxygen 不会递归创建输出路径，首次检出或执行 `mcpp clean` 后需先创建目录，
+见 [官方生成说明](https://www.doxygen.nl/manual/starting.html#step2)。
+使用浏览器打开 `target/doxygen/html/index.html`。Windows PowerShell 中可执行：
 
 ```powershell
+New-Item -ItemType Directory -Path .\target\doxygen -Force | Out-Null
+doxygen Doxyfile
 Invoke-Item .\target\doxygen\html\index.html
 ```
 
@@ -31,7 +36,7 @@ Invoke-Item .\target\doxygen\html\index.html
 它也支持从 Actions 页面手动运行；只有 `main` 分支的运行会发布网站。
 
 构建任务使用 `ubuntu-24.04`，下载 Doxygen 1.18.0 的官方 Linux 二进制包，
-按 [官方下载页](https://www.doxygen.nl/download.html) 的 SHA-256 校验后执行 `doxygen Doxyfile`，
+按 [官方下载页](https://www.doxygen.nl/download.html) 的 SHA-256 校验，创建输出目录后执行 `doxygen Doxyfile`，
 将 `target/doxygen/html/` 上传为 Pages artifact。独立部署任务在构建成功后发布该 artifact。
 生成的 HTML 通过工作流产物传递，无需提交到 Git，也无需安装 mcpp 或 C++ 工具链。
 升级 Doxygen 时，应同时更新工作流中的版本与校验和。
