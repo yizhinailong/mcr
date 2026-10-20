@@ -18,7 +18,6 @@
 
 import std;
 import mcr;
-import mcr.curlholder;
 
 static_assert(std::is_nothrow_copy_constructible_v<mcr::ConnectionPool>);
 static_assert(!std::is_copy_assignable_v<mcr::ConnectionPool>);

@@ -4,7 +4,6 @@
  */
 import std;
 import mcr;
-import mcr.threadpool;
 
 using PlainResult = mcr::utils::AsyncWrapper<int>;
 using CancellableResult = mcr::utils::AsyncWrapper<int, true>;

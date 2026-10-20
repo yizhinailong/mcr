@@ -6,7 +6,7 @@
 
 #include "fixtures/http_server.hpp"
 import std;
-import mcr.api;
+import mcr;
 
 namespace {
     using namespace std::chrono_literals;

@@ -3,7 +3,7 @@
  * @brief Verify local port options, implicit conversions, and uint16_t boundaries through their module.
  */
 import std;
-import mcr.transfer_options;
+import mcr;
 
 static_assert(!std::is_same_v<mcr::options::LocalPort, mcr::options::LocalPortRange>);
 

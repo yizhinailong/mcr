@@ -3,7 +3,7 @@
  * @brief Verify bearer token ownership, view lengths, and polymorphic extension points.
  */
 import std;
-import mcr.auth;
+import mcr;
 
 static_assert(!std::is_default_constructible_v<mcr::options::Bearer>);
 static_assert(std::is_convertible_v<std::string_view, mcr::options::Bearer>);

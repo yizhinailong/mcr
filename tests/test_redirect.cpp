@@ -3,7 +3,7 @@
  * @brief Verify redirect defaults, overloads, and flag semantics through the HTTP options module.
  */
 import std;
-import mcr.http;
+import mcr;
 
 using Flags = mcr::options::PostRedirectFlags;
 

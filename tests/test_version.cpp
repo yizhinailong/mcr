@@ -5,7 +5,6 @@
 #include <curl/curlver.h>
 import std;
 import mcr;
-import mcr.version;
 
 static_assert(mcr::VERSION_NUM == (mcr::VERSION_MAJOR << 16 | mcr::VERSION_MINOR << 8 | mcr::VERSION_PATCH));
 static_assert(mcr::CURL_VERSION_NUM == LIBCURL_VERSION_NUM);

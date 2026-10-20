@@ -3,7 +3,7 @@
  * @brief Verify HTTP version availability, public option semantics, and cpr ordinal compatibility.
  */
 import std;
-import mcr.http;
+import mcr;
 
 using Code = mcr::options::HttpVersionCode;
 

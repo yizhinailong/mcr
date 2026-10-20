@@ -17,8 +17,7 @@
 
 #include <curl/curl.h>
 import std;
-import mcr.types;
-import mcr.util;
+import mcr;
 
 namespace mcr::test {
     using namespace std::chrono_literals;

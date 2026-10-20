@@ -7,8 +7,7 @@
 #include "fixtures/http_server.hpp"
 
 import std;
-import mcr.session;
-import mcr.util;
+import mcr;
 
 static_assert(!std::is_copy_constructible_v<mcr::Session> && !std::is_move_constructible_v<mcr::Session>);
 static_assert(std::is_copy_constructible_v<mcr::Response> && std::is_move_constructible_v<mcr::Response>);

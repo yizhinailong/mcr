@@ -3,7 +3,7 @@
  * @brief Exercise lazy tasks, ownership, continuations, exceptions, and cancellation.
  */
 import std;
-import mcr.task;
+import mcr;
 
 namespace {
     auto require(bool value, std::string_view message) -> void {

@@ -3,7 +3,7 @@
  * @brief Verify body-view borrowing, binary and empty input, and Buffer interoperability.
  */
 import std;
-import mcr.body;
+import mcr;
 
 static_assert(std::is_final_v<mcr::BodyView>);
 static_assert(std::is_trivially_copyable_v<mcr::BodyView>);

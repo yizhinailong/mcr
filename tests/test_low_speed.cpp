@@ -3,7 +3,7 @@
  * @brief Verify chrono-only low-speed construction, duration units, boundaries, and public updates.
  */
 import std;
-import mcr.transfer_options;
+import mcr;
 
 static_assert(std::is_same_v<decltype(mcr::options::LowSpeed::limit), std::int32_t>);
 static_assert(std::is_same_v<decltype(mcr::options::LowSpeed::time), std::chrono::seconds>);

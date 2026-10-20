@@ -3,7 +3,7 @@
  * @brief Verify optional range endpoints, full-width formatting, and ordered multi-range ownership.
  */
 import std;
-import mcr.http;
+import mcr;
 
 static_assert(std::is_same_v<decltype(mcr::options::Range::resume_from), std::int64_t>);
 static_assert(std::is_same_v<decltype(mcr::options::Range::finish_at), std::int64_t>);

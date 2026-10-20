@@ -3,7 +3,7 @@
  * @brief Verify reserve size compatibility and boundaries through the transfer options module.
  */
 import std;
-import mcr.transfer_options;
+import mcr;
 
 static_assert(!std::is_default_constructible_v<mcr::options::ReserveSize>);
 static_assert(std::is_convertible_v<std::size_t, mcr::options::ReserveSize>);

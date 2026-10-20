@@ -3,7 +3,7 @@
  * @brief Verify encoding names, deduplication, empty sets, and disabled validation through the HTTP options module.
  */
 import std;
-import mcr.http;
+import mcr;
 
 using Methods = mcr::options::AcceptEncodingMethods;
 
