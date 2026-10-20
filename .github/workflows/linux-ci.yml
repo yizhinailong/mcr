@@ -1,0 +1,85 @@
+name: Linux CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Linux x64 build and test
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python for TOML parsing
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Verify tag matches package version
+        if: github.ref_type == 'tag'
+        shell: python
+        run: |
+          import os
+          import tomllib
+
+          with open("mcpp.toml", "rb") as manifest:
+              version = tomllib.load(manifest)["package"]["version"]
+          expected = f"v{version}"
+          actual = os.environ["GITHUB_REF_NAME"]
+          if actual != expected:
+              raise ValueError(f"Tag {actual} must match package version {expected}")
+          print(f"Verified {actual} matches [package].version.")
+
+      - name: Install mcpp
+        run: |
+          mcpp_version='2026.9.11.1'
+          mcpp_sha256='efcb0844a31b5e70a2157c59a91073d42886bf104f0062815d38ffaab7fdae05'
+          archive_name="mcpp-$mcpp_version-linux-x86_64"
+          archive_path="$RUNNER_TEMP/$archive_name.tar.gz"
+          install_root="$RUNNER_TEMP/$archive_name"
+
+          curl --fail --location --retry 3 \
+            "https://github.com/mcpp-community/mcpp/releases/download/v$mcpp_version/$archive_name.tar.gz" \
+            --output "$archive_path"
+          printf '%s  %s\n' "$mcpp_sha256" "$archive_path" | sha256sum --check
+          tar -xzf "$archive_path" -C "$RUNNER_TEMP"
+          test -x "$install_root/bin/mcpp"
+
+          # Keep the bundled registry/bin/xlings in this isolated MCPP_HOME.
+          export MCPP_HOME="$install_root"
+          export PATH="$install_root/bin:$PATH"
+          printf 'MCPP_HOME=%s\n' "$install_root" >> "$GITHUB_ENV"
+          printf '%s\n' "$install_root/bin" >> "$GITHUB_PATH"
+          "$install_root/bin/mcpp" --version
+
+      - name: Install LLVM toolchain
+        run: mcpp toolchain install llvm 22.1.8
+
+      - name: Select LLVM toolchain
+        run: mcpp toolchain default llvm@22.1.8
+
+      - name: Build
+        run: mcpp build
+
+      - name: Test
+        run: mcpp test
