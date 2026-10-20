@@ -21,6 +21,7 @@ static_assert(std::is_convertible_v<mcr::Cookie, mcr::Cookies>);
 namespace {
 
     using namespace std::chrono;
+    using namespace std::chrono_literals;
 
     auto check(bool condition, std::string_view message) -> bool {
         if (!condition) {
