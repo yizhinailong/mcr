@@ -83,3 +83,20 @@ jobs:
 
       - name: Test
         run: mcpp test
+
+      - name: Package release
+        if: github.ref_type == 'tag'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="$RUNNER_TEMP/mcr-$version-linux-x64.tar.gz"
+          mcpp pack --release -o "$archive"
+          test -f "$archive"
+
+      - name: Upload package
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcr-linux-x64
+          path: ${{ runner.temp }}/mcr-*-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 7

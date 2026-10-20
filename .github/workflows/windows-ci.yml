@@ -96,3 +96,23 @@ jobs:
 
       - name: Test
         run: mcpp test
+
+      - name: Package release
+        if: github.ref_type == 'tag'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $archive = Join-Path $env:RUNNER_TEMP "mcr-$version-windows-x64.zip"
+          mcpp pack --release -o $archive
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $archive)) {
+              throw 'mcpp pack did not produce the expected archive.'
+          }
+
+      - name: Upload package
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcr-windows-x64
+          path: ${{ runner.temp }}/mcr-*-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7

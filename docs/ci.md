@@ -4,7 +4,7 @@
 
 Windows CI 和 Linux CI 是两个独立工作流，在分支推送和 PR 时分别运行，也支持手动触发。
 发布流程由版本标签工作流和 Release 工作流负责：前者创建带注释的标签，
-后者复用两个平台的 CI，待构建和测试均成功后发布 GitHub Release。
+后者复用两个平台的 CI，待构建和测试均成功后发布 GitHub Release 并附加打包产物。
 逻辑直接写在 YAML 中，不依赖额外脚本。
 内联 Python 使用标准库 tomllib 解析版本，PowerShell 负责 Git 和工作流触发，
 工具安装分别使用 PowerShell（Windows）和 Bash（Linux）。
@@ -56,7 +56,10 @@ Windows CI 和 Linux CI 是两个独立工作流，在分支推送和 PR 时分�
 在标签引用上运行时检查标签与包版本一致。随后安装经过固定 SHA-256 校验和验证的
 mcpp 官方版本 `2026.10.19.1` 到运行器临时目录，保留安装包内置的 registry/bin/xlings，
 并设置隔离的 MCPP_HOME（Windows 使用 xlings.exe）。随后安装并选择 `llvm@23.1.3`，
-依次执行 `mcpp build` 和 `mcpp test`。Linux 的 OpenSSL 依赖和编译定义由 mcpp.toml 提供。
+依次执行 `mcpp build` 和 `mcpp test`。分支推送和 PR 只运行测试，不打包。
+标签引用（即版本变化创建的标签）在测试通过后追加 `mcpp pack --release`，
+把接口和预构建产物打成 `mcr-<version>-windows-x64.zip` 或
+`mcr-<version>-linux-x64.tar.gz`，并作为 Actions 产物上传。Linux 的 OpenSSL 依赖和编译定义由 mcpp.toml 提供。
 Linux 使用工具链自带的 libc++ 23，提供代码所需的 `std::views::enumerate`，
 其标准库支持情况见 [libc++ C++23 状态](https://libcxx.llvm.org/Status/Cxx23.html)。
 Windows 任务额外准备 MSVC x64 环境，托管镜像提供 Visual Studio 和 Windows SDK。
@@ -76,14 +79,15 @@ Windows 任务额外准备 MSVC x64 环境，托管镜像提供 Visual Studio �
 工作流复用规则见 [GitHub 文档](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)。
 
 release 任务在 windows-2025 上运行，通过 `needs: [windows, linux]` 等待两个平台均成功，
-且仅在 v* 标签引用上运行。
-它执行 `gh release create --verify-tag --generate-notes`，
-以 `mcr <version>` 为标题创建发布。
+且仅在 v* 标签引用上运行。它先下载两个平台上传的打包归档，
+再执行 `gh release create --verify-tag --generate-notes`，
+以 `mcr <version>` 为标题创建发布并附上这些归档。
 标签必须已存在，发布操作不会额外创建标签。
-0.2.0-rc.1 等预发布版本标记为预发布；重跑时保留已有 Release。
+0.2.0-rc.1 等预发布版本标记为预发布；重跑时保留已有 Release，
+并用 `gh release upload --clobber` 更新同名归档。
 
-独立运行 Windows CI 或 Linux CI、基于分支的手动运行、构建失败或测试失败均不发布。
-GitHub 提供标签对应的源码归档，本模块库不附加可执行构建产物。
+独立运行 Windows CI 或 Linux CI、基于分支的手动运行、构建失败或测试失败均不发布，
+也不会产生打包归档。GitHub 标签页同时提供对应的源码归档。
 参数说明见 [GitHub CLI 发布文档](https://cli.github.com/manual/gh_release_create)。
 
 在仓库根目录验证：
