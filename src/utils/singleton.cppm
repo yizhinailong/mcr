@@ -2,7 +2,7 @@
  * @file singleton.cppm
  * @brief A CRTP singleton with lazy initialization and explicit, one-time shutdown.
  */
-export module mcr.singleton;
+export module mcr:singleton;
 
 import std;
 

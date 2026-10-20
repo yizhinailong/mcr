@@ -2,7 +2,7 @@
  * @file status_code.cppm
  * @brief HTTP status constants and response classification compatible with cpr.
  */
-export module mcr.status_code;
+export module mcr:status_code;
 
 export namespace mcr::status {
 

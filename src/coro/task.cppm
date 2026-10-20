@@ -2,7 +2,7 @@
  * @file task.cppm
  * @brief Lazy, single-consumer coroutine tasks with cooperative cancellation.
  */
-export module mcr.task;
+export module mcr:task;
 
 import std;
 

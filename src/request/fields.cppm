@@ -2,9 +2,9 @@
  * @file fields.cppm
  * @brief Ordered URL query parameters and form payloads built on the common curl container.
  */
-export module mcr.fields;
+export module mcr:fields;
 
-import mcr.curl_container;
+import :curl_container;
 import std;
 
 export namespace mcr {

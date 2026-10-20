@@ -2,10 +2,10 @@
  * @file cookies.cppm
  * @brief Owned cookie metadata and ordered request cookie serialization.
  */
-export module mcr.cookies;
+export module mcr:cookies;
 
-import mcr.curlholder;
-export import mcr.error;
+import :curlholder;
+export import :error;
 import std;
 
 export namespace mcr {

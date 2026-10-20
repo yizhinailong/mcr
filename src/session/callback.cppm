@@ -2,9 +2,9 @@
  * @file callback.cppm
  * @brief Transfer callback options and shared cancellation state, following cpr's interfaces.
  */
-export module mcr.callback;
+export module mcr:callback;
 
-export import mcr.types;
+export import :types;
 
 import std;
 

@@ -2,9 +2,9 @@
  * @file http.cppm
  * @brief HTTP protocol versions, response encodings, redirects, and transfer ranges.
  */
-export module mcr.http;
+export module mcr:http;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr::options {

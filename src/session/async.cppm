@@ -2,13 +2,13 @@
  * @file async.cppm
  * @brief Global thread-pool submission and explicit asynchronous runtime lifecycle.
  */
-export module mcr.async;
+export module mcr:async;
 
-export import mcr.async_wrapper;
+export import :async_wrapper;
 
-import mcr.singleton;
-import mcr.threadpool;
-export import mcr.error;
+import :singleton;
+import :threadpool;
+export import :error;
 import std;
 
 export namespace mcr {

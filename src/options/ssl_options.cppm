@@ -4,8 +4,8 @@
  */
 module;
 #include <curl/curl.h>
-export module mcr.ssl_options;
-import mcr.secure_string;
+export module mcr:ssl_options;
+import :secure_string;
 import std;
 
 export namespace mcr::options {

@@ -6,9 +6,9 @@ module;
 
 #include <curl/curl.h>
 
-export module mcr.curlmultiholder;
+export module mcr:curlmultiholder;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr::curl {

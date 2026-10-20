@@ -2,9 +2,9 @@
  * @file auth.cppm
  * @brief HTTP authentication modes, owned credentials, and bearer tokens.
  */
-export module mcr.auth;
+export module mcr:auth;
 
-import mcr.secure_string;
+import :secure_string;
 import std;
 
 export namespace mcr::options {

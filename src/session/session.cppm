@@ -6,31 +6,31 @@ module;
 
 #include <curl/curl.h>
 
-// Windows COM headers define this macro, which would corrupt mcr.interface imports.
+// Windows COM headers define this macro, which would corrupt mcr:interface imports.
 #ifdef interface
     #undef interface
 #endif
 
-export module mcr.session;
+export module mcr:session;
 
-export import mcr.async;
-export import mcr.auth;
-export import mcr.body;
-export import mcr.callback;
-export import mcr.connection_pool;
-export import mcr.fields;
-export import mcr.http;
-export import mcr.interface;
-export import mcr.multipart;
-export import mcr.proxy;
-export import mcr.response;
-export import mcr.sse;
-export import mcr.ssl_options;
-export import mcr.transfer_options;
+export import :async;
+export import :auth;
+export import :body;
+export import :callback;
+export import :connection_pool;
+export import :fields;
+export import :http;
+export import :interface;
+export import :multipart;
+export import :proxy;
+export import :response;
+export import :sse;
+export import :ssl_options;
+export import :transfer_options;
 
-import mcr.util;
-import mcr.curlmultiholder;
-export import mcr.error;
+import :util;
+import :curlmultiholder;
+export import :error;
 import std;
 
 export namespace mcr {

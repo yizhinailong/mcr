@@ -2,10 +2,10 @@
  * @file multipart.cppm
  * @brief Multipart descriptors for owned text, file paths, and borrowed byte buffers.
  */
-export module mcr.multipart;
+export module mcr:multipart;
 
-export import mcr.buffer;
-export import mcr.file;
+export import :buffer;
+export import :file;
 
 import std;
 

@@ -2,7 +2,7 @@
  * @file sse.cppm
  * @brief Incremental Server-Sent Event parsing and callback adaptation.
  */
-export module mcr.sse;
+export module mcr:sse;
 
 import std;
 

@@ -2,9 +2,9 @@
  * @file transfer_options.cppm
  * @brief Common request options for timing, rates, connection selection, and diagnostics.
  */
-export module mcr.transfer_options;
+export module mcr:transfer_options;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr::options {

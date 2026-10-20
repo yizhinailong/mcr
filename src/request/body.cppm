@@ -2,13 +2,13 @@
  * @file body.cppm
  * @brief Owned request bodies and borrowed byte views for HTTP transfers.
  */
-export module mcr.body;
+export module mcr:body;
 
-export import mcr.buffer;
-export import mcr.file;
-export import mcr.types;
+export import :buffer;
+export import :file;
+export import :types;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr {

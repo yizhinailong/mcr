@@ -2,9 +2,9 @@
  * @file threadpool.cppm
  * @brief A synchronized, elastic thread pool with future-based task results.
  */
-export module mcr.threadpool;
+export module mcr:threadpool;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr::utils {

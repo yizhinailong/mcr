@@ -2,10 +2,10 @@
  * @file api.cppm
  * @brief One-shot HTTP requests, coroutines, asynchronous continuations and tuple-based batches.
  */
-export module mcr.api;
-export import mcr.session;
-export import mcr.task;
-import mcr.coro_runtime;
+export module mcr:api;
+export import :session;
+export import :task;
+import :coro_runtime;
 import std;
 
 namespace mcr::detail {

@@ -6,15 +6,15 @@ module;
 
 #include <curl/curl.h>
 
-export module mcr.response;
+export module mcr:response;
 
-export import mcr.cert_info;
-export import mcr.cookies;
-export import mcr.error;
-export import mcr.types;
+export import :cert_info;
+export import :cookies;
+export import :error;
+export import :types;
 
-import mcr.curlholder;
-import mcr.util;
+import :curlholder;
+import :util;
 import std;
 
 export namespace mcr {

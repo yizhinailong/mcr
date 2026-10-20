@@ -2,11 +2,11 @@
  * @file curl_container.cppm
  * @brief Ordered parameter and form-pair storage with cpr-compatible serialization.
  */
-export module mcr.curl_container;
+export module mcr:curl_container;
 
-export import mcr.curlholder;
+export import :curlholder;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr {

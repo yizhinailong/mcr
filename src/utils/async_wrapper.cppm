@@ -2,7 +2,7 @@
  * @file async_wrapper.cppm
  * @brief Movable future results with optional cooperative cancellation.
  */
-export module mcr.async_wrapper;
+export module mcr:async_wrapper;
 
 import std;
 

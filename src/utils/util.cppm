@@ -6,16 +6,16 @@ module;
 
 #include <curl/curl.h>
 
-export module mcr.util;
+export module mcr:util;
 
-export import mcr.callback;
-export import mcr.cookies;
-export import mcr.curlholder;
-export import mcr.secure_string;
-export import mcr.sse;
-export import mcr.types;
+export import :callback;
+export import :cookies;
+export import :curlholder;
+export import :secure_string;
+export import :sse;
+export import :types;
 
-export import mcr.error;
+export import :error;
 import std;
 
 namespace mcr::utils::detail {

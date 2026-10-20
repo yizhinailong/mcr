@@ -5,12 +5,12 @@
 module;
 #include <curl/curl.h>
 
-export module mcr.coro_runtime;
+export module mcr:coro_runtime;
 
-import mcr.task;
-import mcr.session;
-import mcr.curlholder;
-import mcr.curlmultiholder;
+import :task;
+import :session;
+import :curlholder;
+import :curlmultiholder;
 import std;
 
 export namespace mcr::detail {

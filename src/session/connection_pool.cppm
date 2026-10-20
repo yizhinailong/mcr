@@ -6,9 +6,9 @@ module;
 
 #include <curl/curl.h>
 
-export module mcr.connection_pool;
+export module mcr:connection_pool;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr {

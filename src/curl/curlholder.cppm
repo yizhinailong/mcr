@@ -6,11 +6,11 @@ module;
 
 #include <curl/curl.h>
 
-export module mcr.curlholder;
+export module mcr:curlholder;
 
-export import mcr.secure_string;
+export import :secure_string;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr::curl {

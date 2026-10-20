@@ -2,9 +2,9 @@
  * @file buffer.cppm
  * @brief Borrow a contiguous byte range with an owned multipart filename.
  */
-export module mcr.buffer;
+export module mcr:buffer;
 
-export import mcr.error;
+export import :error;
 import std;
 
 export namespace mcr {

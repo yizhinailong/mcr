@@ -11,7 +11,7 @@ module;
     #include <openssl/ssl.h>
     #include <openssl/x509_vfy.h>
 #endif
-export module mcr.ssl_ctx;
+export module mcr:ssl_ctx;
 
 import std;
 

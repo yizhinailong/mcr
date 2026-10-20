@@ -2,11 +2,11 @@
  * @file proxy.cppm
  * @brief Protocol-specific proxy addresses and encoded authentication credentials.
  */
-export module mcr.proxy;
+export module mcr:proxy;
 
-import mcr.secure_string;
-import mcr.util;
-export import mcr.error;
+import :secure_string;
+import :util;
+export import :error;
 import std;
 
 export namespace mcr::options {

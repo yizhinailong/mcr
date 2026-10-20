@@ -2,7 +2,7 @@
  * @file cert_info.cppm
  * @brief Ordered, owned strings describing one certificate.
  */
-export module mcr.cert_info;
+export module mcr:cert_info;
 
 import std;
 

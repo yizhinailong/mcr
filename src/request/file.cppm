@@ -2,7 +2,7 @@
  * @file file.cppm
  * @brief File-upload descriptors and ordered file collections using only the standard library.
  */
-export module mcr.file;
+export module mcr:file;
 
 import std;
 

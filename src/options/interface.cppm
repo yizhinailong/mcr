@@ -2,9 +2,9 @@
  * @file interface.cppm
  * @brief Owned network interface selection for HTTP connections.
  */
-export module mcr.interface;
+export module mcr:interface;
 
-export import mcr.types;
+export import :types;
 
 import std;
 

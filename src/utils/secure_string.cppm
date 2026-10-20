@@ -2,7 +2,7 @@
  * @file secure_string.cppm
  * @brief A standard-compatible allocator that wipes released storage and its string alias.
  */
-export module mcr.secure_string;
+export module mcr:secure_string;
 
 import std;
 
