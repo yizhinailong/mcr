@@ -6,13 +6,13 @@
 `cmake/cprver.h.in`。`import mcr;` 导出 HTTP API 和版本信息，两者分别实现于
 `mcr:api` 和 `mcr:version` 分区。总入口也导出 SSL 上下文回调等后端接口及通用工具。
 HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
-`utils::AsyncWrapper<Result<Response>>`；提交结果和请求执行结果分别检查，见[错误处理](error.md)。
+`utils::AsyncWrapper<Result<Response>>`；提交结果和请求执行结果分别检查，见[错误处理](utils/error.md)。
 
 | 操作 | 返回值 | 执行方式 |
 | --- | --- | --- |
 | `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Result<Response>` | 临时 Session，同步请求 |
 | 各方法的 `*Async` | `Result<AsyncResponse>` | 全局线程池中的独立请求 |
-| 各方法的 `*Coro` | `mcr::Task<Result<Response>>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro.md) |
+| 各方法的 `*Coro` | `mcr::Task<Result<Response>>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro/coro.md) |
 | 各方法的 `*Callback` | `Result<mcr::utils::AsyncWrapper<回调返回类型, true>>` | 请求完成后在线程池任务中调用完成回调 |
 | `MultiGet` / `MultiPost` / `MultiPut` / `MultiHead` / `MultiDelete` / `MultiOptions` / `MultiPatch` | `Result<std::vector<Response>>` | 由 MultiPerform 并发执行，结果保持参数顺序 |
 | 各批量方法的 `Multi*Async` | `Result<std::vector<mcr::utils::AsyncWrapper<Result<Response>, true>>>` | 独立提交，可分别取消 |
@@ -22,7 +22,7 @@ HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
 
 ## 请求选项与结果
 
-请求选项沿用 Session 的 `SetOption`。传输配置类型位于 `mcr::options`，详见[选项命名空间](options.md)。
+请求选项沿用 Session 的 `SetOption`。传输配置类型位于 `mcr::options`，详见[选项命名空间](options/options.md)。
 以下均为函数内用法片段，需在已初始化 curl 的环境中执行；完整程序见[项目首页](../README.md)。
 
 ```cpp
@@ -110,8 +110,8 @@ auto metadata = task.Get().value();
 失败的传输可能留下部分文件。与 cpr 的区别是统一使用线程池、显式处理文件错误，
 并在 Windows 上避免文本模式转换字节。
 
-curl 的全局初始化、清理和全局线程池生命周期沿用 [Session 约定](session.md) 和
-[Async 约定](async.md)。显式清理 curl 前应等待所有异步任务完成；
+curl 的全局初始化、清理和全局线程池生命周期沿用 [Session 约定](session/session.md) 和
+[Async 约定](session/async.md)。显式清理 curl 前应等待所有异步任务完成；
 `Async::Cleanup()` 需在任务之外调用。
 
 ## 文件系统与版本信息
@@ -133,7 +133,7 @@ mcpp 的生成目录；修改版本会重新生成，无需维护第二份版本
 
 ## SSL 上下文
 
-SSL 上下文入口位于 `mcr::curl`，详见 [curl 后端命名空间](curl.md)：
+SSL 上下文入口位于 `mcr::curl`，详见 [curl 后端命名空间](curl/curl.md)：
 
 ```cpp
 #include <curl/curl.h>

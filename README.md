@@ -17,7 +17,7 @@
 | `compat.curl` | `8.21.0` | HTTP 传输 |
 | `compat.openssl` | `3.5.1` | Linux/macOS 的 OpenSSL 上下文支持 |
 
-Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows 和 Linux，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
+Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows 和 Linux，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
 
 <a id="快速开始"></a>
 
@@ -125,7 +125,7 @@ auto main() -> int {
 - 配置和本地操作失败通过 `Result` 返回。传输错误保存在 `Response::error`；HTTP 4xx/5xx 仍是普通响应，需要检查 `status_code`。用户回调与标准库资源异常继续传播。
 - `Body`、`Payload` 拥有数据；`BodyView` 和 Multipart 中的 `Buffer` 借用数据，底层存储必须有效到请求结束。
 - 同一个 Session 的配置与请求串行使用；Session 的异步方法需要通过 `std::shared_ptr` 管理会话。
-- 在启动工作线程前初始化 curl，完成全部请求后关闭已使用的异步运行时，再销毁剩余句柄并清理 curl。`Async::Cleanup()` 和 `Coro::Cleanup()` 的生命周期相互独立，均为永久关闭，详见 [异步运行时](docs/async.md) 和 [协程请求](docs/coro.md)。
+- 在启动工作线程前初始化 curl，完成全部请求后关闭已使用的异步运行时，再销毁剩余句柄并清理 curl。`Async::Cleanup()` 和 `Coro::Cleanup()` 的生命周期相互独立，均为永久关闭，详见 [异步运行时](docs/session/async.md) 和 [协程请求](docs/coro/coro.md)。
 
 mcr 采用 C++23 模块和独立命名空间，并增加协程及基于 `std::expected` 的结果接口。与 cpr 有意保留的 API 和行为差异记录在各模块文档中。
 

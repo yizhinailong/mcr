@@ -1,6 +1,6 @@
 # expected 接口迁移
 
-[文档索引](README.md) · [错误处理](error.md) · [项目首页](../README.md)
+[文档索引](README.md) · [错误处理](utils/error.md) · [项目首页](../README.md)
 
 mcr 使用 `Result<T> = std::expected<T, Error>` 报告可恢复的请求配置、资源初始化、
 文件操作及任务提交失败。以下接口变化是相对于原接口及 cpr 的有意差异，调用方需要同步调整。
@@ -87,7 +87,7 @@ if (created) {
 
 `Result<Response>` 成功表示取得响应快照，传输状态继续保存在 `Response::error`，
 HTTP 状态保存在 `Response::status_code`。网络错误仍可携带部分正文、响应头和计时信息；
-HTTP 4xx/5xx 仍是普通响应。详见[错误处理](error.md)。
+HTTP 4xx/5xx 仍是普通响应。详见[错误处理](utils/error.md)。
 
 这不是关闭 C++ 异常支持：标准库分配和线程创建失败、用户回调异常继续传播。
 通用 Task、AsyncWrapper 的无效状态操作、线程池配置与自身等待、Singleton 生命周期误用，
