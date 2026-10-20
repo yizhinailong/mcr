@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.error`，使用 `mcr::ErrorCode`、`Error` 和
+导入 `mcr`，使用 `mcr::ErrorCode`、`Error` 和
 `Result<T>`（即 `std::expected<T, mcr::Error>`）。
 `Result<void>` 表示没有返回值的操作。实现位于 `src/utils/error.cppm`，公开接口仍在 mcr 命名空间。
 

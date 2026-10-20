@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.async_wrapper`，使用
+导入 `mcr`，使用
 `mcr::utils::AsyncWrapper<RetType, is_cancellable>`。
 它参考 cpr 的 `include/cpr/async_wrapper.h`，拥有一个 `std::future<RetType>`，
 可移动、不可复制，结果支持值、引用、void 和仅可移动类型。

@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.curlmultiholder`，使用 `mcr::curl::CurlMultiHolder`。
+导入 `mcr`，使用 `mcr::curl::CurlMultiHolder`。
 其他接口与迁移规则见 [curl 后端](curl.md)。
 实现参考 cpr 的 `include/cpr/curlmultiholder.h` 和 `cpr/curlmultiholder.cpp`：
 `CurlMultiHolder::Create() -> Result<CurlMultiHolder>` 调用 curl_multi_init，公开 `CURLM* handle` 用于访问 libcurl，
@@ -12,7 +12,7 @@
 #include <curl/curl.h>
 
 import std;
-import mcr.curlmultiholder;
+import mcr;
 
 /**
  * @brief 初始化 curl 并执行一次空 multi 操作。

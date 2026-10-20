@@ -2,13 +2,13 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.body`，使用 `mcr::BodyView`。它参考 cpr 的
+导入 `mcr`，使用 `mcr::BodyView`。它参考 cpr 的
 `include/cpr/body_view.h`，为保存私有 `std::string_view m_body` 的 final 类。
-与 Body 共用模块；模块还导出 Buffer、File 和公共请求类型。
+与 Body 共用 `mcr:body` 分区；该分区还重新导出 Buffer、File 和公共请求类型。
 
 ```cpp
 import std;
-import mcr.body;
+import mcr;
 
 std::string source{ "x=5" };
 mcr::BodyView body{ source };

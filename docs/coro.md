@@ -6,10 +6,9 @@
 `GetCoro` / `PostCoro` / `PutCoro` / `HeadCoro` / `DeleteCoro` /
 `OptionsCoro` / `PatchCoro` / `DownloadCoro`。
 
-公共请求函数位于 `src/api.cppm`（`mcr.api`）；任务和运行时位于
-`src/coro/task.cppm`（`mcr.task`）及 `src/coro/runtime.cppm`（`mcr.coro_runtime`）。
-只使用任务类型时可单独 `import mcr.task;`。`mcr.api` 同时导出任务类型；
-运行时生命周期可单独通过 `import mcr.coro_runtime;` 访问。
+公共请求函数位于 `src/api.cppm`（`mcr:api` 分区）；任务和运行时位于
+`src/coro/task.cppm`（`mcr:task` 分区）及 `src/coro/runtime.cppm`（`mcr:coro_runtime` 分区）。
+这些分区均由 `import mcr;` 统一导出；`mcr:api` 同时导出任务类型。
 
 ## 基本用法
 

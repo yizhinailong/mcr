@@ -4,18 +4,17 @@
 
 `src/utils/` 集中放置基础类型、错误处理和通用工具。通用工具使用 `mcr::utils`；
 `types.cppm`、`error.cppm` 中的公共接口继续使用 `mcr`。
-各模块保持现有导入名。`import mcr;` 统一导出全部工具及公共基础类型、错误结果和异步结果类型，
-也可以按需单独导入对应模块。
+各分区保留现有名称。`import mcr;` 统一导出全部工具及公共基础类型、错误结果和异步结果类型。
 
-| 模块导入名 | 主要接口 |
+| 模块分区 | 主要接口 |
 | --- | --- |
-| `mcr.types` | `mcr::Url`、`mcr::UserAgent`、`mcr::Header`、`mcr::StringHolder<T>` 及 curl 兼容类型 |
-| `mcr.error` | `mcr::ErrorCode`、`mcr::Error`、`mcr::Result<T>` 及错误转换函数 |
-| `mcr.secure_string` | `mcr::utils::SecureAllocator<T>`、`mcr::utils::SecureString` |
-| `mcr.singleton` | `mcr::utils::Singleton<T>` |
-| `mcr.threadpool` | `mcr::utils::ThreadPool` 和 `DEFAULT_THREAD_POOL_*` 常量 |
-| `mcr.async_wrapper` | `mcr::utils::AsyncWrapper<T>`、`mcr::utils::CancellationResult` |
-| `mcr.util` | `mcr::utils::parse_header`、URL 编解码和 curl 回调适配函数 |
+| `mcr:types` | `mcr::Url`、`mcr::UserAgent`、`mcr::Header`、`mcr::StringHolder<T>` 及 curl 兼容类型 |
+| `mcr:error` | `mcr::ErrorCode`、`mcr::Error`、`mcr::Result<T>` 及错误转换函数 |
+| `mcr:secure_string` | `mcr::utils::SecureAllocator<T>`、`mcr::utils::SecureString` |
+| `mcr:singleton` | `mcr::utils::Singleton<T>` |
+| `mcr:threadpool` | `mcr::utils::ThreadPool` 和 `DEFAULT_THREAD_POOL_*` 常量 |
+| `mcr:async_wrapper` | `mcr::utils::AsyncWrapper<T>`、`mcr::utils::CancellationResult` |
+| `mcr:util` | `mcr::utils::parse_header`、URL 编解码和 curl 回调适配函数 |
 
 ```cpp
 import std;

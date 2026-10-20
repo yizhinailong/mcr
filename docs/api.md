@@ -3,9 +3,8 @@
 [文档索引](README.md) · [项目首页](../README.md)
 
 请求入口和版本接口参考 cpr 的 `api.h`、`ssl_ctx.h` / `ssl_ctx.cpp` 和
-`cmake/cprver.h.in`。`import mcr;` 导出 HTTP API 和版本信息，也可以分别导入
-`mcr.api`、`mcr.version`。总入口也导出 SSL 上下文回调等后端接口及通用工具；
-只需要 SSL 上下文接口时，可以单独导入 `mcr.ssl_ctx`。
+`cmake/cprver.h.in`。`import mcr;` 导出 HTTP API 和版本信息，两者分别实现于
+`mcr:api` 和 `mcr:version` 分区。总入口也导出 SSL 上下文回调等后端接口及通用工具。
 HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
 `utils::AsyncWrapper<Result<Response>>`；提交结果和请求执行结果分别检查，见[错误处理](error.md)。
 
@@ -127,7 +126,7 @@ curl 的全局初始化、清理和全局线程池生命周期沿用 [Session �
 
 C++23 通过 `import std;` 直接使用 `std::filesystem`。模块不导出预处理宏，版本信息改为可用于
 `static_assert` / `if constexpr` 的 `inline constexpr` 常量。
-`build.mcpp` 从 `mcpp.toml` 的 `[package].version` 生成 `mcr.version`，输出位于
+`build.mcpp` 从 `mcpp.toml` 的 `[package].version` 生成 `mcr:version`，输出位于
 mcpp 的生成目录；修改版本会重新生成，无需维护第二份版本号。
 完整版本字符串保留后缀，三段数字分别占 8 位；超出范围时构建失败。
 `CURL_VERSION_NUM` 描述构建头文件，运行时动态库信息仍应通过 curl 自身接口查询。

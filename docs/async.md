@@ -2,15 +2,14 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.async`，使用 `mcr::GlobalThreadPool`、`async` 和 `Async`。
-模块同时导出 `mcr.async_wrapper`，实现参考 cpr 的 `include/cpr/async.h` 和 `cpr/async.cpp`。
-总入口还导出底层工具和常量；只导入 async 时，如需直接命名单例或线程池工具接口，
-应另导入 `mcr.singleton` 或 `mcr.threadpool`。
+导入 `mcr`，使用 `mcr::GlobalThreadPool`、`async` 和 `Async`。
+实现同时位于 `mcr:async_wrapper` 分区，参考 cpr 的 `include/cpr/async.h` 和 `cpr/async.cpp`。
+总入口还导出底层工具和常量，包括 `mcr:singleton`、`mcr:threadpool` 分区中的接口。
 库级入口位于 `mcr`，底层工具位于 `mcr::utils`，见 [工具模块](utils.md)。
 
 ```cpp
 import std;
-import mcr.async;
+import mcr;
 
 /**
  * @brief 提交任务，取回结果后关闭全局线程池。

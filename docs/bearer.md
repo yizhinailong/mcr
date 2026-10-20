@@ -2,12 +2,12 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.auth`，使用 `mcr::options::Bearer`，接口参考 cpr 的 `include/cpr/bearer.h`。
-总入口同时导出安全字符串；只导入 `mcr.auth` 时，如需直接命名安全字符串类型，还需导入 `mcr.secure_string`。
+导入 `mcr`，使用 `mcr::options::Bearer`，接口参考 cpr 的 `include/cpr/bearer.h`。
+总入口同时导出 `mcr:secure_string` 分区中的安全字符串类型。
 
 ```cpp
 import std;
-import mcr.auth;
+import mcr;
 
 mcr::options::Bearer token{ "the_token" };
 mcr::options::Bearer from_view = std::string_view{ "another_token" };

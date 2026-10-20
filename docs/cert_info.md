@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.cert_info`，使用 `mcr::CertInfo`。
+导入 `mcr`，使用 `mcr::CertInfo`。
 
 ```cpp
 import std;
-import mcr.cert_info;
+import mcr;
 
 mcr::CertInfo certificate{
     "Subject:CN = test-server",

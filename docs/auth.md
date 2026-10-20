@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.auth`，使用 `mcr::options::AuthMode` 和 `Authentication`。
+导入 `mcr`，使用 `mcr::options::AuthMode` 和 `Authentication`。
 接口参考 cpr 的 `include/cpr/auth.h` 和 `cpr/auth.cpp`。
 
 ```cpp
-import mcr.auth;
+import mcr;
 
 mcr::options::Authentication auth{ "user", "password", mcr::options::AuthMode::BASIC };
 auto mode = auth.GetAuthMode();
@@ -41,7 +41,7 @@ auto credentials = auth.GetAuthString(); // 借用指向 "user:password" 的指�
 在第一个空字节处结束；因此该选项不能表示包含冒号的用户名，密码中的冒号可以保留。
 包装类型不验证这些输入。
 
-模块只直接依赖 `mcr.secure_string`，构造和查询不调用 curl。
+`mcr:auth` 分区只直接依赖 `mcr:secure_string`，构造和查询不调用 curl。
 安全分配器会擦除释放的堆存储；短字符串内联存储、来源和外部副本的限制见 [SecureString](secure_string.md)。
 
 与 cpr 的区别是模块、`mcr::options` 命名空间、私有字段 `m_auth_string` / `m_auth_mode`，

@@ -151,9 +151,9 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
 
 - Session、MultiPerform 及两种拦截器使用 `mcr` 命名空间；传输配置使用 `mcr::options`，
   TLS 选项标签使用 `mcr::options::ssl`，详见[选项命名空间](options.md)。为避免模块循环，这些会话和拦截器类型
-  同属 `mcr.session`，统一通过 `import mcr.session;` 使用。会话、TLS、拦截器和批量执行
+  同属 `mcr:session` 分区，统一通过 `import mcr;` 使用。会话、TLS、拦截器和批量执行
   均直接实现在 `src/session/session.cppm` 中。
-  总模块 `mcr` 也导出 `mcr.ssl_options` 和 `mcr.proxy`。
+  总模块 `mcr` 也导出 `mcr:ssl_options` 和 `mcr:proxy`。
 - 公共方法统一为 `Intercept` / `Proceed` 和 `ProxyAuthentication::Has`。
   TLS 替换、blob 复制、代理凭据解码、批次归属检查和异常恢复采用上述行为。
 - 当前 curl 8.21 依赖不再支持的 SSLv2、SSLv3、NPN 不提供选项。

@@ -18,36 +18,42 @@
 库代码直接在 `.cppm` 中实现。`session.cppm` 包含会话、TLS、拦截器和批量执行的
 声明及实现；`ssl_ctx.cppm` 包含 SSL 上下文回调的完整实现。
 
-`Body` 和 `BodyView` 合并在 `mcr.body`；`Parameters` 和 `Payload` 合并在
-`mcr.fields`。类型名称、所有权语义和序列化行为保持不变。
+`Body` 和 `BodyView` 合并在 `mcr:body` 分区；`Parameters` 和 `Payload` 合并在
+`mcr:fields` 分区。类型名称、所有权语义和序列化行为保持不变。
+
+`src/` 中的组件都是 `mcr` 的模块分区。例如 `src/request/body.cppm` 声明
+`export module mcr:body;`，依赖通过 `import :other;` 引入。分区不能被外部代码单独导入；
+`src/mcr.cppm` 作为主模块接口单元重新导出全部分区，外部代码只需 `import mcr;`。
+
+| 文件 | 分区 |
+| --- | --- |
+| `src/mcr.cppm` | `mcr`（主模块接口单元） |
+| `src/api.cppm` | `mcr:api` |
+| `src/request/body.cppm` | `mcr:body` |
+| `src/request/fields.cppm` | `mcr:fields` |
+| `src/http/response.cppm` | `mcr:response` |
+| `src/session/session.cppm` | `mcr:session` |
+| `src/options/http.cppm` | `mcr:http` |
+| `src/utils/types.cppm` | `mcr:types` |
+| `src/utils/error.cppm` | `mcr:error` |
+
+`import mcr;` 统一导出全部公开接口，包括请求 API、会话、请求与响应数据、配置选项、
+异步结果、状态码、版本信息，以及 curl 后端、安全字符串、单例、线程池和解析工具。
+`mcr:fields` 单独导出 `Parameter`、`Pair`，不重新导出 curl 容器分区。
+新增公开分区时，同时将其加入 `src/mcr.cppm` 的 `export import :name;` 列表。
+
+旧模块按下表迁移：
 
 | 原导入 | 当前导入 |
 | --- | --- |
-| `mcr.body_view` | `import mcr.body;` |
-| `mcr.parameters`、`mcr.payload` | `import mcr.fields;` |
-| `mcr.interceptor`、`mcr.multiperform` | `import mcr.session;` |
+| `import mcr.body_view;` | `import mcr;` |
+| `import mcr.parameters;`、`import mcr.payload;` | `import mcr;` |
+| `import mcr.interceptor;`、`import mcr.multiperform;` | `import mcr;` |
 
-以上旧模块不再提供独立文件。同组的多条导入可以合并成一条。
-文件路径、模块名和命名空间分别管理：
-
-```cpp
-import mcr.body;       // src/request/body.cppm
-import mcr.fields;     // src/request/fields.cppm
-import mcr.response;   // src/http/response.cppm
-import mcr.session;    // src/session/session.cppm
-import mcr.http;       // src/options/http.cppm：HTTP 配置选项
-import mcr.types;      // src/utils/types.cppm
-import mcr.error;      // src/utils/error.cppm
-```
-
-`import mcr;` 统一导出全部公开模块，包括请求 API、会话、请求与响应数据、配置选项、
-异步结果、状态码、版本信息，以及 curl 后端、安全字符串、单例、线程池和解析工具。
-外部代码可以只导入总入口，也可以按需单独导入上表中的模块。
-组件模块内部仍使用普通 import 引入后端和工具依赖；`mcr.fields` 单独导出 `Parameter`、`Pair`。
-新增公开模块时，同时将其加入 `src/mcr.cppm` 的 `export import` 列表。
+以上旧模块不再提供独立文件。
 
 公共基础类型、错误结果、请求数据、响应和会话类型使用 `mcr`，
 状态码使用 `mcr::status`，配置选项使用 `mcr::options`，工具使用 `mcr::utils`，
 curl 后端接口使用 `mcr::curl`。
 
-从仓库根目录运行 `mcpp test` 可构建并验证整理后的模块。
+从仓库根目录运行 `mcpp test` 可构建并验证整理后的模块分区。

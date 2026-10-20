@@ -2,12 +2,12 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.interface`，使用 `mcr::options::Interface`。
+导入 `mcr`，使用 `mcr::options::Interface`。
 该类型参考 cpr 的 `include/cpr/interface.h`，继承 `StringHolder<Interface>`。
 
 ```cpp
 import std;
-import mcr.interface;
+import mcr;
 
 mcr::options::Interface automatic;
 mcr::options::Interface device{ "eth0" };

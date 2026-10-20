@@ -2,10 +2,10 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.singleton`，派生自 `mcr::utils::Singleton<T>`：
+导入 `mcr`，派生自 `mcr::utils::Singleton<T>`：
 
 ```cpp
-import mcr.singleton;
+import mcr;
 
 /**
  * @brief 演示只创建一次的服务。

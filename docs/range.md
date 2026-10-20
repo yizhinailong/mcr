@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.http`，使用 `mcr::options::Range` 和 `MultiRange`。
+导入 `mcr`，使用 `mcr::options::Range` 和 `MultiRange`。
 
 ```cpp
 import std;
-import mcr.http;
+import mcr;
 
 mcr::options::Range range{ 2, 3 };
 std::println("{}", range.Str()); // 2-3

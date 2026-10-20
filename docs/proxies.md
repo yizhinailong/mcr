@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.proxy`，使用 `mcr::options::Proxies`。
+导入 `mcr`，使用 `mcr::options::Proxies`。
 
 ```cpp
 import std;
-import mcr.proxy;
+import mcr;
 
 mcr::options::Proxies proxies{
     { "http", "http://proxy.test:8080" },

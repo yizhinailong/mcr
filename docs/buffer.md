@@ -2,12 +2,12 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.buffer`，使用 `mcr::Buffer`。它参考 cpr 的
-`include/cpr/buffer.h`，使用 `mcr.error` 和标准库，直接使用 `std::filesystem::path`。
+导入 `mcr`，使用 `mcr::Buffer`。它参考 cpr 的
+`include/cpr/buffer.h`；`mcr:buffer` 分区依赖 `mcr:error` 和标准库，直接使用 `std::filesystem::path`。
 
 ```cpp
 import std;
-import mcr.buffer;
+import mcr;
 
 std::vector<unsigned char> bytes{ 'h', 'i', 0, 0xff };
 auto buffer = mcr::Buffer::Create( bytes.begin(), bytes.end(), "upload.bin" ).value();

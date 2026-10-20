@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.types`，使用 mcr 命名空间中的公共类型。
+导入 `mcr`，使用 mcr 命名空间中的公共类型。
 实现位于 `src/utils/types.cppm`，模块名与公开命名空间不受路径影响。
 
 ```cpp
@@ -20,8 +20,8 @@ std::println("{}: {}", url.Str(), headers.at("content-type"));
 - `StringHolder<T>` 拥有文本，拼接返回 T。
   Url 和 UserAgent 接收字符串、视图、C 字符串、字节范围及片段列表；
   视图和范围会复制，显式长度保留内嵌空字节，不验证或编码文本。
-- UserAgent 与 Url 同由 mcr.types 导出。原先导入 mcr.user_agent 的代码
-  应改用 mcr.types 或总入口 mcr。
+- UserAgent 与 Url 同由 `mcr:types` 分区导出。原先导入 `mcr.user_agent` 的代码
+  应改用 `import mcr;`。
 - Str、CStr、Data、显式 std::string 转换、流输出、复制移动、比较及返回 void 的 +=
   保留 cpr 行为，派生类可访问受保护的 m_str。
 - Header 是使用 CaseInsensitiveCompare 的映射，字段名称忽略大小写，

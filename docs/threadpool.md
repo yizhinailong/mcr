@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.threadpool`，使用 `mcr::utils::ThreadPool`。
+导入 `mcr`，使用 `mcr::utils::ThreadPool`。
 
 ```cpp
 import std;
-import mcr.threadpool;
+import mcr;
 
 mcr::utils::ThreadPool pool{ 1, 4 };
 auto answer = pool.Submit([](int value) { return value * 2; }, 21).value();

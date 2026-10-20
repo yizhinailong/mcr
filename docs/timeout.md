@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.transfer_options`，使用 `mcr::options::Timeout` 和 `ConnectTimeout`。
+导入 `mcr`，使用 `mcr::options::Timeout` 和 `ConnectTimeout`。
 
 ```cpp
 import std;

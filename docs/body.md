@@ -2,13 +2,13 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.body`，使用 `mcr::Body`。模块同时导出 `mcr.buffer`、
-`mcr.file` 和 `mcr.types`。`Body` 继承 `StringHolder<Body>`，拥有请求字节，
+导入 `mcr`，使用 `mcr::Body`。`mcr:body` 分区同时重新导出 `mcr:buffer`、
+`mcr:file` 和 `mcr:types`。`Body` 继承 `StringHolder<Body>`，拥有请求字节，
 设计参考 cpr 的 `include/cpr/body.h`。
 
 ```cpp
 import std;
-import mcr.body;
+import mcr;
 
 mcr::Body text{ "x=", "5&y=13" };
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };

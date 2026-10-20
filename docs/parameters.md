@@ -2,13 +2,12 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.fields`，使用 `mcr::Parameters` 和 `Parameter`。
-总入口也导出 `mcr::curl::CurlHolder`；只导入 fields 时，如需命名该后端类型，应另导入 `mcr.curlholder`。
-实现参考 cpr 的 `include/cpr/parameters.h`，与其他请求字段放在同一模块内。
+导入 `mcr`，使用 `mcr::Parameters` 和 `Parameter`。
+总入口也导出 `mcr::curl::CurlHolder`。
+实现参考 cpr 的 `include/cpr/parameters.h`，与其他请求字段位于同一 `mcr:fields` 分区。
 
 ```cpp
-import mcr.fields;
-import mcr.curlholder;
+import mcr;
 
 mcr::Parameters query{ { "q", "hello world" }, { "flag", "" } };
 query.Add(mcr::Parameter{ "q", "x+y" });

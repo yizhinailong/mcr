@@ -2,12 +2,12 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.secure_string`，使用 `mcr::utils::SecureAllocator<T>`
+导入 `mcr`，使用 `mcr::utils::SecureAllocator<T>`
 和 `SecureString`，设计参考 cpr 的 `include/cpr/secure_string.h`。
 
 ```cpp
 import std;
-import mcr.secure_string;
+import mcr;
 
 mcr::utils::SecureString credentials{ "username" };
 credentials += ':';

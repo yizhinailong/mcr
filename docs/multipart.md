@@ -2,13 +2,13 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.multipart`，使用 `mcr::Part` 和 `Multipart`。
-模块同时导出 `mcr.buffer` 和 `mcr.file`，实现仅依赖标准库，
-将 cpr 的 `include/cpr/multipart.h` 和 `cpr/multipart.cpp` 合并在模块内。
+导入 `mcr`，使用 `mcr::Part` 和 `Multipart`。
+`mcr:multipart` 分区同时重新导出 `mcr:buffer` 和 `mcr:file`，实现仅依赖标准库，
+将 cpr 的 `include/cpr/multipart.h` 和 `cpr/multipart.cpp` 合并在分区内。
 
 ```cpp
 import std;
-import mcr.multipart;
+import mcr;
 
 std::array<unsigned char, 3> bytes{ 'a', 0, 'b' };
 auto buffer = mcr::Buffer::Create( bytes.begin(), bytes.end(), "upload.bin" ).value();

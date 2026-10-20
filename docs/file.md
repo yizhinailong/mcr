@@ -2,13 +2,13 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.file`，使用 `mcr::File` 和 `Files`。
+导入 `mcr`，使用 `mcr::File` 和 `Files`。
 实现将 cpr 的 `include/cpr/file.h` 和 `cpr/file.cpp` 合并在模块内，
 通过 `import std;` 直接使用 `std::filesystem`，不提供文件系统兼容层或命名空间别名。
 
 ```cpp
 import std;
-import mcr.file;
+import mcr;
 
 std::filesystem::path path{ std::filesystem::path{ "uploads" } / "report.txt" };
 mcr::File file{ path.string(), "download.txt" };

@@ -2,9 +2,8 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.fields`，使用 `mcr::Parameter` 和 `Pair`；
-导入 `mcr` 或 `mcr.curl_container`，还可使用 `mcr::curl::CurlContainer<T>`。
-后端模块位于 `src/curl/curl_container.cppm`，同时导出 `mcr.curlholder`。
+导入 `mcr`，使用 `mcr::Parameter`、`Pair` 和 `mcr::curl::CurlContainer<T>`。
+后端分区位于 `src/curl/curl_container.cppm`，同时重新导出 `mcr:curlholder`。
 请求记录保留在 mcr 命名空间，编码容器位于 mcr::curl。
 实现参考 cpr 的 `include/cpr/curl_container.h` 和 `cpr/curl_container.cpp`。
 
@@ -12,7 +11,7 @@ Parameter 和 Pair 是独立类型，各有两个拥有存储的公开字符串�
 构造按值接收并移动两个字符串，保留空字符串和内嵌空字节；两者均没有默认构造。
 
 ```cpp
-import mcr.curl_container;
+import mcr;
 
 mcr::curl::CurlContainer<mcr::Parameter> query{ { "q", "hello world" }, { "flag", "" } };
 query.Add(mcr::Parameter{ "q", "another value" });

@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.transfer_options`，使用 `mcr::options::LowSpeed`。
+导入 `mcr`，使用 `mcr::options::LowSpeed`。
 
 ```cpp
 import std;
-import mcr.transfer_options;
+import mcr;
 
 using namespace std::chrono_literals;
 mcr::options::LowSpeed option{ 1000, 1s };

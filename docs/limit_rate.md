@@ -2,10 +2,10 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.transfer_options`，使用 `mcr::options::LimitRate`。
+导入 `mcr`，使用 `mcr::options::LimitRate`。
 
 ```cpp
-import mcr.transfer_options;
+import mcr;
 
 mcr::options::LimitRate limited{ 1024, 2048 }; // 下载和上传速率，单位为字节/秒。
 mcr::options::LimitRate unlimited{ 0, 0 };

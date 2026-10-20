@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.connection_pool`，使用 `mcr::ConnectionPool`。
+导入 `mcr`，使用 `mcr::ConnectionPool`。
 实现参考 cpr 的 `include/cpr/connection_pool.h` 和 `cpr/connection_pool.cpp`。
 它创建 CURLSH 句柄，启用 `CURL_LOCK_DATA_CONNECT` 和 `CURL_LOCK_DATA_SSL_SESSION`，
 共享可复用连接和 TLS 会话；不启用 Cookie 或 DNS 共享。

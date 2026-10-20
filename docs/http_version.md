@@ -2,11 +2,11 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.http`，使用 `mcr::options::HttpVersionCode` 和 `HttpVersion`。
+导入 `mcr`，使用 `mcr::options::HttpVersionCode` 和 `HttpVersion`。
 它们参考 cpr 的 `include/cpr/http_version.h`。
 
 ```cpp
-import mcr.http;
+import mcr;
 
 mcr::options::HttpVersion automatic;
 mcr::options::HttpVersion explicit_version{ mcr::options::HttpVersionCode::VERSION_1_1 };

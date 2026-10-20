@@ -4,17 +4,17 @@
 
 `src/curl/` 中的后端类型、函数和常量使用 `mcr::curl` 命名空间。
 请求条目 `Parameter`、`Pair` 保留在 `mcr`，与 `mcr::curl::CurlContainer<T>`
-在同一模块中导出。声明和实现直接放在各自的 `.cppm` 中，各模块保留现有导入名。
+在同一模块中导出。声明和实现直接放在各自的 `.cppm` 中，各分区保留现有名称。
 
-| 模块导入名 | 公开接口 |
+| 模块分区 | 公开接口 |
 | --- | --- |
-| `mcr.curlholder` | `mcr::curl::CurlHolder`，管理 easy 句柄及关联资源 |
-| `mcr.curlmultiholder` | `mcr::curl::CurlMultiHolder`，管理 multi 句柄 |
-| `mcr.curl_container` | `mcr::curl::CurlContainer<T>`，提供请求容器存储和编码；请求条目为 `mcr::Parameter`、`mcr::Pair` |
-| `mcr.ssl_ctx` | `mcr::curl::sslctx_function_load_ca_cert_from_buffer` 和 `mcr::curl::SSL_CTX_OPENSSL_ENABLED` |
+| `mcr:curlholder` | `mcr::curl::CurlHolder`，管理 easy 句柄及关联资源 |
+| `mcr:curlmultiholder` | `mcr::curl::CurlMultiHolder`，管理 multi 句柄 |
+| `mcr:curl_container` | `mcr::curl::CurlContainer<T>`，提供请求容器存储和编码；请求条目为 `mcr::Parameter`、`mcr::Pair` |
+| `mcr:ssl_ctx` | `mcr::curl::sslctx_function_load_ca_cert_from_buffer` 和 `mcr::curl::SSL_CTX_OPENSSL_ENABLED` |
 
-`import mcr;` 统一导出全部 curl 后端接口，也可以按需单独导入对应模块。
-公共请求条目 `Parameter`、`Pair` 仍可通过 `mcr` 或 `mcr.fields` 使用。
+`import mcr;` 统一导出全部 curl 后端接口。
+公共请求条目 `Parameter`、`Pair` 仍可通过 `mcr` 使用。
 迁移现有调用时，为原 `mcr` 下的后端接口名称添加
 `curl::`，例如 `mcr::CurlHolder` 改为 `mcr::curl::CurlHolder`。
 旧命名空间不提供兼容别名。

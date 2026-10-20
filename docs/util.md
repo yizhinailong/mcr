@@ -2,13 +2,13 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.util`，使用 `mcr::utils` 中的自由函数。
+导入 `mcr`，使用 `mcr::utils` 中的自由函数。
 命名空间和迁移规则见 [工具模块](utils.md)。
 实现参考 cpr 的 `include/cpr/util.h`、`cpr/util.cpp` 和 `test/util_tests.cpp`。
 
 ```cpp
 import std;
-import mcr.util;
+import mcr;
 
 std::string status;
 std::string reason;

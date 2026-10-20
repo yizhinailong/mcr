@@ -2,7 +2,7 @@
 
 [文档索引](README.md) · [项目首页](../README.md)
 
-导入 `mcr` 或 `mcr.transfer_options`，使用 `mcr::options::Resolve`。
+导入 `mcr`，使用 `mcr::options::Resolve`。
 
 ```cpp
 import mcr;
