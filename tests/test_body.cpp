@@ -141,7 +141,7 @@ namespace {
             passed &= check(!body && body.error().code == mcr::ErrorCode::FILE_COULDNT_READ_FILE && body.error().message == "Can't open the file for HTTP request body!", "missing and empty paths must return the open failure diagnostic");
         }
         auto const directory = mcr::Body::FromFile(mcr::File{ temporary.directory.string() });
-        passed &= check(!directory && (directory.error().code == mcr::ErrorCode::FILE_COULDNT_READ_FILE || directory.error().code == mcr::ErrorCode::READ_ERROR), "unreadable directories must fail at open or read");
+        passed &= check(!directory && directory.error().code == mcr::ErrorCode::FILE_COULDNT_READ_FILE && directory.error().message == "Can't open the file for HTTP request body!", "directories must return the open failure diagnostic even if the stream accepts them");
         return passed;
     }
 

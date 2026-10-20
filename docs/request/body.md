@@ -40,7 +40,7 @@ auto from_file = mcr::Body::FromFile( mcr::File{ "request.bin" } ).value(); // �
 实现按固定大小的块读取到正常 EOF，不预先查询文件大小。全部正文仍驻留内存，
 并发修改文件不保证得到原子快照。
 
-打开失败返回 `FILE_COULDNT_READ_FILE`，消息为 `Can't open the file for HTTP request body!`。
+打开失败或路径指向目录时返回 `FILE_COULDNT_READ_FILE`，消息为 `Can't open the file for HTTP request body!`。
 正常 EOF 前的读取失败返回 `READ_ERROR`，消息为
 `Can't read the file for HTTP request body!`。分配和容量错误分别传播
 `std::bad_alloc`、`std::length_error`。所有退出路径均通过 RAII 关闭文件；
@@ -55,6 +55,7 @@ auto from_file = mcr::Body::FromFile( mcr::File{ "request.bin" } ).value(); // �
 除模块、命名空间及继承的命名规范外，文件读取会检查每次读取直到 EOF。
 上游先定位文件长度、调整字符串大小，再单次读取，未检查定位和读取失败；
 此处避免将失败的大小查询转换成无符号分配量，并在读取错误时返回失败，防止暴露部分正文或填充字节。
+目录被显式拒绝，避免部分标准库将目录读取报告为正常 EOF 而产生空正文。
 Buffer 字段已具备所需类型，无需多余转换。
 
 运行 `mcpp build` 和 `mcpp test`，验证构造所有权、Buffer 子范围与生命周期、

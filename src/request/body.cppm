@@ -70,11 +70,13 @@ export namespace mcr {
          * @throws std::bad_alloc If body storage cannot be allocated.
          * @throws std::length_error If the contents exceed string capacity.
          * @note Empty files produce an empty body. The stream is closed on success and failure.
+         * Directories are rejected with FILE_COULDNT_READ_FILE.
          */
         [[nodiscard]] static auto FromFile(File const& file) -> Result<Body> {
             Body result;
             std::ifstream stream{ file.filepath, std::ios::binary };
-            if (!stream) {
+            std::error_code error;
+            if (!stream || std::filesystem::is_directory(file.filepath, error)) {
                 return std::unexpected{
                     Error{ ErrorCode::FILE_COULDNT_READ_FILE, "Can't open the file for HTTP request body!" }
                 };
