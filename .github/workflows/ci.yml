@@ -1,4 +1,4 @@
-name: Windows CI
+name: Windows and Linux CI
 
 on:
   push:
@@ -9,17 +9,27 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Windows x64 build and test
-    runs-on: windows-2025
+    name: ${{ matrix.platform }} x64 build and test
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows
+            os: windows-2025
+            shell: pwsh
+          - platform: Linux
+            os: ubuntu-24.04
+            shell: bash
     defaults:
       run:
-        shell: pwsh
+        shell: ${{ matrix.shell }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -48,11 +58,13 @@ jobs:
           print(f"Verified {actual} matches [package].version.")
 
       - name: Set up MSVC environment
+        if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1.13.0
         with:
           arch: amd64
 
-      - name: Install mcpp
+      - name: Install mcpp on Windows
+        if: runner.os == 'Windows'
         run: |
           $ErrorActionPreference = 'Stop'
           $mcppVersion = '2026.9.11.1'
@@ -81,6 +93,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               throw "mcpp --version failed with exit code $LASTEXITCODE."
           }
+
+      - name: Install mcpp on Linux
+        if: runner.os == 'Linux'
+        run: |
+          mcpp_version='2026.9.11.1'
+          mcpp_sha256='efcb0844a31b5e70a2157c59a91073d42886bf104f0062815d38ffaab7fdae05'
+          archive_name="mcpp-$mcpp_version-linux-x86_64"
+          archive_path="$RUNNER_TEMP/$archive_name.tar.gz"
+          install_root="$RUNNER_TEMP/$archive_name"
+
+          curl --fail --location --retry 3 \
+            "https://github.com/mcpp-community/mcpp/releases/download/v$mcpp_version/$archive_name.tar.gz" \
+            --output "$archive_path"
+          printf '%s  %s\n' "$mcpp_sha256" "$archive_path" | sha256sum --check
+          tar -xzf "$archive_path" -C "$RUNNER_TEMP"
+          test -x "$install_root/bin/mcpp"
+
+          # Keep the bundled registry/bin/xlings in this isolated MCPP_HOME.
+          export MCPP_HOME="$install_root"
+          export PATH="$install_root/bin:$PATH"
+          printf 'MCPP_HOME=%s\n' "$install_root" >> "$GITHUB_ENV"
+          printf '%s\n' "$install_root/bin" >> "$GITHUB_PATH"
+          "$install_root/bin/mcpp" --version
 
       - name: Install LLVM toolchain
         run: mcpp toolchain install llvm 22.1.8

@@ -166,4 +166,4 @@ curl_easy_setopt(handle, CURLOPT_SSL_CTX_DATA, ca_pem.data());
 - `tests/test_version.cpp` 通过总入口检查生成常量，并与 manifest 对照。
 - `tests/test_ssl_ctx.cpp` 在 OpenSSL 构建下生成短期自签 CA，检查坏证书、bundle、重复加载
   和实际 trust store 验证；Schannel 构建验证明确的不支持返回值。
-  自动化构建目前覆盖 Windows，Linux/macOS 平台配置见 [mcpp.toml](../mcpp.toml)。
+  自动化构建目前覆盖 Windows 和 Linux，平台配置见 [mcpp.toml](../mcpp.toml)。

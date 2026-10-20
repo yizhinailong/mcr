@@ -8,7 +8,7 @@
 
 ## 环境与依赖
 
-需要 mcpp，以及支持 C++23 模块和 `import std;` 的编译器与标准库。安装方式见 [mcpp 官方说明](https://github.com/mcpp-community/mcpp#install)。当前 [Windows CI](.github/workflows/windows-ci.yml) 使用 mcpp `2026.9.11.1`、LLVM `22.1.8`，并依赖 Visual Studio 的 MSVC 工具和 Windows SDK。
+需要 mcpp，以及支持 C++23 模块和 `import std;` 的编译器与标准库。安装方式见 [mcpp 官方说明](https://github.com/mcpp-community/mcpp#install)。当前 [Windows/Linux CI](.github/workflows/ci.yml) 使用 mcpp `2026.9.11.1`、LLVM `22.1.8`，分别在 Windows 2025 和 Ubuntu 24.04 上构建与测试；Windows 依赖 Visual Studio 的 MSVC 工具和 Windows SDK。
 
 依赖版本以 [mcpp.toml](mcpp.toml) 为准，由 mcpp 解析和管理：
 
@@ -17,7 +17,7 @@
 | `compat.curl` | `8.21.0` | HTTP 传输 |
 | `compat.openssl` | `3.5.1` | Linux/macOS 的 OpenSSL 上下文支持 |
 
-Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
+Windows 配置使用 Schannel；Linux/macOS 配置启用 OpenSSL 上下文支持。自动化构建和测试目前覆盖 Windows 和 Linux，TLS 测试的环境要求及跳过条件见 [Session 文档](docs/session.md)。协议和 TLS 功能的实际可用性取决于所链接的 libcurl 及其后端。
 
 <a id="快速开始"></a>
 
@@ -138,7 +138,7 @@ mcpp build --configure-only
 mcpp test
 ```
 
-第一条命令生成编辑器所需的编译数据库；测试为 `tests/test_*.cpp` 中的独立程序，HTTP 测试使用本地服务。贡献规范见 [AGENTS.md](AGENTS.md)，发布流程见 [版本标签与 Windows CI](docs/ci.md)。
+第一条命令生成编辑器所需的编译数据库；测试为 `tests/test_*.cpp` 中的独立程序，HTTP 测试使用本地服务。贡献规范见 [AGENTS.md](AGENTS.md)，发布流程见 [版本标签与 Windows/Linux CI](docs/ci.md)。
 
 安装 Doxygen 后，在仓库根目录先创建 `target/doxygen`，再执行 `doxygen Doxyfile`，生成的 API 文档首页为
 `target/doxygen/html/index.html`。Documentation 工作流会在 `main` 上的源码或文档更新时自动生成并发布 GitHub Pages。

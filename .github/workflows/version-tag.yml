@@ -100,7 +100,7 @@ jobs:
               if ($target -ne $env:GITHUB_SHA) {
                   throw "Tag $env:VERSION_TAG already belongs to another commit; choose a new package version"
               }
-              Write-Output "Tag $env:VERSION_TAG already points to this commit; retrying Windows CI"
+              Write-Output "Tag $env:VERSION_TAG already points to this commit; retrying Windows and Linux CI"
           }
           "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
@@ -122,16 +122,16 @@ jobs:
               throw "Failed to push tag $env:VERSION_TAG"
           }
 
-      - name: Start Windows CI for the version tag
+      - name: Start Windows and Linux CI for the version tag
         if: steps.version.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_TAG: ${{ steps.version.outputs.tag }}
         # Like FileMonitor, dispatch explicitly because GITHUB_TOKEN tag pushes do not trigger push workflows.
         run: |
-          gh workflow run windows-ci.yml `
+          gh workflow run ci.yml `
               --repo $env:GITHUB_REPOSITORY `
               --ref $env:VERSION_TAG
           if ($LASTEXITCODE -ne 0) {
-              throw "Failed to start Windows CI for $env:VERSION_TAG"
+              throw "Failed to start Windows and Linux CI for $env:VERSION_TAG"
           }
