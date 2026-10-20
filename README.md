@@ -8,7 +8,7 @@
 
 ## 环境与依赖
 
-需要 mcpp，以及支持 C++23 模块和 `import std;` 的编译器与标准库。安装方式见 [mcpp 官方说明](https://github.com/mcpp-community/mcpp#install)。当前 [Windows CI](.github/workflows/windows-ci.yml) 和 [Linux CI](.github/workflows/linux-ci.yml) 使用 mcpp `2026.9.11.1`、LLVM `22.1.8`，分别在 Windows 2025 和 Ubuntu 24.04 上构建与测试。两个工作流在分支推送和 PR 时独立触发；Windows 依赖 Visual Studio 的 MSVC 工具和 Windows SDK。
+需要 mcpp，以及支持 C++23 模块和 `import std;` 的编译器与标准库。安装方式见 [mcpp 官方说明](https://github.com/mcpp-community/mcpp#install)。当前 [Windows CI](.github/workflows/windows-ci.yml) 和 [Linux CI](.github/workflows/linux-ci.yml) 使用 mcpp `2026.10.19.1`、LLVM `23.1.3`，分别在 Windows 2025 和 Ubuntu 24.04 上构建与测试。两个工作流在分支推送和 PR 时独立触发；Windows 依赖 Visual Studio 的 MSVC 工具和 Windows SDK。
 
 依赖版本以 [mcpp.toml](mcpp.toml) 为准，由 mcpp 解析和管理：
 

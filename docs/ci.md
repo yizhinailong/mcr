@@ -54,9 +54,11 @@ Windows CI 和 Linux CI 是两个独立工作流，在分支推送和 PR 时分�
 
 每个测试任务检出触发事件对应的提交 SHA；PR 验证 GitHub 生成的合并提交。
 在标签引用上运行时检查标签与包版本一致。随后安装经过固定 SHA-256 校验和验证的
-mcpp 官方版本 `2026.9.11.1` 到运行器临时目录，保留安装包内置的 registry/bin/xlings，
-并设置隔离的 MCPP_HOME（Windows 使用 xlings.exe）。随后安装并选择 `llvm@22.1.8`，
+mcpp 官方版本 `2026.10.19.1` 到运行器临时目录，保留安装包内置的 registry/bin/xlings，
+并设置隔离的 MCPP_HOME（Windows 使用 xlings.exe）。随后安装并选择 `llvm@23.1.3`，
 依次执行 `mcpp build` 和 `mcpp test`。Linux 的 OpenSSL 依赖和编译定义由 mcpp.toml 提供。
+Linux 使用工具链自带的 libc++ 23，提供代码所需的 `std::views::enumerate`，
+其标准库支持情况见 [libc++ C++23 状态](https://libcxx.llvm.org/Status/Cxx23.html)。
 Windows 任务额外准备 MSVC x64 环境，托管镜像提供 Visual Studio 和 Windows SDK。
 升级 mcpp 时，必须同时更新两个平台安装步骤中的版本与对应校验和。
 
