@@ -127,20 +127,33 @@ namespace {
         unsigned short port{};
         unsigned short mutual_port{};
 
+        /**
+         * @brief Wait for generated certificates and bound listeners, including a cold PowerShell startup.
+         * @throws std::runtime_error If the fixture exits early or fails to become ready within 60 seconds.
+         * @throws std::system_error If waiting for the child process or querying its exit code fails.
+         */
         HttpsFixture() {
             auto const script{ std::filesystem::absolute(std::filesystem::path{ __FILE__ }.parent_path() / "fixtures" / "https_server.ps1") };
             child.Start(script, directory.path);
-            auto const deadline{ std::chrono::steady_clock::now() + 15s };
+            auto const deadline{ std::chrono::steady_clock::now() + 60s };
             while (std::chrono::steady_clock::now() < deadline) {
                 std::ifstream ready{ directory.path / "ready" };
                 if (ready >> port >> mutual_port) {
                     return;
                 }
-                if (WaitForSingleObject(child.info.hProcess, 20) == WAIT_OBJECT_0) {
-                    break;
+                auto const state{ WaitForSingleObject(child.info.hProcess, 20) };
+                if (state == WAIT_OBJECT_0) {
+                    DWORD exit_code{};
+                    if (!GetExitCodeProcess(child.info.hProcess, &exit_code)) {
+                        throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not query TLS fixture exit code" };
+                    }
+                    throw std::runtime_error{ std::format("TLS fixture exited before readiness (exit {}):\n{}", exit_code, read_file(directory.path / "server.log")) };
+                }
+                if (state == WAIT_FAILED) {
+                    throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not wait for TLS fixture" };
                 }
             }
-            throw std::runtime_error{ "TLS fixture did not start: " + read_file(directory.path / "server.log") };
+            throw std::runtime_error{ "TLS fixture startup timed out after 60 seconds:\n" + read_file(directory.path / "server.log") };
         }
 
         auto Url(bool mutual = false, std::string_view hostname = "localhost") const -> mcr::Url {

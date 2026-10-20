@@ -48,6 +48,7 @@ public static class McrHttpsFixture
         using var client = CreateLeaf(clientKey, root, true);
         // Schannel requires a normal key container for the server credential. This temporary
         // certificate is never added to a certificate store and is disposed on graceful shutdown.
+        Console.Error.WriteLine("TLS fixture: importing server credentials.");
         using var serverCredential = X509CertificateLoader.LoadPkcs12(server.Export(X509ContentType.Pfx, "server-fixture"),
             "server-fixture", X509KeyStorageFlags.DefaultKeySet);
         File.WriteAllText(Path.Combine(directory, "ca.pem"), root.ExportCertificatePem());
@@ -60,6 +61,7 @@ public static class McrHttpsFixture
         var mutual = new TcpListener(IPAddress.Loopback, 0);
         plain.Start();
         mutual.Start();
+        Console.Error.WriteLine("TLS fixture: HTTPS listeners started.");
         File.WriteAllText(Path.Combine(directory, "ready"),
             ((IPEndPoint)plain.LocalEndpoint).Port + " " + ((IPEndPoint)mutual.LocalEndpoint).Port);
         using var shutdown = new CancellationTokenSource();
