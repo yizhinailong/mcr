@@ -2874,7 +2874,7 @@ namespace mcr::detail {
     auto check_multi(CURLMcode result) -> Result<void> {
         if (result != CURLM_OK) {
             return std::unexpected{
-                Error{ ErrorCode::FAILED_INIT, std::string{ "mcr::MultiPerform: " } + curl_multi_strerror(result) }
+                Error{ error_code_from_curl_multi(result), std::string{ "mcr::MultiPerform: " } + curl_multi_strerror(result) }
             };
         }
 

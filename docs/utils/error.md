@@ -83,3 +83,7 @@ Session 的传输失败保存在 Response::error，HTTP 4xx/5xx 仍是普通响�
 配置错误和用户回调异常的传播规则见 [Session](../session/session.md)。
 
 运行 `mcpp build` 和 `mcpp test`，验证模块与错误处理。
+
+`error_code_from_curl_multi` 单独映射 multi 状态：无效句柄归入 `BAD_FUNCTION_ARGUMENT`，
+重复挂载和递归调用归入 `RECURSIVE_API_CALL`，内存、未知选项、回调中止及轮询错误
+分别保留对应类别。批量与协程诊断消息仍包含 `curl_multi_strerror` 的具体原因。

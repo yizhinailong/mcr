@@ -300,6 +300,28 @@ export namespace mcr {
     using Result = std::expected<T, Error>;
 
     /**
+     * @brief Map multi failures without confusing them with CURLcode values.
+     * @param multi_code Numeric CURLMcode returned by a multi operation.
+     * @return The closest public error category; diagnostics retain curl's exact multi error.
+     */
+    [[nodiscard]] constexpr auto error_code_from_curl_multi(std::int32_t multi_code) noexcept -> ErrorCode {
+        switch (multi_code) {
+            case CURLM_OK                   : return ErrorCode::OK;
+            case CURLM_BAD_HANDLE           :
+            case CURLM_BAD_EASY_HANDLE      :
+            case CURLM_BAD_SOCKET           :
+            case CURLM_BAD_FUNCTION_ARGUMENT: return ErrorCode::BAD_FUNCTION_ARGUMENT;
+            case CURLM_ADDED_ALREADY        :
+            case CURLM_RECURSIVE_API_CALL   : return ErrorCode::RECURSIVE_API_CALL;
+            case CURLM_OUT_OF_MEMORY        : return ErrorCode::OUT_OF_MEMORY;
+            case CURLM_UNKNOWN_OPTION       : return ErrorCode::UNKNOWN_OPTION;
+            case CURLM_ABORTED_BY_CALLBACK  : return ErrorCode::ABORTED_BY_CALLBACK;
+            case CURLM_UNRECOVERABLE_POLL   : return ErrorCode::UNRECOVERABLE_POLL;
+            default                         : return ErrorCode::FAILED_INIT;
+        }
+    }
+
+    /**
      * @brief Convert a curl status into an expected-based operation result.
      * @param curl_code Numeric CURLcode returned by a curl operation.
      * @param error_message Diagnostic to preserve on failure, such as the contents of CURLOPT_ERRORBUFFER.

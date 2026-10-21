@@ -167,6 +167,22 @@ namespace {
         return passed;
     }
 
+    /**
+     * @brief Distinguish invalid easy handles, duplicate attachment, and allocation failures.
+     */
+    auto check_multi_errors() -> bool {
+        auto multi{ mcr::curl::CurlMultiHolder::Create().value() };
+        auto easy{ mcr::curl::CurlHolder::Create().value() };
+        auto const invalid{ curl_multi_add_handle(multi.handle, nullptr) };
+        bool passed{ check(invalid == CURLM_BAD_EASY_HANDLE && mcr::error_code_from_curl_multi(invalid) == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "invalid easy handles must identify argument errors") };
+        passed &= check(curl_multi_add_handle(multi.handle, easy.handle) == CURLM_OK, "the easy handle must attach once");
+        auto const duplicate{ curl_multi_add_handle(multi.handle, easy.handle) };
+        passed &= check(duplicate == CURLM_ADDED_ALREADY && mcr::error_code_from_curl_multi(duplicate) == mcr::ErrorCode::RECURSIVE_API_CALL, "duplicate attachment must identify busy handles");
+        passed &= check(curl_multi_remove_handle(multi.handle, easy.handle) == CURLM_OK, "the original attachment must remain removable");
+        passed &= check(mcr::error_code_from_curl_multi(CURLM_OUT_OF_MEMORY) == mcr::ErrorCode::OUT_OF_MEMORY, "multi allocation errors must retain their category");
+        return passed;
+    }
+
     auto check_initialization_failure() -> bool {
         auto const before{ g_live_allocations.load() };
         bool passed{ true };
@@ -193,6 +209,7 @@ int main() {
     try {
         passed &= check_empty_and_moves();
         passed &= check_easy_handles();
+        passed &= check_multi_errors();
         passed &= check_initialization_failure();
     } catch (std::exception const& error) {
         std::println("test_curlmultiholder: unexpected exception: {}", error.what());

@@ -563,7 +563,7 @@ export namespace mcr::detail {
             }
             if (m_transfer->multi_error != CURLM_OK) {
                 return std::unexpected{
-                    Error{ ErrorCode::FAILED_INIT, std::string{ "mcr::Coro: " } + curl_multi_strerror(m_transfer->multi_error) }
+                    Error{ error_code_from_curl_multi(m_transfer->multi_error), std::string{ "mcr::Coro: " } + curl_multi_strerror(m_transfer->multi_error) }
                 };
             }
             if (!m_transfer->prepared) {

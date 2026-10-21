@@ -107,7 +107,7 @@ namespace {
         first.Start();
         require(arrived.wait_for(3s) == std::future_status::ready, "the first handle must be active");
         auto second = mcr::sync_wait(transfer(session, preparations));
-        require(!second && second.error().code == mcr::ErrorCode::FAILED_INIT, "the duplicate submission must return a multi setup error");
+        require(!second && second.error().code == mcr::ErrorCode::RECURSIVE_API_CALL && second.error().message.contains(curl_multi_strerror(CURLM_ADDED_ALREADY)), "the duplicate submission must identify an already active handle");
         auto response = mcr::sync_wait(std::move(first)).value();
         require(!response.error && response.status_code == 200 && response.text == std::string(307200, 'x'), std::format("the first submission must keep its handle, body, and continuation: {} ({} bytes): {}", mcr::to_string(response.error.code), response.text.size(), response.error.message));
         require(preparations == 1, "a duplicate must be rejected before preparing the active session");
