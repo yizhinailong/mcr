@@ -38,6 +38,16 @@ export namespace mcr::curl {
         void* sslctx,
         void* raw_cert_buf
     ) noexcept -> CURLcode {
+#ifdef MCR_SSL_CTX_OPENSSL
+        /**
+         * @brief Leave no OpenSSL errors behind on success, failure, or exception.
+         */
+        struct ClearErrors {
+            ClearErrors() noexcept { ERR_clear_error(); }
+
+            ~ClearErrors() { ERR_clear_error(); }
+        } clear_errors;
+#endif
         if (!sslctx || !raw_cert_buf) {
             return CURLE_ABORTED_BY_CALLBACK;
         }
@@ -64,7 +74,7 @@ export namespace mcr::curl {
                 Certificate certificate{ PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free };
                 if (!certificate) {
                     auto const error{ ERR_peek_last_error() };
-                    if (error && !(ERR_GET_LIB(error) == ERR_LIB_PEM && ERR_GET_REASON(error) == PEM_R_NO_START_LINE)) {
+                    if (BIO_eof(bio.get()) != 1 || (error && !(ERR_GET_LIB(error) == ERR_LIB_PEM && ERR_GET_REASON(error) == PEM_R_NO_START_LINE))) {
                         return CURLE_ABORTED_BY_CALLBACK;
                     }
                     ERR_clear_error();

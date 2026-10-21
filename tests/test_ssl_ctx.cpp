@@ -5,6 +5,7 @@
 #include <curl/curl.h>
 #ifdef MCR_SSL_CTX_OPENSSL
     #include <openssl/bio.h>
+    #include <openssl/err.h>
     #include <openssl/pem.h>
     #include <openssl/ssl.h>
     #include <openssl/x509_vfy.h>
@@ -14,6 +15,9 @@ import std;
 import mcr;
 
 namespace {
+    /**
+     * @brief Report a failed certificate-store assertion.
+     */
     auto check(bool condition, std::string_view message) -> bool {
         if (!condition) {
             std::println("test_ssl_ctx: {}", message);
@@ -22,12 +26,18 @@ namespace {
     }
 
 #ifdef MCR_SSL_CTX_OPENSSL
+    /**
+     * @brief Reject an unavailable OpenSSL fixture operation.
+     */
     auto require(bool condition) -> void {
         if (!condition) {
             throw std::runtime_error{ "Could not create the OpenSSL certificate fixture." };
         }
     }
 
+    /**
+     * @brief Generate an independent self-signed CA certificate as PEM text.
+     */
     auto certificate(long serial) -> std::string {
         std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key{ EVP_PKEY_Q_keygen(nullptr, nullptr, "RSA", 2048), &EVP_PKEY_free };
         std::unique_ptr<X509, decltype(&X509_free)> cert{ X509_new(), &X509_free };
@@ -50,12 +60,18 @@ namespace {
         return { bytes, static_cast<std::size_t>(length) };
     }
 
+    /**
+     * @brief Verify atomic bundle parsing, trust updates, and error-queue cleanup.
+     */
     auto check_openssl() -> bool {
         static_assert(mcr::curl::SSL_CTX_OPENSSL_ENABLED);
         std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> context{ SSL_CTX_new(TLS_method()), &SSL_CTX_free };
         require(bool(context));
         auto load = [&](std::string bytes) {
-            return mcr::curl::sslctx_function_load_ca_cert_from_buffer(nullptr, context.get(), bytes.data());
+            ERR_raise(ERR_LIB_USER, 1);
+            auto const result{ mcr::curl::sslctx_function_load_ca_cert_from_buffer(nullptr, context.get(), bytes.data()) };
+            require(ERR_peek_error() == 0);
+            return result;
         };
         auto* store{ SSL_CTX_get_cert_store(context.get()) };
         auto count = [&] {
@@ -67,6 +83,7 @@ namespace {
         passed &= check(load(first + "-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n") == CURLE_ABORTED_BY_CALLBACK && count() == 0, "a malformed trailing certificate must fail before updating trust");
         passed &= check(load(first + second) == CURLE_OK && count() == 2, "every valid certificate in a bundle must be added");
         passed &= check(load(first + second) == CURLE_OK && count() == 2, "reloading a CA bundle must tolerate duplicate certificates");
+        passed &= check(load(first + "\n \t\r\n") == CURLE_OK && count() == 2, "whitespace followed by true BIO EOF must end the bundle successfully");
         std::unique_ptr<BIO, decltype(&BIO_free)> bio{ BIO_new_mem_buf(first.data(), static_cast<int>(first.size())), &BIO_free };
         std::unique_ptr<X509, decltype(&X509_free)> cert{ PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free };
         std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)> verification{ X509_STORE_CTX_new(), &X509_STORE_CTX_free };
@@ -79,7 +96,13 @@ namespace {
 
 auto main() -> int {
     static_assert(noexcept(mcr::curl::sslctx_function_load_ca_cert_from_buffer(nullptr, nullptr, nullptr)));
+#ifdef MCR_SSL_CTX_OPENSSL
+    ERR_raise(ERR_LIB_USER, 1);
+#endif
     bool passed{ check(mcr::curl::sslctx_function_load_ca_cert_from_buffer(nullptr, nullptr, nullptr) == CURLE_ABORTED_BY_CALLBACK, "null callback arguments must fail without throwing") };
+#ifdef MCR_SSL_CTX_OPENSSL
+    passed &= check(ERR_peek_error() == 0, "invalid arguments must also clear the OpenSSL error queue");
+#endif
     try {
 #ifdef MCR_SSL_CTX_OPENSSL
         passed &= check_openssl();
