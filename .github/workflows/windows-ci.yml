@@ -97,6 +97,27 @@ jobs:
       - name: Test
         run: mcpp test
 
+      - name: Build request examples
+        working-directory: example
+        run: mcpp build
+
+      - name: Verify all request examples
+        working-directory: example
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
+
+          with open("mcpp.toml", "rb") as manifest:
+              targets = tomllib.load(manifest)["targets"]
+          candidates = [directory for directory in pathlib.Path("target").glob("*/*/bin")
+                        if all((directory / f"{name}.exe").is_file() for name in targets)]
+          if len(candidates) != 1:
+              raise RuntimeError(f"Expected one complete example build, found {candidates}")
+          subprocess.run([sys.executable, "scripts/verify.py", "--bin-dir", str(candidates[0])], check=True)
+
       - name: Package release
         if: github.ref_type == 'tag'
         run: |
