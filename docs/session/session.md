@@ -208,7 +208,10 @@ Windows 上需要 PATH 中的 PowerShell 7.5 或更高版本（.NET 9+），通�
 `tests/fixtures/https_server.ps1` / `.cs` 在运行时生成临时 CA、服务端和客户端证书，
 不会向系统证书库安装信任。覆盖默认拒绝不可信证书、CA 文件/内存、主机名校验、
 公钥固定、TLS 1.2、证书快照、P12 错误密码及凭据清除。
-仅在出现上述精确 Schannel 错误时打印 `SKIP`，保留文件与复制后 blob 的错误一致性检查；
-其余环境要求双向 TLS 成功。非 Windows 当前只运行类型与 setter 检查并显式跳过 HTTPS。
+Windows 缺少 `pwsh` 时跳过 HTTPS；已找到可执行程序但启动、证书生成或握手失败时测试失败。
+仅在出现上述精确 Schannel 错误时跳过双向 TLS 成功断言，保留文件与复制后 blob 的错误一致性检查。
+非 Windows 使用 Python 3 和 PATH 中的 `openssl`，由 `tests/fixtures/https_server.py` 生成临时证书并启动服务，
+要求 CA 文件/blob、公钥固定、主机校验、TLS 版本边界、客户端证书及私钥文件/blob 的真实握手断言通过。
+Linux CI 检查 HTTPS 与双向 TLS 成功标记，缺少依赖不会跳过测试。
 
 无需手动管理 Session 的请求可使用 [自由函数 API](../api.md)，包括同步、异步、批量和下载入口。

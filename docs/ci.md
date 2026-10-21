@@ -42,7 +42,8 @@ Windows CI 和 Linux CI 是两个独立工作流，在分支推送和 PR 时分�
 - 通过 workflow_call，由 Release 工作流调用以验证版本标签。
 
 分支删除时跳过测试。两个平台独立运行，一个平台失败不影响另一个平台完成验证。
-同一工作流、同一引用的重复运行会取消较早、尚未完成的运行；
+同一测试工作流、同一引用的重复运行会取消较早、尚未完成的运行；
+Release 对同一引用串行执行且不取消正在发布的运行。
 两个平台和 Release 使用不同的并发组，避免相互取消。
 
 版本标签工作流使用 windows-2025。各平台 CI 的运行环境如下：
@@ -57,6 +58,12 @@ Windows CI 和 Linux CI 是两个独立工作流，在分支推送和 PR 时分�
 mcpp 官方版本 `2026.10.19.1` 到运行器临时目录，保留安装包内置的 registry/bin/xlings，
 并设置隔离的 MCPP_HOME（Windows 使用 xlings.exe）。随后安装并选择 `llvm@23.1.3`，
 依次执行 `mcpp build` 和 `mcpp test`。分支推送和 PR 只运行测试，不打包。
+库和测试启用 `-Wall -Wextra -Werror`。Linux 使用 `dev` 与 `sanitize` 两个独立矩阵任务，
+后者通过 `--profile sanitize` 启用 ASan/UBSan，报告内存泄漏并在未定义行为发生时失败。
+Linux 两个任务都要求本地 HTTPS 与双向 TLS 的成功标记。
+Windows 和 Linux 的普通任务随后进入 `example/` 构建全部目标，
+根据清单定位完整的 bin 目录，用已配置的 Python 执行 `scripts/verify.py --bin-dir <目录>`，
+验证全部 46 个请求示例。sanitizer 任务不重复构建示例或上传归档。
 标签引用（即版本变化创建的标签）在测试通过后追加 `mcpp pack --release`，
 把接口和预构建产物打成 `mcr-<version>-windows-x64.zip` 或
 `mcr-<version>-linux-x64.tar.gz`，并作为 Actions 产物上传。Linux 的 OpenSSL 依赖和编译定义由 mcpp.toml 提供。
@@ -64,6 +71,7 @@ Linux 使用工具链自带的 libc++ 23，提供代码所需的 `std::views::en
 其标准库支持情况见 [libc++ C++23 状态](https://libcxx.llvm.org/Status/Cxx23.html)。
 Windows 任务额外准备 MSVC x64 环境，托管镜像提供 Visual Studio 和 Windows SDK。
 升级 mcpp 时，必须同时更新两个平台安装步骤中的版本与对应校验和。
+第三方 action 固定到提交 SHA，并在注释保留对应版本；更新时同时核对版本与提交。
 
 标签任务请求 contents: write 和 actions: write；发布任务请求 contents: write；
 测试任务仅需要仓库只读权限。使用内置令牌，无需额外密钥，

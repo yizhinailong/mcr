@@ -7,6 +7,16 @@ license = "MIT"
 [lib]
 path = "src/mcr.cppm"
 
+[build]
+cxxflags = ["-Wall", "-Wextra", "-Werror"]
+
+[profile.sanitize]
+opt = 1
+debug = true
+cflags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
+cxxflags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
+ldflags = ["-fsanitize=address,undefined"]
+
 [dependencies.compat]
 curl = "8.21.0"
 

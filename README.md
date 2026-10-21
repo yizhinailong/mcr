@@ -143,6 +143,10 @@ mcpp test
 
 第一条命令生成编辑器所需的编译数据库；测试为 `tests/test_*.cpp` 中的独立程序，HTTP 测试使用本地服务。贡献规范见 [AGENTS.md](AGENTS.md)，发布流程见 [版本标签与 Windows/Linux CI](docs/ci.md)。
 
+库和测试默认启用 LLVM/GCC 的 `-Wall -Wextra -Werror`。
+Linux 上可运行 `mcpp test --profile sanitize --timeout 90`，使用 ASan/UBSan 检查内存与未定义行为；
+Linux CI 分别运行普通配置和该配置，普通配置还会构建并验证全部请求示例。
+
 安装 Doxygen 后，在仓库根目录先创建 `target/doxygen`，再执行 `doxygen Doxyfile`，生成的 API 文档首页为
 `target/doxygen/html/index.html`。Documentation 工作流会在 `main` 上的源码或文档更新时自动生成并发布 GitHub Pages。
 首次启用所需的 GitHub 设置、源码范围、中文页面和可选图表的配置见 [Doxygen 使用说明](docs/doxygen.md)。

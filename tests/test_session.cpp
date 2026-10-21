@@ -443,7 +443,7 @@ namespace {
             { "http", encoded }
         };
         passed &= check(auth.Has("http") && !auth.Has("HTTP") && auth.GetUsername("absent").empty() && auth.Has("absent"), "proxy lookup must retain exact keys and insertion semantics");
-        passed &= check(rejects([&] { std::as_const(auth).GetPasswordUnderlying("missing"); }), "const secure credential lookup must reject absent protocols");
+        passed &= check(rejects([&] { (void)std::as_const(auth).GetPasswordUnderlying("missing"); }), "const secure credential lookup must reject absent protocols");
         auto session_owner = mcr::Session::Create().value();
         auto& session = *session_owner;
         configure(session, server);
@@ -564,7 +564,7 @@ namespace {
         }
         passed &= check(!response.error && std::filesystem::file_size(temporary.path) == 28, "download retries must retain their file destination");
         auto asynchronous{ make_session(server) };
-        asynchronous->AddInterceptor(std::make_shared<I>([](mcr::Session& current) { auto result{ I::Proceed(current).value() }; result.status_code = 201; return result; }));
+        asynchronous->AddInterceptor(std::make_shared<I>([](mcr::Session& current) { auto result{ I::Proceed(current).value() }; result.status_code = 201; return result; })).value();
         passed &= check(asynchronous->GetAsync().value().Get().value().status_code == 201, "async methods must run the same interceptor chain");
         return passed;
     }

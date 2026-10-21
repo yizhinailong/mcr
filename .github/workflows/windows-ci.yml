@@ -95,7 +95,7 @@ jobs:
         run: mcpp build
 
       - name: Test
-        run: mcpp test
+        run: mcpp test --timeout 90
 
       - name: Build request examples
         working-directory: example
