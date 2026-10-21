@@ -361,21 +361,31 @@ export namespace mcr::detail {
                             continue;
                         }
                         auto* handle = transfer->session->GetCurlHolder()->handle;
+                        bool inserted{};
                         try {
+                            // Claim the handle before preparing it: a duplicate must not change an active transfer.
+                            auto const entry = active.try_emplace(handle, transfer);
+                            inserted = entry.second;
+                            if (!inserted) {
+                                complete(std::move(transfer), CURLE_FAILED_INIT, {}, CURLM_ADDED_ALREADY);
+                                continue;
+                            }
                             transfer->setup_result = transfer->prepare(*transfer->session);
                             if (!transfer->setup_result) {
+                                active.erase(handle);
                                 complete(std::move(transfer), CURLE_FAILED_INIT);
                                 continue;
                             }
                             transfer->prepared = true;
-                            active.emplace(handle, transfer);
                             auto const added = curl_multi_add_handle(m_multi->handle, handle);
                             if (added != CURLM_OK) {
                                 active.erase(handle);
                                 complete(std::move(transfer), CURLE_FAILED_INIT, {}, added);
                             }
                         } catch (...) {
-                            active.erase(handle);
+                            if (inserted) {
+                                active.erase(handle);
+                            }
                             complete(std::move(transfer), CURLE_FAILED_INIT, std::current_exception());
                         }
                     }
@@ -475,6 +485,7 @@ export namespace mcr::detail {
          * @brief Publish only fully initialized state and avoid accessing this after acceptance.
          * @param continuation Already suspended coroutine to resume.
          * @return Whether the runtime accepted responsibility for resumption.
+         * @note [expr.await] suspends before this call. Acceptance may destroy the awaiter before return.
          */
         auto await_suspend(std::coroutine_handle<> continuation) -> bool {
             auto work = std::move(m_work);
@@ -484,6 +495,7 @@ export namespace mcr::detail {
                 m_status = std::move(status);
                 return false;
             }
+            // Only locals may be accessed after acceptance, including during their destruction.
             return true;
         }
 
@@ -500,6 +512,12 @@ export namespace mcr::detail {
         std::shared_ptr<CoroTransfer> m_transfer;
 
     public:
+        /**
+         * @brief Own all transfer state before publishing a continuation to the runtime.
+         * @param session Session exclusively used by this transfer.
+         * @param prepare Request preparation performed on the I/O thread.
+         * @param token Cooperative cancellation token.
+         */
         CoroTransferAwaiter(
             std::shared_ptr<Session> session,
             std::function<Result<void>(Session&)> prepare,
@@ -507,9 +525,18 @@ export namespace mcr::detail {
         )
             : m_transfer{ std::make_shared<CoroTransfer>(std::move(session), std::move(prepare), token) } {}
 
-        bool await_ready() const noexcept { return false; }
+        /**
+         * @brief Always suspend to serialize curl access through the runtime.
+         */
+        auto await_ready() const noexcept -> bool { return false; }
 
-        bool await_suspend(std::coroutine_handle<> continuation) {
+        /**
+         * @brief Publish fully initialized state without accessing the awaiter after acceptance.
+         * @param continuation Already suspended coroutine to resume.
+         * @return Whether the runtime accepted responsibility for resumption.
+         * @note The local shared owner survives even if completion destroys this awaiter before return.
+         */
+        auto await_suspend(std::coroutine_handle<> continuation) -> bool {
             auto transfer = m_transfer;
             auto& runtime = CoroRuntime::Instance();
             transfer->continuation = continuation;
@@ -522,6 +549,11 @@ export namespace mcr::detail {
             return true;
         }
 
+        /**
+         * @brief Consume the transfer outcome on the continuation thread.
+         * @return Response or setup error.
+         * @throws Any exception captured while preparing the transfer or running user callbacks.
+         */
         auto await_resume() -> Result<Response> {
             if (m_transfer->error) {
                 std::rethrow_exception(m_transfer->error);
