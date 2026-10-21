@@ -331,15 +331,15 @@ export namespace mcr {
         }
 
         /**
-         * @brief Attach a borrowed connection pool.
-         * @param pool Pool that must outlive this session's handle.
+         * @brief Attach a shared connection pool and retain it through easy-handle cleanup.
+         * @param pool Pool whose cache and lock ownership is copied; temporary pools are supported.
          * @return Success or the first operation error.
          */
         auto SetConnectionPool(ConnectionPool const& pool) -> Result<void> {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            if (auto status = pool.SetupHandler(m_curl->handle); !status) {
+            if (auto status = pool.SetupHandler(*m_curl); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
             return {};

@@ -30,6 +30,7 @@ export namespace mcr::curl {
         curl_slist* resolve_curl_list{ nullptr };  ///< Owned hostname resolution override list.
         curl_mime* multipart{ nullptr };           ///< Owned multipart MIME data.
         std::array<char, CURL_ERROR_SIZE> error{}; ///< Error storage registered with the active handle.
+        std::shared_ptr<void> connection_pool;     ///< Retained share state; released after easy-handle cleanup.
 
         /**
          * @brief Initialize an easy handle and register this holder's error buffer.
@@ -64,7 +65,8 @@ export namespace mcr::curl {
               chunk{ std::exchange(other.chunk, nullptr) },
               resolve_curl_list{ std::exchange(other.resolve_curl_list, nullptr) },
               multipart{ std::exchange(other.multipart, nullptr) },
-              error{ other.error } {
+              error{ other.error },
+              connection_pool{ std::move(other.connection_pool) } {
             bindErrorBuffer();
         }
 
@@ -88,6 +90,7 @@ export namespace mcr::curl {
                 resolve_curl_list = std::exchange(other.resolve_curl_list, nullptr);
                 multipart = std::exchange(other.multipart, nullptr);
                 error = other.error;
+                connection_pool = std::move(other.connection_pool);
                 bindErrorBuffer();
             }
             return *this;
@@ -168,13 +171,14 @@ export namespace mcr::curl {
         }
 
         /**
-         * @brief Release each owned resource and clear its pointer, following cpr's cleanup order.
+         * @brief Release transfer resources, then the easy handle, then its retained share state.
          */
         auto releaseResources() noexcept -> void {
             curl_slist_free_all(std::exchange(chunk, nullptr));
             curl_slist_free_all(std::exchange(resolve_curl_list, nullptr));
             curl_mime_free(std::exchange(multipart, nullptr));
             curl_easy_cleanup(std::exchange(handle, nullptr));
+            connection_pool.reset();
         }
 
         /**

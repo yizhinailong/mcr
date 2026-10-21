@@ -9,14 +9,16 @@ module;
 export module mcr:connection_pool;
 
 export import :error;
+import :curlholder;
 import std;
 
 export namespace mcr {
 
     /**
      * @brief Share connection and TLS session caches between easy handles.
-     * @note Keep at least one copy alive until all attached easy handles are cleaned up or
-     * detached with CURLOPT_SHARE set to null. Callers manage curl's global initialization.
+     * @note Sessions and SetupHandler(CurlHolder&) retain the pool until easy-handle cleanup.
+     * Raw SetupHandler(CURL*) borrows the pool; retain a copy until detachment or cleanup.
+     * Callers manage curl's global initialization.
      * Libcurl does not support using a shared connection cache in concurrent threads;
      * the lock callbacks do not remove this restriction. Serialize use of the same pool.
      */
@@ -24,8 +26,24 @@ export namespace mcr {
     private:
         using Mutexes = std::array<std::mutex, CURL_LOCK_DATA_LAST>;
 
-        std::shared_ptr<Mutexes> m_mutexes;   ///< Locks by curl data type; outlive the share handle.
-        std::shared_ptr<CURLSH> m_curl_share; ///< Shared caches, cleaned up when the final copy is destroyed.
+        /**
+         * @brief Keep callback storage alive until libcurl actually releases its share handle.
+         */
+        struct State {
+            Mutexes mutexes;                    ///< Locks indexed by curl data type.
+            CURLSH* share{ curl_share_init() }; ///< Owned shared caches.
+            State* next{};                      ///< Intrusive link used only after failed cleanup.
+        };
+
+        /**
+         * @brief Retain prematurely released borrowed shares without allocating during destruction.
+         */
+        struct RetiredStates {
+            std::mutex mutex; ///< Serializes collection and retirement.
+            State* head{};    ///< States still rejected by curl_share_cleanup.
+        };
+
+        std::shared_ptr<State> m_state; ///< Shared caches and callback storage.
 
     public:
         /**
@@ -34,20 +52,21 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         [[nodiscard]] static auto Create() -> Result<ConnectionPool> {
+            (void)CollectUnused();
             ConnectionPool result;
-            if (!result.m_curl_share) {
+            if (!result.m_state->share) {
                 return std::unexpected{
                     Error{ ErrorCode::FAILED_INIT, "mcr::ConnectionPool: curl_share_init failed." }
                 };
             }
-            auto const share = result.m_curl_share.get();
+            auto const share = result.m_state->share;
             if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT), "curl_share_setopt"); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
             if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION), "curl_share_setopt"); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_USERDATA, static_cast<void*>(result.m_mutexes.get())), "curl_share_setopt"); !status) {
+            if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_USERDATA, static_cast<void*>(&result.m_state->mutexes)), "curl_share_setopt"); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
             if (auto status = checkShareResult(curl_share_setopt(share, CURLSHOPT_LOCKFUNC, static_cast<curl_lock_function>(lock)), "curl_share_setopt"); !status) {
@@ -78,7 +97,7 @@ export namespace mcr {
                     Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::ConnectionPool: SetupHandler requires a nonnull easy handle." }
                 };
             }
-            auto const result{ curl_easy_setopt(easy_handler, CURLOPT_SHARE, m_curl_share.get()) };
+            auto const result{ curl_easy_setopt(easy_handler, CURLOPT_SHARE, m_state->share) };
             if (result != CURLE_OK) {
                 return std::unexpected{
                     Error{ static_cast<std::int32_t>(result), std::format("mcr::ConnectionPool: CURLOPT_SHARE failed: {}", curl_easy_strerror(result)) }
@@ -87,11 +106,48 @@ export namespace mcr {
             return {};
         }
 
+        /**
+         * @brief Attach an idle owned handle and retain its caches through easy-handle cleanup.
+         * @param holder Holder whose previous pool ownership is replaced only after successful setup.
+         * @return Success or a curl option error.
+         */
+        auto SetupHandler(curl::CurlHolder& holder) const -> Result<void> {
+            if (auto status = SetupHandler(holder.handle); !status) {
+                return status;
+            }
+            holder.connection_pool = m_state;
+            return {};
+        }
+
+        /**
+         * @brief Retry shares whose last borrowed pool copy was destroyed before handle detachment.
+         * @return Number of states still retained because libcurl rejected their cleanup.
+         * @note Call after detaching or cleaning raw borrowed handles and before curl_global_cleanup.
+         * Create() also retries collection. Normal owned-handle use requires no explicit collection.
+         */
+        [[nodiscard]] static auto CollectUnused() noexcept -> std::size_t {
+            auto& retired = retiredStates();
+            std::lock_guard guard{ retired.mutex };
+            std::size_t pending{};
+            auto** link = &retired.head;
+            while (*link) {
+                auto* state = *link;
+                if (releaseShare(*state)) {
+                    *link = state->next;
+                    delete state;
+                } else {
+                    ++pending;
+                    link = &state->next;
+                }
+            }
+            return pending;
+        }
+
     private:
         /**
          * @brief Acquire resources before checked share configuration.
          */
-        ConnectionPool() : m_mutexes{ std::make_shared<Mutexes>() }, m_curl_share{ curl_share_init(), cleanupShare } {}
+        ConnectionPool() : m_state{ std::make_unique<State>().release(), cleanupShare } {}
 
         /**
          * @brief Lock the mutex for the data type requested by libcurl.
@@ -113,14 +169,32 @@ export namespace mcr {
         }
 
         /**
-         * @brief Disable callbacks and release a share handle while its mutex storage is alive.
+         * @brief Store rejected cleanup states until all raw borrowers have detached.
          */
-        static auto cleanupShare(CURLSH* share) noexcept -> void {
-            if (share) {
-                (void)curl_share_setopt(share, CURLSHOPT_LOCKFUNC, static_cast<curl_lock_function>(nullptr));
-                (void)curl_share_setopt(share, CURLSHOPT_UNLOCKFUNC, static_cast<curl_unlock_function>(nullptr));
-                (void)curl_share_cleanup(share);
+        static auto cleanupShare(State* state) noexcept -> void {
+            if (releaseShare(*state)) {
+                delete state;
+            } else {
+                auto& retired = retiredStates();
+                std::lock_guard guard{ retired.mutex };
+                state->next = retired.head;
+                retired.head = state;
             }
+        }
+
+        /**
+         * @brief Check libcurl cleanup before releasing any lock callback storage.
+         */
+        static auto releaseShare(State& state) noexcept -> bool {
+            return !state.share || curl_share_cleanup(state.share) == CURLSHE_OK;
+        }
+
+        /**
+         * @brief Access allocation-free retirement storage without curl work during static destruction.
+         */
+        static auto retiredStates() noexcept -> RetiredStates& {
+            static RetiredStates s_retired;
+            return s_retired;
         }
 
         /**

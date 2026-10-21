@@ -144,7 +144,8 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
 - 同一个 Session 的配置与请求必须串行使用。异步请求需要
   `Session::Create()` 提供的共享所有权；任务持有 Session 直到执行结束。
 - Body 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
-  借用的数据、回调捕获对象、下载流和 ConnectionPool 必须覆盖使用它们的生命周期。
+  借用的数据、回调捕获对象和下载流必须覆盖使用它们的生命周期。
+  ConnectionPool 的共享状态由会话句柄保留，支持传入临时池。
 - Content 会跨请求保留，调用 `RemoveContent()` 清除。
 - ReadCallback 独立保留，仅在 POST、PUT、PATCH 未设置 Content 时提供上传正文，
   可通过 `SetReadCallback({})` 清除。GET、DELETE、OPTIONS、HEAD 和 Download 不调用它。

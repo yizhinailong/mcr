@@ -292,6 +292,64 @@ namespace {
         return passed;
     }
 
+    /**
+     * @brief Retain temporary and local pools through sessions and externally retained holder moves.
+     */
+    auto check_session_lifetime() -> bool {
+        HttpServer server;
+        bool passed{ true };
+        std::weak_ptr<void> lifetime;
+        {
+            auto session = mcr::Session::Create().value();
+            session->SetUrl(mcr::Url{ server.Url() }).value();
+            session->SetProxies({ { "http", "" }, { "no_proxy", "*" } }).value();
+            session->SetTimeout(mcr::options::Timeout{ std::chrono::seconds{ 5 } }).value();
+            {
+                auto local = mcr::ConnectionPool::Create().value();
+                auto copy = local;
+                session->SetConnectionPool(copy).value();
+            }
+            passed &= check(session->Get().value().text == "Hello pool!", "a session must retain a pool after every caller-owned copy is destroyed");
+            session->SetConnectionPool(mcr::ConnectionPool::Create().value()).value();
+            passed &= check(session->Get().value().text == "Hello pool!", "a temporary replacement pool must survive the full expression");
+            auto external = session->GetCurlHolder();
+            lifetime = external->connection_pool;
+            session.reset();
+            passed &= check(!lifetime.expired(), "a holder retained beyond its session must retain share ownership across curl_easy_reset");
+            auto moved = std::move(*external);
+            external.reset();
+            passed &= check(!lifetime.expired(), "move construction must carry share state with its easy handle");
+            auto assigned = mcr::curl::CurlHolder::Create().value();
+            assigned = std::move(moved);
+            passed &= check(!lifetime.expired(), "move assignment must carry share state with its easy handle");
+        }
+        passed &= check(lifetime.expired(), "easy-handle cleanup must release the final pool owner");
+        server.Stop();
+        return passed;
+    }
+
+    /**
+     * @brief Preserve lock storage on CURLSHE_IN_USE and reclaim it after raw borrowers detach.
+     */
+    auto check_deferred_cleanup() -> bool {
+        auto first = mcr::curl::CurlHolder::Create().value();
+        auto second = mcr::curl::CurlHolder::Create().value();
+        {
+            auto pool = mcr::ConnectionPool::Create().value();
+            pool.SetupHandler(first.handle).value();
+        }
+        {
+            auto pool = mcr::ConnectionPool::Create().value();
+            pool.SetupHandler(second.handle).value();
+        }
+        bool passed{ check(mcr::ConnectionPool::CollectUnused() == 2, "in-use borrowed shares must retain their handles and lock storage") };
+        passed &= check(curl_easy_setopt(first.handle, CURLOPT_SHARE, static_cast<CURLSH*>(nullptr)) == CURLE_OK, "a raw borrower must remain safe to detach after pool retirement");
+        passed &= check(mcr::ConnectionPool::CollectUnused() == 1, "collection must reclaim detached entries even behind an in-use entry");
+        passed &= check(curl_easy_setopt(second.handle, CURLOPT_SHARE, static_cast<CURLSH*>(nullptr)) == CURLE_OK, "the last raw borrower must remain safe to detach");
+        passed &= check(mcr::ConnectionPool::CollectUnused() == 0, "all retired shares must be released after their raw borrowers detach");
+        return passed;
+    }
+
     auto request(
         std::string const& url,
         mcr::ConnectionPool const* pool,
@@ -358,6 +416,8 @@ int main() {
     try {
         passed &= check_failures();
         passed &= check_attached_lifetime();
+        passed &= check_session_lifetime();
+        passed &= check_deferred_cleanup();
         passed &= check_connection_reuse();
     } catch (std::exception const& error) {
         std::println("test_connection_pool: unexpected exception: {}", error.what());
