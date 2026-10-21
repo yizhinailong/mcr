@@ -377,7 +377,7 @@ export namespace mcr::utils {
     /**
      * @brief Percent-encode a URL component using a temporary CurlHolder.
      * @param input Bytes to encode, including embedded nulls; need not be null-terminated.
-     * @return Encoded secure storage, or an empty string for empty input or curl conversion failure.
+     * @return Encoded secure storage, empty for empty input, or an explicit initialization/conversion error.
      * @note Reuse CurlHolder::UrlEncode() for repeated conversions to avoid handle creation overhead.
      */
     [[nodiscard]] auto url_encode(std::string_view input) -> Result<SecureString> {
@@ -391,7 +391,7 @@ export namespace mcr::utils {
     /**
      * @brief Decode percent escapes using a temporary CurlHolder, leaving plus signs unchanged.
      * @param input Bytes to decode; need not be null-terminated.
-     * @return Decoded secure storage retaining embedded nulls, or empty on empty input or curl failure.
+     * @return Decoded secure storage retaining embedded nulls, empty for empty input, or an explicit initialization/conversion error.
      * @note Reuse CurlHolder::UrlDecode() for repeated conversions. Curl global initialization and
      * cleanup remain the caller's responsibility, as for CurlHolder.
      */

@@ -285,7 +285,7 @@ namespace mcr::detail {
         auto* pool{ GlobalThreadPool::GetInstance() };
         if (!pool) {
             return std::unexpected{
-                Error{ ErrorCode::FAILED_INIT, "mcr::MultiAsync: global thread pool has been cleaned up." }
+                Error{ ErrorCode::FAILED_INIT, "mcr::MultiGetAsync/MultiPostAsync and other asynchronous batch requests: global thread pool has been cleaned up." }
             };
         }
         auto cancelled{ std::make_shared<std::atomic_bool>(false) };
@@ -1006,6 +1006,6 @@ export namespace mcr {
                 Error{ ErrorCode::WRITE_ERROR, "mcr::DownloadCoro: could not finish writing the output file." }
             };
         }
-        co_return response;
+        co_return std::move(response);
     }
 } // namespace mcr
