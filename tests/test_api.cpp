@@ -12,6 +12,23 @@ namespace {
     using namespace std::chrono_literals;
     using mcr::test::HttpServer;
 
+    /**
+     * @brief Check public request constraints and the result type through import mcr.
+     * @tparam M HTTP method, including deliberately invalid enum values.
+     * @tparam Ts Option types.
+     */
+    template <mcr::Method M, typename... Ts>
+    concept RequestAvailable = requires(Ts&&... values) {
+        { mcr::request<M>(std::forward<Ts>(values)...) } -> std::same_as<mcr::Result<mcr::Response>>;
+    };
+
+    static_assert(std::is_scoped_enum_v<mcr::Method>);
+    static_assert(std::same_as<decltype(mcr::method::Get), mcr::Method const>);
+    static_assert(mcr::method::Get == mcr::Method::Get && mcr::method::Post == mcr::Method::Post && mcr::method::Put == mcr::Method::Put && mcr::method::Head == mcr::Method::Head && mcr::method::Delete == mcr::Method::Delete && mcr::method::Options == mcr::Method::Options && mcr::method::Patch == mcr::Method::Patch);
+    static_assert(!RequestAvailable<static_cast<mcr::Method>(-1)>);
+    static_assert(!RequestAvailable<static_cast<mcr::Method>(7), mcr::Url>);
+    static_assert(!RequestAvailable<static_cast<mcr::Method>(255), mcr::Url, mcr::Body>);
+
     auto check(bool condition, std::string_view message) -> bool {
         if (!condition) {
             std::println("test_api: {}", message);
@@ -32,10 +49,42 @@ namespace {
         return check(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text == (method == "HEAD" ? "" : "payload"), std::format("{} must preserve method and body semantics", method));
     }
 
-    template <typename Sync, typename Async, typename Callback, typename Multi, typename MultiAsync>
+    /**
+     * @brief Exercise named request families and the equivalent compile-time synchronous entry.
+     * @tparam M Public method constant selecting request<M>.
+     * @tparam Sync Named synchronous entry.
+     * @tparam Async Named asynchronous entry.
+     * @tparam Callback Named callback entry.
+     * @tparam Multi Named batch entry.
+     * @tparam MultiAsync Named asynchronous batch entry.
+     * @param server Local HTTP fixture.
+     * @param method Expected HTTP verb.
+     * @param sync Named synchronous callable.
+     * @param asynchronous Named asynchronous callable.
+     * @param callback Named callback callable.
+     * @param multi Named batch callable.
+     * @param multi_async Named asynchronous batch callable.
+     * @return Whether all entries preserve the expected behavior.
+     */
+    template <mcr::Method M, typename Sync, typename Async, typename Callback, typename Multi, typename MultiAsync>
     auto check_family(HttpServer const& server, std::string_view method, Sync sync, Async asynchronous, Callback callback, Multi multi, MultiAsync multi_async) -> bool {
+        static_assert(RequestAvailable<M> && RequestAvailable<M, mcr::Url, mcr::Body>);
         auto const args{ options(server) };
         bool passed{ check_response(std::apply(sync, args), method) };
+        auto request = [](auto&&... values) {
+            return mcr::request<M>(std::forward<decltype(values)>(values)...).value();
+        };
+        auto response{ std::apply(request, args) };
+        passed &= check_response(response, method);
+        passed &= check_response(std::apply(request, options(server)), method);
+        if constexpr (M == mcr::method::Head) {
+            passed &= check(response.header.at("Content-Length") == "0", "HEAD must omit the configured request body as well as the response body");
+        }
+        response = mcr::request<M>(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args)).value();
+        passed &= check(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text.empty(), std::format("{} must also work without a body option", method));
+        auto empty{ mcr::request<M>() };
+        auto const named_empty{ sync() };
+        passed &= check(empty && bool(empty->error) && empty->status_code == 0 && empty->error.code == named_empty.error.code, "zero options must retain the named entry's missing URL transfer error");
         passed &= check_response(std::apply(asynchronous, args).Get().value(), method);
         auto continuation{ [&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  return check_response(response, method); } };
         passed &= std::apply([&](auto const&... values) { return callback(continuation, values...); }, args).Get();
@@ -55,13 +104,13 @@ namespace {
 
     auto check_methods(HttpServer const& server) -> bool {
         bool passed{ true };
-        passed &= check_family(server, "GET", [](auto&&... values) { return mcr::Get(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::GetAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::GetCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiGet(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiGetAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "POST", [](auto&&... values) { return mcr::Post(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PostAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PostCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPost(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPostAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "PUT", [](auto&&... values) { return mcr::Put(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PutAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PutCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPut(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPutAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "HEAD", [](auto&&... values) { return mcr::Head(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::HeadAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::HeadCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiHead(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiHeadAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "DELETE", [](auto&&... values) { return mcr::Delete(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::DeleteAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::DeleteCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiDelete(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiDeleteAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "OPTIONS", [](auto&&... values) { return mcr::Options(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::OptionsAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::OptionsCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiOptions(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiOptionsAsync(std::forward<decltype(values)>(values)...).value(); });
-        passed &= check_family(server, "PATCH", [](auto&&... values) { return mcr::Patch(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PatchAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PatchCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPatch(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPatchAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Get>(server, "GET", [](auto&&... values) { return mcr::Get(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::GetAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::GetCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiGet(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiGetAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Post>(server, "POST", [](auto&&... values) { return mcr::Post(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PostAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PostCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPost(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPostAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Put>(server, "PUT", [](auto&&... values) { return mcr::Put(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PutAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PutCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPut(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPutAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Head>(server, "HEAD", [](auto&&... values) { return mcr::Head(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::HeadAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::HeadCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiHead(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiHeadAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Delete>(server, "DELETE", [](auto&&... values) { return mcr::Delete(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::DeleteAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::DeleteCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiDelete(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiDeleteAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Options>(server, "OPTIONS", [](auto&&... values) { return mcr::Options(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::OptionsAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::OptionsCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiOptions(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiOptionsAsync(std::forward<decltype(values)>(values)...).value(); });
+        passed &= check_family<mcr::method::Patch>(server, "PATCH", [](auto&&... values) { return mcr::Patch(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PatchAsync(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::PatchCallback(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPatch(std::forward<decltype(values)>(values)...).value(); }, [](auto&&... values) { return mcr::MultiPatchAsync(std::forward<decltype(values)>(values)...).value(); });
 
         passed &= check(bool(mcr::Get().value().error) && bool(mcr::GetAsync().value().Get().value().error), "zero options must compile and report a missing URL");
         auto empty_options{ mcr::MultiGet(std::tuple<>{}).value() };
@@ -83,8 +132,15 @@ namespace {
         },
                                   options(server)) };
         bool passed{ check(response.header["X-Request-X-Custom"] == "last" && response.header["X-Request-X-Empty"] == "preserved", "all cv/ref forms of repeated Header options must merge in order") };
+        auto requested{ std::apply([&](auto const&... values) {
+            return mcr::request<mcr::method::Get>(values..., first, second, mcr::Header{ { "X-Custom", "last" } }, mcr::Header{}).value();
+        },
+                                   options(server)) };
+        passed &= check(requested.header["X-Request-X-Custom"] == response.header["X-Request-X-Custom"] && requested.header["X-Request-X-Empty"] == response.header["X-Request-X-Empty"], "request<M> must preserve ordered, case-insensitive merging of lvalue, const and rvalue headers");
         response = std::apply([&](auto const&... values) { return mcr::Get(values..., std::ref(first), std::cref(second)).value(); }, options(server));
         passed &= check(response.header["X-Request-X-Custom"] == "second" && response.header["X-Request-X-Empty"] == "preserved", "explicit reference-wrapped headers must also merge");
+        requested = std::apply([&](auto const&... values) { return mcr::request<mcr::method::Get>(values..., std::ref(first), std::cref(second)).value(); }, options(server));
+        passed &= check(requested.header["X-Request-X-Custom"] == response.header["X-Request-X-Custom"] && requested.header["X-Request-X-Empty"] == response.header["X-Request-X-Empty"], "request<M> must merge explicit reference-wrapped headers like Get");
 
         auto* pool{ mcr::GlobalThreadPool::GetInstance() };
         pool->Wait();
@@ -114,6 +170,11 @@ namespace {
         MoveOnlyUrl(MoveOnlyUrl&&) = default;
     };
 
+    /**
+     * @brief Check ordered content replacement and synchronous option forwarding.
+     * @param server Local HTTP fixture.
+     * @return Whether named and compile-time entries forward options consistently.
+     */
     auto check_content_options(HttpServer const& server) -> bool {
         auto const url{ server.Url("/echo") };
         mcr::options::Proxies const proxies{
@@ -122,7 +183,42 @@ namespace {
         };
         mcr::options::Timeout const timeout{ 3000ms };
         auto response{ mcr::Post(url, proxies, timeout, mcr::Body{ "discarded" }, mcr::Body{ "last" }).value() };
-        return check(!response.error && response.text == "last", "the last content option must win in one-shot APIs");
+        bool passed{ check(!response.error && response.text == "last", "the last content option must win in one-shot APIs") };
+        mcr::Body body{ "last" };
+        response = mcr::request<mcr::method::Post>(std::cref(url), std::cref(proxies), std::cref(timeout), mcr::Body{ "discarded" }, std::ref(body)).value();
+        passed &= check(!response.error && response.text == "last" && body.Str() == "last", "request<M> must unwrap borrowed options and apply the last body without moving from lvalues");
+        MoveOnlyUrl movable{ url };
+        response = mcr::request<mcr::method::Post>(movable, proxies, timeout, body).value();
+        passed &= check(!response.error && response.text == "last" && movable.Str() == url.Str() && body.Str() == "last", "request<M> must forward noncopyable lvalue options without taking ownership");
+        response = mcr::request<mcr::method::Post>(MoveOnlyUrl{ url }, proxies, timeout, mcr::Body{ "discarded" }, mcr::Body{ "last" }).value();
+        passed &= check(!response.error && response.text == "last", "request<M> must forward noncopyable rvalues and preserve content option order");
+        return passed;
+    }
+
+    /**
+     * @brief Keep configuration errors, transfer errors and HTTP failures distinct.
+     * @param server Local HTTP fixture.
+     * @return Whether request<M> retains the named entries' error semantics.
+     */
+    auto check_request_errors(HttpServer const& server) -> bool {
+        auto const invalid{ mcr::options::HttpVersion{ static_cast<mcr::options::HttpVersionCode>(255) } };
+        auto const connections{ server.Connections() };
+        auto rejected{ mcr::request<mcr::method::Get>(server.Url(), invalid) };
+        auto named_rejected{ mcr::Get(server.Url(), invalid) };
+        bool passed{ check(!rejected && !named_rejected && rejected.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT && rejected.error().code == named_rejected.error().code && server.Connections() == connections, "request<M> must return configuration errors through Result without sending a request") };
+
+        mcr::Url const unsupported{ "invalid-scheme://localhost/" };
+        auto transfer{ mcr::request<mcr::method::Get>(unsupported) };
+        auto named_transfer{ mcr::Get(unsupported) };
+        passed &= check(transfer && named_transfer && transfer->error.code == mcr::ErrorCode::UNSUPPORTED_PROTOCOL && transfer->error.code == named_transfer->error.code && transfer->status_code == 0, "request<M> must retain transfer errors in Response::error");
+
+        auto const args{ options(server, "/error") };
+        auto response{ std::apply([](auto const&... values) { return mcr::request<mcr::method::Get>(values...).value(); }, args) };
+        auto const named_response{ std::apply([](auto const&... values) { return mcr::Get(values...).value(); }, args) };
+        passed &= check(!response.error && response.status_code == 404 && response.status_code == named_response.status_code && response.text == named_response.text, "request<M> must return HTTP failures as responses with their status codes");
+        response = std::apply([](auto const&... values) { return mcr::request<mcr::method::Head>(values...).value(); }, args);
+        passed &= check(!response.error && response.status_code == 404 && response.header.at("X-Method") == "HEAD" && response.text.empty(), "HEAD must preserve HTTP failures without reading a response body");
+        return passed;
     }
 
     auto check_batches(HttpServer const& server) -> bool {
@@ -288,6 +384,7 @@ auto main() -> int {
         passed &= check_methods(server);
         passed &= check_headers_and_ownership(server);
         passed &= check_content_options(server);
+        passed &= check_request_errors(server);
         passed &= check_batches(server);
         passed &= check_callbacks(server);
         passed &= check_cancellation(server);

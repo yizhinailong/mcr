@@ -8,7 +8,71 @@ export import :task;
 import :coro_runtime;
 import std;
 
+export namespace mcr {
+    /**
+     * @brief HTTP methods supported by synchronous one-shot requests.
+     */
+    enum class Method {
+        Get,     ///< GET request.
+        Post,    ///< POST request.
+        Put,     ///< PUT request.
+        Head,    ///< HEAD request without a response body.
+        Delete,  ///< DELETE request.
+        Options, ///< OPTIONS request.
+        Patch    ///< PATCH request.
+    };
+
+    namespace method {
+        inline constexpr Method Get{ Method::Get };         ///< GET method argument.
+        inline constexpr Method Post{ Method::Post };       ///< POST method argument.
+        inline constexpr Method Put{ Method::Put };         ///< PUT method argument.
+        inline constexpr Method Head{ Method::Head };       ///< HEAD method argument.
+        inline constexpr Method Delete{ Method::Delete };   ///< DELETE method argument.
+        inline constexpr Method Options{ Method::Options }; ///< OPTIONS method argument.
+        inline constexpr Method Patch{ Method::Patch };     ///< PATCH method argument.
+    } // namespace method
+} // namespace mcr
+
 namespace mcr::detail {
+    /**
+     * @brief Accept only the seven supported HTTP method enumerators.
+     * @tparam M Compile-time HTTP method.
+     */
+    template <Method M>
+    concept SupportedMethod =
+        M == Method::Get ||
+        M == Method::Post ||
+        M == Method::Put ||
+        M == Method::Head ||
+        M == Method::Delete ||
+        M == Method::Options ||
+        M == Method::Patch;
+
+    /**
+     * @brief Select the existing synchronous Session method at compile time.
+     * @tparam M Supported HTTP method.
+     * @return Session member function implementing the method's complete behavior.
+     */
+    template <Method M>
+    requires SupportedMethod<M>
+    constexpr auto request_action() {
+        if constexpr (M == Method::Get) {
+            return &Session::Get;
+        } else if constexpr (M == Method::Post) {
+            return &Session::Post;
+        } else if constexpr (M == Method::Put) {
+            return &Session::Put;
+        } else if constexpr (M == Method::Head) {
+            return &Session::Head;
+        } else if constexpr (M == Method::Delete) {
+            return &Session::Delete;
+        } else if constexpr (M == Method::Options) {
+            return &Session::Options;
+        } else if constexpr (M == Method::Patch) {
+            return &Session::Patch;
+        }
+    }
+
     /**
      * @brief Unwrap an explicitly borrowed option.
      * @tparam T Option type.
@@ -267,6 +331,19 @@ namespace mcr::detail {
 } // namespace mcr::detail
 
 export namespace mcr {
+
+    /**
+     * @brief Perform one synchronous request with a compile-time HTTP method.
+     * @tparam M Supported HTTP method; other enum values are rejected by constraints.
+     * @tparam Ts Option types.
+     * @param options Perfectly forwarded options applied in order; repeated headers are merged.
+     * @return Independent response snapshot or an operation error, as in the named entry points.
+     */
+    template <Method M, typename... Ts>
+    requires detail::SupportedMethod<M>
+    [[nodiscard]] auto request(Ts&&... options) -> Result<Response> {
+        return detail::request<detail::request_action<M>()>(std::forward<Ts>(options)...);
+    }
 
     /**
      * @brief Perform one GET request.

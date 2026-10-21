@@ -11,6 +11,7 @@ HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
 | 操作 | 返回值 | 执行方式 |
 | --- | --- | --- |
 | `Get` / `Post` / `Put` / `Head` / `Delete` / `Options` / `Patch` | `Result<Response>` | 临时 Session，同步请求 |
+| `request<M>` | `Result<Response>` | 编译期选择方法的同步请求，与对应命名入口共享行为 |
 | 各方法的 `*Async` | `Result<AsyncResponse>` | 全局线程池中的独立请求 |
 | 各方法的 `*Coro` | `mcr::Task<Result<Response>>` | 惰性启动，curl multi 并发传输，详见[协程请求](coro/coro.md) |
 | 各方法的 `*Callback` | `Result<mcr::utils::AsyncWrapper<回调返回类型, true>>` | 请求完成后在线程池任务中调用完成回调 |
@@ -19,6 +20,71 @@ HTTP 入口保留 cpr 的 `Get`、`Post` 等名称。`AsyncResponse` 是
 | `Download(std::ofstream&, ...)` / `Download(WriteCallback const&, ...)` | `Result<Response>` | 同步下载，正文交给指定消费者 |
 | `DownloadAsync(std::filesystem::path, ...)` | `Result<AsyncResponse>` | 在线程池中打开、下载并关闭目标文件 |
 | `DownloadCoro(std::filesystem::path, ...)` | `mcr::Task<Result<Response>>` | 启动时打开文件，经 curl multi 下载，关闭后返回元数据 |
+
+## 编译期方法请求
+
+`request<M>` 是 mcr 在 cpr 命名入口之外增加的同步 API，声明于 `mcr:api`，通过
+`import mcr;` 使用。其形式为 `template <Method M, typename... Ts>`，接收 `Ts&&...`
+选项并完美转发，标注 `[[nodiscard]]`，返回 `Result<Response>`。
+
+`mcr::Method` 是强类型枚举；`mcr::method` 提供以下 `inline constexpr Method` 常量：
+
+| 方法常量 | 对应枚举值 | 共享行为的命名入口 |
+| --- | --- | --- |
+| `mcr::method::Get` | `mcr::Method::Get` | `mcr::Get` |
+| `mcr::method::Post` | `mcr::Method::Post` | `mcr::Post` |
+| `mcr::method::Put` | `mcr::Method::Put` | `mcr::Put` |
+| `mcr::method::Head` | `mcr::Method::Head` | `mcr::Head` |
+| `mcr::method::Delete` | `mcr::Method::Delete` | `mcr::Delete` |
+| `mcr::method::Options` | `mcr::Method::Options` | `mcr::Options` |
+| `mcr::method::Patch` | `mcr::Method::Patch` | `mcr::Patch` |
+
+方法由模板实参在编译期确定，也可直接使用 `mcr::Method::Get` 等枚举值。
+约束仅接受这七种方法；显式转换得到的其他值（例如 `static_cast<mcr::Method>(255)`）
+在编译期被拒绝，不会回退为 GET。
+
+以下为函数内用法片段，curl 初始化约定同下文的命名入口：
+
+```cpp
+import std;
+import mcr;
+
+auto result = mcr::request<mcr::method::Get>(
+    mcr::Url{ "http://127.0.0.1:8080/hello" },
+    mcr::options::Timeout{ std::chrono::seconds{ 3 } }
+);
+auto posted = mcr::request<mcr::method::Post>(
+    mcr::Url{ "http://127.0.0.1:8080/echo" },
+    mcr::Header{ { "Content-Type", "application/json" } },
+    mcr::Body{ R"({"message":"hello"})" }
+);
+```
+
+新入口复用对应 Session 方法和命名入口的选项处理流程，方法与正文语义一致；
+HEAD 不发送已配置的正文，也不读取响应正文。选项按参数顺序应用，重复 Header
+按名称忽略大小写合并，后值覆盖前值，空 Header 不清除已有字段。
+普通左值、右值及显式 `std::ref` / `std::cref` 的处理与 `Get` / `Post` 等入口一致。
+`request<mcr::method::Get>()` 等零选项调用合法，缺少 URL 的传输错误保存在返回响应中。
+
+返回值也沿用命名入口的错误分层：配置等操作失败返回失败的 `Result`；
+传输错误保存在 `Response::error`；HTTP 4xx/5xx 仍返回响应，通过 `Response::status_code`
+判断。详见[错误处理](utils/error.md)。
+
+该入口适合需要传递方法参数的泛型封装，例如：
+
+```cpp
+template <mcr::Method M, typename... Ts>
+[[nodiscard]] auto send(Ts&&... options) -> mcr::Result<mcr::Response> {
+    return mcr::request<M>(std::forward<Ts>(options)...);
+}
+
+// 在函数内调用。
+auto response = send<mcr::method::Patch>(
+    mcr::Url{ "http://127.0.0.1:8080/echo" }, mcr::Body{ "updated" }
+);
+```
+
+`request<M>` 仅提供同步请求；异步、协程、回调和批量请求继续使用各自的命名入口。
 
 ## 请求选项与结果
 
@@ -162,7 +228,8 @@ curl_easy_setopt(handle, CURLOPT_SSL_CTX_DATA, ca_pem.data());
 
 - `mcpp build`、`mcpp test`。
 - `tests/test_api.cpp` 复用 `tests/fixtures/http_server.hpp` 的回环服务器，验证所有方法、
-  Header 合并、异步所有权、结果类型、异常、真实并发、排队/传输中取消及二进制下载。
+  `request<M>` 的公开类型与编译期约束、正文和 HEAD 语义、零选项、错误分层、
+  Header 合并、选项转发、异步所有权、结果类型、异常、真实并发、排队/传输中取消及二进制下载。
 - `tests/test_version.cpp` 通过总入口检查生成常量，并与 manifest 对照。
 - `tests/test_ssl_ctx.cpp` 在 OpenSSL 构建下生成短期自签 CA，检查坏证书、bundle、重复加载
   和实际 trust store 验证；Schannel 构建验证明确的不支持返回值。
