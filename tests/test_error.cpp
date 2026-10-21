@@ -68,6 +68,8 @@ int main() {
         { CURLE_SETOPT_OPTION_SYNTAX, mcr::ErrorCode::SETOPT_OPTION_SYNTAX },
         { CURLE_HTTP3, mcr::ErrorCode::HTTP3 },
         { CURLE_TOO_LARGE, mcr::ErrorCode::TOO_LARGE },
+        { CURLE_ECH_REQUIRED, mcr::ErrorCode::ECH_REQUIRED },
+        { CURL_LAST, mcr::ErrorCode::UNKNOWN_ERROR },
         { CURLE_FTP_WEIRD_PASS_REPLY, mcr::ErrorCode::UNKNOWN_ERROR },
         { -1, mcr::ErrorCode::UNKNOWN_ERROR },
         { (std::numeric_limits<std::int32_t>::max)(), mcr::ErrorCode::UNKNOWN_ERROR },
@@ -81,9 +83,11 @@ int main() {
         );
     }
 
+    static_assert(std::to_underlying(mcr::ErrorCode::ECH_REQUIRED) == 63);
+    passed &= check(mcr::to_string(mcr::ErrorCode::ECH_REQUIRED) == "ECH_REQUIRED", "ECH failures must have a distinct symbolic name");
     auto const& mapping{ mcr::get_error_code_to_string_mapping() };
-    passed &= check(mapping.size() == 64, "all 64 cpr error codes must have names");
-    for (std::uint16_t value{ 0 }; value <= 62; ++value) {
+    passed &= check(mapping.size() == 65, "all supported error codes and UNKNOWN_ERROR must have names");
+    for (std::uint16_t value{ 0 }; value <= std::to_underlying(mcr::ErrorCode::ECH_REQUIRED); ++value) {
         passed &= check(
             mapping.contains(static_cast<mcr::ErrorCode>(value)),
             "a supported error code is missing its name"

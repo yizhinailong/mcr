@@ -17,70 +17,71 @@ export namespace mcr {
      * @note These values differ from CURLcode. Use error_code_from_curl() to convert curl errors.
      */
     enum class ErrorCode : std::uint16_t {
-        OK = 0, ///< No error occurred.
-        UNSUPPORTED_PROTOCOL = 1,
-        FAILED_INIT = 2,
-        URL_MALFORMAT = 3,
-        NOT_BUILT_IN = 4,
-        COULDNT_RESOLVE_PROXY = 5,
-        COULDNT_RESOLVE_HOST = 6,
-        COULDNT_CONNECT = 7,
-        WEIRD_SERVER_REPLY = 8,
-        REMOTE_ACCESS_DENIED = 9,
-        HTTP2 = 10,
-        PARTIAL_FILE = 11,
-        QUOTE_ERROR = 12,
-        HTTP_RETURNED_ERROR = 13,
-        WRITE_ERROR = 14,
-        UPLOAD_FAILED = 15,
-        READ_ERROR = 16,
-        OUT_OF_MEMORY = 17,
-        OPERATION_TIMEDOUT = 18,
-        RANGE_ERROR = 19,
-        HTTP_POST_ERROR = 20,
-        SSL_CONNECT_ERROR = 21,
-        BAD_DOWNLOAD_RESUME = 22,
-        FILE_COULDNT_READ_FILE = 23,
-        FUNCTION_NOT_FOUND = 24,
-        ABORTED_BY_CALLBACK = 25,
-        BAD_FUNCTION_ARGUMENT = 26,
-        INTERFACE_FAILED = 27,
-        TOO_MANY_REDIRECTS = 28,
-        UNKNOWN_OPTION = 29,
-        SETOPT_OPTION_SYNTAX = 30,
-        GOT_NOTHING = 31,
-        SSL_ENGINE_NOTFOUND = 32,
-        SSL_ENGINE_SETFAILED = 33,
-        SEND_ERROR = 34,
-        RECV_ERROR = 35,
-        SSL_CERTPROBLEM = 36,
-        SSL_CIPHER = 37,
-        PEER_FAILED_VERIFICATION = 38,
-        BAD_CONTENT_ENCODING = 39,
-        FILESIZE_EXCEEDED = 40,
-        USE_SSL_FAILED = 41,
-        SEND_FAIL_REWIND = 42,
-        SSL_ENGINE_INITFAILED = 43,
-        LOGIN_DENIED = 44,
-        SSL_CACERT_BADFILE = 45,
-        SSL_SHUTDOWN_FAILED = 46,
-        AGAIN = 47,
-        SSL_CRL_BADFILE = 48,
-        SSL_ISSUER_ERROR = 49,
-        CHUNK_FAILED = 50,
-        NO_CONNECTION_AVAILABLE = 51,
-        SSL_PINNEDPUBKEYNOTMATCH = 52,
-        SSL_INVALIDCERTSTATUS = 53,
-        HTTP2_STREAM = 54,
-        RECURSIVE_API_CALL = 55,
-        AUTH_ERROR = 56,
-        HTTP3 = 57,
-        QUIC_CONNECT_ERROR = 58,
-        PROXY = 59,
-        SSL_CLIENTCERT = 60,
-        UNRECOVERABLE_POLL = 61,
-        TOO_LARGE = 62,
-        UNKNOWN_ERROR = 1000, ///< An unsupported or unrecognized curl error occurred.
+        OK = 0,                        ///< No error occurred.
+        UNSUPPORTED_PROTOCOL = 1,      ///< The URL scheme is unsupported.
+        FAILED_INIT = 2,               ///< Curl initialization failed.
+        URL_MALFORMAT = 3,             ///< The URL is malformed.
+        NOT_BUILT_IN = 4,              ///< A requested feature is unavailable in this curl build.
+        COULDNT_RESOLVE_PROXY = 5,     ///< Proxy hostname resolution failed.
+        COULDNT_RESOLVE_HOST = 6,      ///< Destination hostname resolution failed.
+        COULDNT_CONNECT = 7,           ///< Connection establishment failed.
+        WEIRD_SERVER_REPLY = 8,        ///< The server reply is invalid for the protocol.
+        REMOTE_ACCESS_DENIED = 9,      ///< The remote endpoint denied access.
+        HTTP2 = 10,                    ///< An HTTP/2 protocol failure occurred.
+        PARTIAL_FILE = 11,             ///< The received size differs from the advertised size.
+        QUOTE_ERROR = 12,              ///< A protocol command was rejected.
+        HTTP_RETURNED_ERROR = 13,      ///< The HTTP status was rejected by curl's fail-on-error policy.
+        WRITE_ERROR = 14,              ///< Writing received bytes failed.
+        UPLOAD_FAILED = 15,            ///< Starting the upload failed.
+        READ_ERROR = 16,               ///< Reading upload bytes failed.
+        OUT_OF_MEMORY = 17,            ///< Curl could not allocate memory.
+        OPERATION_TIMEDOUT = 18,       ///< The transfer exceeded its time or low-speed limit.
+        RANGE_ERROR = 19,              ///< The server could not honor the requested range.
+        HTTP_POST_ERROR = 20,          ///< Preparing POST data failed.
+        SSL_CONNECT_ERROR = 21,        ///< The TLS handshake failed.
+        BAD_DOWNLOAD_RESUME = 22,      ///< Resuming the download failed.
+        FILE_COULDNT_READ_FILE = 23,   ///< Opening the local input file failed.
+        FUNCTION_NOT_FOUND = 24,       ///< A required callback function is unavailable.
+        ABORTED_BY_CALLBACK = 25,      ///< A callback aborted the transfer.
+        BAD_FUNCTION_ARGUMENT = 26,    ///< An API argument is invalid.
+        INTERFACE_FAILED = 27,         ///< Binding the outgoing interface failed.
+        TOO_MANY_REDIRECTS = 28,       ///< The redirect limit was exceeded.
+        UNKNOWN_OPTION = 29,           ///< A curl option is unknown.
+        SETOPT_OPTION_SYNTAX = 30,     ///< A curl option value has invalid syntax.
+        GOT_NOTHING = 31,              ///< The server returned no response.
+        SSL_ENGINE_NOTFOUND = 32,      ///< The selected TLS engine is unavailable.
+        SSL_ENGINE_SETFAILED = 33,     ///< Selecting the TLS engine failed.
+        SEND_ERROR = 34,               ///< Sending request bytes failed.
+        RECV_ERROR = 35,               ///< Receiving response bytes failed.
+        SSL_CERTPROBLEM = 36,          ///< Loading the client certificate failed.
+        SSL_CIPHER = 37,               ///< The configured TLS cipher selection is invalid.
+        PEER_FAILED_VERIFICATION = 38, ///< The peer certificate or hostname failed verification.
+        BAD_CONTENT_ENCODING = 39,     ///< Decoding the response content failed.
+        FILESIZE_EXCEEDED = 40,        ///< The transfer exceeded its configured size limit.
+        USE_SSL_FAILED = 41,           ///< The requested TLS upgrade failed.
+        SEND_FAIL_REWIND = 42,         ///< The upload source could not rewind.
+        SSL_ENGINE_INITFAILED = 43,    ///< Initializing the TLS engine failed.
+        LOGIN_DENIED = 44,             ///< Authentication was rejected.
+        SSL_CACERT_BADFILE = 45,       ///< Loading the CA bundle failed.
+        SSL_SHUTDOWN_FAILED = 46,      ///< Closing the TLS connection failed.
+        AGAIN = 47,                    ///< The operation must be retried when its socket is ready.
+        SSL_CRL_BADFILE = 48,          ///< Loading the certificate revocation list failed.
+        SSL_ISSUER_ERROR = 49,         ///< The certificate issuer does not match the requirement.
+        CHUNK_FAILED = 50,             ///< Processing chunked data failed.
+        NO_CONNECTION_AVAILABLE = 51,  ///< No connection is currently available.
+        SSL_PINNEDPUBKEYNOTMATCH = 52, ///< The peer public key does not match its pin.
+        SSL_INVALIDCERTSTATUS = 53,    ///< The peer certificate status check failed.
+        HTTP2_STREAM = 54,             ///< An HTTP/2 stream failed.
+        RECURSIVE_API_CALL = 55,       ///< The API cannot be called while its handle is busy.
+        AUTH_ERROR = 56,               ///< An authentication exchange failed.
+        HTTP3 = 57,                    ///< An HTTP/3 protocol failure occurred.
+        QUIC_CONNECT_ERROR = 58,       ///< The QUIC connection failed.
+        PROXY = 59,                    ///< The proxy negotiation failed.
+        SSL_CLIENTCERT = 60,           ///< The server requires a client certificate.
+        UNRECOVERABLE_POLL = 61,       ///< Polling cannot continue.
+        TOO_LARGE = 62,                ///< A value or payload exceeds curl's size limit.
+        ECH_REQUIRED = 63,             ///< Encrypted ClientHello was required but could not be established.
+        UNKNOWN_ERROR = 1000,          ///< An unsupported or unrecognized curl error occurred.
     };
 
     /**
@@ -154,6 +155,7 @@ export namespace mcr {
             { ErrorCode::SSL_CLIENTCERT, "SSL_CLIENTCERT" },
             { ErrorCode::UNRECOVERABLE_POLL, "UNRECOVERABLE_POLL" },
             { ErrorCode::TOO_LARGE, "TOO_LARGE" },
+            { ErrorCode::ECH_REQUIRED, "ECH_REQUIRED" },
             { ErrorCode::UNKNOWN_ERROR, "UNKNOWN_ERROR" },
         };
         return s_mapping;
@@ -178,6 +180,7 @@ export namespace mcr {
     [[nodiscard]] constexpr auto error_code_from_curl(
         std::int32_t curl_code
     ) noexcept -> ErrorCode {
+        static_assert(CURL_LAST == 102, "Review error_code_from_curl for the updated curl error set.");
         switch (curl_code) {
             case CURLE_OK                      : return ErrorCode::OK;
             case CURLE_UNSUPPORTED_PROTOCOL    : return ErrorCode::UNSUPPORTED_PROTOCOL;
@@ -242,6 +245,7 @@ export namespace mcr {
             case CURLE_SSL_CLIENTCERT          : return ErrorCode::SSL_CLIENTCERT;
             case CURLE_UNRECOVERABLE_POLL      : return ErrorCode::UNRECOVERABLE_POLL;
             case CURLE_TOO_LARGE               : return ErrorCode::TOO_LARGE;
+            case CURLE_ECH_REQUIRED            : return ErrorCode::ECH_REQUIRED;
             default                            : return ErrorCode::UNKNOWN_ERROR;
         }
     }

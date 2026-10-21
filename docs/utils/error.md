@@ -67,6 +67,9 @@ if (!submitted) {
 
 - 保留错误名称和数值、默认 ErrorCode::OK 及 Error::operator bool()。
   Error 为 true 表示失败；`Result<T>` 为 true 表示包含成功结果。
+- 在现有 cpr 编号之后增加 `ECH_REQUIRED = 63`，将 curl 8.21 的 `CURLE_ECH_REQUIRED`
+  映射为独立错误。上游 [error.h](https://github.com/libcpr/cpr/blob/master/include/cpr/error.h)
+  暂未提供该项。升级 curl 时，编译期哨兵会要求重新核对错误码集合。
 - 根据声明的 curl 依赖显式映射状态，不能直接强制转换：
   curl 的超时值为 28，ErrorCode::OPERATION_TIMEDOUT 为 18。
   不支持或未知的 curl 状态映射为 UNKNOWN_ERROR。
