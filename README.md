@@ -2,7 +2,7 @@
 
 基于 libcurl 的 C++23 模块化 HTTP 客户端库，使用 [mcpp](https://github.com/mcpp-community/mcpp) 构建和管理依赖，API 设计参考 [cpr](https://github.com/libcpr/cpr)。
 
-通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载。库还提供可复用的 Session、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
+通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载，以及按编译期方法参数分派的 `request<M>` 系列入口。库还提供可复用的 Session、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
 
 [快速开始](#快速开始) · [文档索引](docs/README.md) · [可运行示例](example/README.md) · [源码结构](docs/structure.md) · [expected 接口迁移](docs/expected_migration.md)
 
@@ -109,6 +109,7 @@ auto main() -> int {
 | 场景 | 接口 | 结果 |
 | --- | --- | --- |
 | 一次同步请求 | `Get`、`Post` 等七种 HTTP 方法 | `Result<Response>` |
+| 泛型代码按编译期方法参数请求 | `request<M>`、`request_async<M>`、`request_coro<M>` | `Result<Response>`、`Result<AsyncResponse>`、`Task<Result<Response>>` |
 | 复用连接和配置 | `Session::Create()` | 创建结果及请求的 `Result<Response>` |
 | 在线程池执行请求 | `GetAsync` 等 | `Result<AsyncResponse>`，提交成功后通过 `Get()` 取请求结果 |
 | 在协程中等待请求 | `GetCoro` 等 | `Task<Result<Response>>`，支持 `co_await` 和 `sync_wait` |
@@ -117,6 +118,8 @@ auto main() -> int {
 | 同步并发批次 | `MultiGet` 等、`MultiPerform` | 按输入顺序排列的响应 |
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |
 | 下载到文件或回调 | `Download`、`DownloadAsync`、`DownloadCoro` | 响应元数据 |
+
+`request<M>` 系列以 `mcr::method::Get` 等标签或 `mcr::Method` 枚举值在编译期选择方法，同步、线程池异步和协程三种形式与同名命名入口行为一致。它们适合需要把方法作为模板参数传递的封装；回调、批量和下载仍使用命名接口，详见 [请求 API](docs/api.md#编译期方法请求)。
 
 库只传输字节，不依赖具体 JSON 实现。发送 JSON 时由调用方序列化后放入 `Body` 并显式设置 `Content-Type`；响应正文保存在 `Response::text`，可用任意 JSON 库自行解析。同步、异步、协程、回调和两种批量调用都遵循相同语义，运行目标见 [示例说明](example/README.md)。
 
@@ -127,7 +130,7 @@ auto main() -> int {
 - 同一个 Session 的配置与请求串行使用；Session 的异步方法需要通过 `std::shared_ptr` 管理会话。
 - 在启动工作线程前初始化 curl，完成全部请求后关闭已使用的异步运行时，再销毁剩余句柄并清理 curl。`Async::Cleanup()` 和 `Coro::Cleanup()` 的生命周期相互独立，均为永久关闭，详见 [异步运行时](docs/session/async.md) 和 [协程请求](docs/coro/coro.md)。
 
-mcr 采用 C++23 模块和独立命名空间，并增加协程及基于 `std::expected` 的结果接口。与 cpr 有意保留的 API 和行为差异记录在各模块文档中。
+mcr 采用 C++23 模块和独立命名空间，并增加协程、编译期方法模板入口及基于 `std::expected` 的结果接口。与 cpr 有意保留的 API 和行为差异记录在各模块文档中。
 
 ## 开发与文档
 

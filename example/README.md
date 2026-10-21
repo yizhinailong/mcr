@@ -4,8 +4,10 @@
 
 参考 cpr 的 [HTTP API](https://github.com/libcpr/cpr/blob/master/include/cpr/api.h)
 和 [FetchContent 示例](https://github.com/libcpr/example-cmake-fetch-content)。
-覆盖 [src/api.cppm](../src/api.cppm) 中全部公开请求入口：7 种 HTTP 方法 × 6 种调用形式，以及
+覆盖 [src/api.cppm](../src/api.cppm) 中全部命名请求入口：7 种 HTTP 方法 × 6 种调用形式，以及
 4 个下载入口（包括 `Download` 的两个重载），提供 46 个入口示例。
+编译期方法模板 `request<M>`、`request_async<M>` 和 `request_coro<M>` 由库测试覆盖，
+用法见[请求 API](../docs/api.md#编译期方法请求)。
 
 每个入口都有一个按功能命名的 `.cpp` 文件和同名 mcpp 目标。
 示例直接调用对应 API；[support.cppm](src/common/support.cppm) 只共用命令行解析、
@@ -194,13 +196,13 @@ uv run scripts/verify.py --bin-dir "target/x86_64-windows-msvc/<构建指纹>/bi
 路径相对于当前终端目录解析，也接受绝对路径；包含空格时使用引号。
 该目录中应包含全部 46 个可执行文件，不能只编译其中一个目标。
 
-脚本对照 `src/api.cppm` 检查是否遗漏入口或下载重载，
+脚本对照 `src/api.cppm` 检查是否遗漏命名入口或下载重载，
 然后用临时的本地服务运行全部 46 个示例，检查真实 HTTP 方法、查询参数、正文、批量结果顺序、二进制下载内容、
 HTTP 404、传输失败、下载文件打开失败和 CLI 退出码。HTTP 验证仅访问本机，
 下载文件放在临时目录中并在验证结束后清理。全部通过时最后输出：
 
 ```text
-46 request examples passed; every public request declaration is covered.
+46 request examples passed; every named public request declaration is covered.
 ```
 
 验证脚本成功时退出码为 `0`，失败时返回非零并显示出错的示例和检查信息。
