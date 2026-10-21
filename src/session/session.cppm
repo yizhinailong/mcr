@@ -298,6 +298,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetTimeout(options::Timeout const& timeout) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             auto milliseconds = timeout.Milliseconds();
             if (!milliseconds) {
                 return std::unexpected{ std::move(milliseconds.error()) };
@@ -314,6 +317,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetConnectTimeout(options::ConnectTimeout const& timeout) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             auto milliseconds = timeout.Milliseconds();
             if (!milliseconds) {
                 return std::unexpected{ std::move(milliseconds.error()) };
@@ -330,6 +336,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetConnectionPool(ConnectionPool const& pool) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = pool.SetupHandler(m_curl->handle); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -342,6 +351,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetAuth(options::Authentication const& auth) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             long mode{};
             switch (auth.GetAuthMode()) {
                 case options::AuthMode::BASIC    : mode = CURLAUTH_BASIC; break;
@@ -370,6 +382,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetBearer(options::Bearer const& token) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_HTTPAUTH, static_cast<long>(CURLAUTH_BEARER)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -386,6 +401,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetUserAgent(UserAgent const& ua) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_USERAGENT, ua.CStr()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -458,6 +476,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetVerifySsl(options::VerifySsl const& verify) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_SSL_VERIFYPEER, verify.verify ? 1L : 0L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -502,6 +523,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetRedirect(options::Redirect const& redirect) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_FOLLOWLOCATION, redirect.follow ? 1L : 0L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -534,6 +558,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetCookies(Cookies const& cookies) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_COOKIELIST, "ALL"); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -584,6 +611,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetLowSpeed(options::LowSpeed const& low_speed) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_LOW_SPEED_LIMIT, static_cast<long>(low_speed.limit)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -600,6 +630,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetUnixSocket(options::UnixSocket const& unix_socket) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_UNIX_SOCKET_PATH, unix_socket.GetUnixSocketString()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -654,6 +687,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetDebugCallback(DebugCallback const& debug) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             m_debug = debug;
             if (auto status = SetVerbose(options::Verbose{ bool(m_debug.callback) }); !status) {
                 return std::unexpected{ std::move(status.error()) };
@@ -680,6 +716,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetVerbose(options::Verbose const& verbose) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_VERBOSE, verbose.verbose ? 1L : 0L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -692,6 +731,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetInterface(options::Interface const& iface) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_INTERFACE, iface.Str().empty() ? nullptr : iface.CStr()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -704,6 +746,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetLocalPort(options::LocalPort const& local_port) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_LOCALPORT, static_cast<long>(static_cast<std::uint16_t>(local_port))); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -716,6 +761,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetLocalPortRange(options::LocalPortRange const& local_port_range) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_LOCALPORTRANGE, static_cast<long>(static_cast<std::uint16_t>(local_port_range))); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -728,6 +776,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetHttpVersion(options::HttpVersion const& version) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             long value{};
             switch (version.code) {
                 case options::HttpVersionCode::VERSION_NONE               : value = CURL_HTTP_VERSION_NONE; break;
@@ -755,6 +806,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetRange(options::Range const& range) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_RANGE, range.Str().c_str()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -779,6 +833,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetResolves(std::vector<options::Resolve> const& resolves) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             CurlList list{ nullptr, &curl_slist_free_all };
             for (auto const& resolve : resolves) {
                 for (auto port : resolve.ports) {
@@ -801,6 +858,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetMultiRange(options::MultiRange const& multi_range) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_RANGE, multi_range.Str().c_str()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -845,6 +905,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto SetLimitRate(options::LimitRate const& limit_rate) -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_MAX_RECV_SPEED_LARGE, static_cast<curl_off_t>(limit_rate.downrate)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -1975,6 +2038,19 @@ export namespace mcr {
         }
 
         /**
+         * @brief Reject curl mutations while a transfer or another owner uses the handle.
+         * @return Success while mutable, or RECURSIVE_API_CALL.
+         */
+        auto checkMutable() const -> Result<void> {
+            if (m_in_transfer || (m_multi_owner && !m_multi_preparing)) {
+                return std::unexpected{
+                    Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Session: handle is in use by a transfer or MultiPerform." }
+                };
+            }
+            return {};
+        }
+
+        /**
          * @brief Apply an option with its exact curl argument type.
          * @tparam T Argument type.
          * @param option Curl option.
@@ -2014,6 +2090,9 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto clearCurlContent() -> Result<void> {
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
+            }
             if (auto status = setOption(CURLOPT_MIMEPOST, static_cast<curl_mime*>(nullptr)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -2198,10 +2277,8 @@ export namespace mcr {
          * @return Success or the first operation error.
          */
         auto prepare(std::string_view method, bool download = false) -> Result<void> {
-            if (m_in_transfer || (m_multi_owner && !m_multi_preparing)) {
-                return std::unexpected{
-                    Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Session: handle is in use by a transfer or MultiPerform." }
-                };
+            if (auto status = checkMutable(); !status) {
+                return std::unexpected{ std::move(status.error()) };
             }
             m_method = method;
             if (auto status = clearCurlContent(); !status) {
@@ -2795,6 +2872,9 @@ namespace mcr::detail {
 
 namespace mcr {
     auto Session::SetSslOptions(options::SslOptions const& options) -> Result<void> {
+        if (auto status = checkMutable(); !status) {
+            return std::unexpected{ std::move(status.error()) };
+        }
         // Some backends reject even the default value for unsupported optional settings.
         auto optional_option = [this](CURLoption option, auto value, bool requested) -> Result<void> {
             auto const result{ curl_easy_setopt(m_curl->handle, option, value) };

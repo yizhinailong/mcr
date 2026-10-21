@@ -144,6 +144,10 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
   `AsyncResponse` 本身沿用不可取消的默认 AsyncWrapper 类型。
 - curl 配置失败通过 `Result` 返回；传输失败写入 `Response::error`，HTTP 4xx/5xx 保留为普通响应。
   用户回调的异常在 curl 返回之后重新抛出，异步调用通过 `Get()` 取得异常。
+- 回调内调用会立即修改 curl 选项或释放资源的 setter（包括 `RemoveContent()`、
+  `SetTimeout()`、`SetSslOptions()` 和 `SetDebugCallback()`）返回 `RECURSIVE_API_CALL`，
+  保留既有配置。Session 属于 MultiPerform 时，这些操作只允许批次内部准备阶段执行；
+  外部调用应先通过 `RemoveSession()` 解除归属。仅存储下次请求配置的 setter 仍可使用。
 - 与现有 CurlHolder 一致，调用方负责需要显式管理的 curl 全局初始化/清理；
   Session 不执行进程级清理。库中其他 curl 使用者尚未结束时不能清理 curl。
 
