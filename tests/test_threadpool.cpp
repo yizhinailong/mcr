@@ -257,6 +257,38 @@ namespace {
         }
         require(is_canceled(abandoned) && canceled_runs == 0, "destruction must cancel pending tasks even when their futures were discarded");
     }
+
+    /**
+     * @brief Destroy a pool from one task while another claimed task waits for that destruction.
+     */
+    auto check_self_destruction() -> void {
+        auto pool = std::make_unique<mcr::utils::ThreadPool>(2, 2);
+        std::promise<void> other_started, killer_started, destroy, destroyed, release_other;
+        auto allow_destroy = destroy.get_future().share();
+        auto finish_other = release_other.get_future().share();
+        auto other = pool->Submit([&] {
+                             other_started.set_value();
+                             require(finish_other.wait_for(3s) == std::future_status::ready, "self-destruction must release other claimed tasks");
+                             return 7;
+                         })
+                         .value();
+        require(other_started.get_future().wait_for(3s) == std::future_status::ready, "the other worker must be active");
+        auto killer = pool->Submit([&] {
+                              killer_started.set_value();
+                              require(allow_destroy.wait_for(3s) == std::future_status::ready, "the caller must finish submitting before destruction");
+                              pool.reset();
+                              destroyed.set_value();
+                              return 11;
+                          })
+                          .value();
+        require(killer_started.get_future().wait_for(3s) == std::future_status::ready, "the destroying worker must be active");
+        auto pending = pool->Submit([] { return 99; }).value();
+        destroy.set_value();
+        bool const returned = destroyed.get_future().wait_for(2s) == std::future_status::ready;
+        release_other.set_value();
+        require(returned && killer.get() == 11 && other.get() == 7, "self-destruction must return without joining workers and preserve claimed task results");
+        require(!pool && is_canceled(pending), "self-destruction must cancel queued tasks and destroy the public object");
+    }
 } // namespace
 
 int main() {
@@ -267,6 +299,7 @@ int main() {
         check_growth_and_retirement();
         check_concurrent_submit();
         check_stop_and_restart();
+        check_self_destruction();
     } catch (std::exception const& error) {
         std::println("test_threadpool: {}", error.what());
         return 1;

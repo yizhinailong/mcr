@@ -16,7 +16,7 @@ export namespace mcr {
     /**
      * @brief Provide one lazily initialized thread pool for async submissions.
      * @note Singleton shutdown is explicit and permanent. Returned pointers are borrowed.
-     * Shutdown must occur outside pool workers after other pool users stop accessing the instance.
+     * Stop other callers from accessing the instance before shutdown. Worker cleanup defers active task reclamation.
      */
     class GlobalThreadPool : public utils::ThreadPool, public utils::Singleton<GlobalThreadPool> {
     private:
@@ -79,7 +79,7 @@ export namespace mcr {
     /**
      * @brief Configure startup and permanently clean up the global asynchronous runtime.
      * @note Lifecycle operations require external coordination with submissions and direct pool access.
-     * Call Cleanup outside pool workers. Call the pool's Wait first if all queued tasks must finish.
+     * Call the pool's Wait externally first if all queued tasks must finish.
      */
     class Async {
     public:
@@ -125,10 +125,11 @@ export namespace mcr {
         }
 
         /**
-         * @brief Permanently destroy the singleton, cancelling queued tasks and joining active workers.
+         * @brief Permanently destroy the singleton, cancelling queued tasks and retiring active workers.
          * @throws std::logic_error If the singleton has never been successfully initialized.
          * @note Repeated cleanup has no effect. Later async or Startup calls return errors; cleanup is not a pause.
-         * Do not call from a global pool task or overlap other access to the singleton.
+         * External calls join active workers. Calls inside a global pool task let claimed tasks finish independently.
+         * Stop new submissions and other direct pool access first; await active results before releasing their dependencies.
          */
         static auto Cleanup() -> void {
             GlobalThreadPool::ExitInstance();

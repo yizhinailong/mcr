@@ -161,6 +161,13 @@ namespace {
  */
 int main() {
     try {
+        auto pool = std::make_unique<mcr::utils::ThreadPool>(2, 2);
+        pool->Start();
+        g_fail_after = 0;
+        pool.reset();
+        bool const allocation_free = g_fail_after == 0;
+        g_fail_after = -1;
+        require(allocation_free, "destruction must not allocate queue or worker storage");
         for (std::ptrdiff_t index{}; index < 512; ++index) {
             if (!check_allocation_failure(index)) {
                 require(index > 0, "the allocation injector must observe submission allocations");

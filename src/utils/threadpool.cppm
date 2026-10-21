@@ -16,7 +16,8 @@ export namespace mcr::utils {
     /**
      * @brief Execute queued tasks with automatic startup, bounded growth, and idle worker retirement.
      * @note Public operations synchronize shared state. Stop cancels queued tasks and joins active workers.
-     * Destruction must occur outside this pool's tasks, after other callers stop accessing the object.
+     * Destruction cancels queued work. Inside a task it defers worker reclamation until claimed tasks finish.
+     * Other callers must stop accessing the pool object before destruction.
      */
     class ThreadPool {
     public:
@@ -101,25 +102,32 @@ export namespace mcr::utils {
                                            STOPPING };
 
         /**
-         * @brief A stable worker record; the thread is joined before its completion flag is destroyed.
+         * @brief Own a worker handle separately from the completion flag retained by its thread.
          */
         struct Worker {
-            bool finished{ false }; ///< Protected by the pool mutex.
-            std::jthread thread;    ///< Joins when this worker record is destroyed.
+            std::shared_ptr<bool> finished{ std::make_shared<bool>(false) }; ///< Completion flag retained by detached workers; protected by the state mutex.
+            std::jthread thread;                                             ///< Joins unless detached during self-destruction.
         };
 
-        mutable std::mutex m_mutex;
-        std::condition_variable m_task_cond;
-        std::condition_variable m_done_cond;
-        Status m_status{ Status::STOPPED };
-        std::size_t m_min_thread_num;
-        std::size_t m_max_thread_num;
-        std::chrono::milliseconds m_max_idle_time;
-        std::size_t m_current_thread_num{ 0 };
-        std::size_t m_active_thread_num{ 0 };
-        std::list<Worker> m_workers;
-        std::queue<QueuedTask> m_tasks;
-        inline static thread_local ThreadPool* s_current_pool{ nullptr };
+        /**
+         * @brief Retain synchronization, tasks, and worker state independently of the public pool object.
+         */
+        struct State {
+            mutable std::mutex m_mutex;                ///< Protects lifecycle, queues, counts, and completion flags.
+            std::condition_variable m_task_cond;       ///< Wakes workers for tasks, configuration changes, or shutdown.
+            std::condition_variable m_done_cond;       ///< Wakes callers waiting for all claimed and queued work.
+            Status m_status{ Status::STOPPED };        ///< Current pool lifecycle.
+            std::size_t m_min_thread_num{};            ///< Minimum live workers while started.
+            std::size_t m_max_thread_num{};            ///< Maximum live workers.
+            std::chrono::milliseconds m_max_idle_time; ///< Retirement timeout above the minimum.
+            std::size_t m_current_thread_num{ 0 };     ///< Workers that have not retired.
+            std::size_t m_active_thread_num{ 0 };      ///< Workers executing claimed tasks.
+            std::list<Worker> m_workers;               ///< Joinable worker handles until retirement or shutdown.
+            std::list<QueuedTask> m_tasks;             ///< Tasks awaiting a worker, in submission order.
+        };
+
+        std::shared_ptr<State> m_state;                      ///< Workers retain the state until their final task has finished.
+        inline static thread_local State* s_current_state{}; ///< State currently executing on this thread.
 
     public:
         /**
@@ -133,10 +141,7 @@ export namespace mcr::utils {
             std::size_t min_threads = DEFAULT_THREAD_POOL_MIN_THREAD_NUM,
             std::size_t max_threads = DEFAULT_THREAD_POOL_MAX_THREAD_NUM,
             std::chrono::milliseconds max_idle_ms = DEFAULT_THREAD_POOL_MAX_IDLE_TIME
-        ) : m_min_thread_num{ min_threads }, m_max_thread_num{ max_threads }, m_max_idle_time{ max_idle_ms } {
-            validateLimits(min_threads, max_threads);
-            validateIdleTime(max_idle_ms);
-        }
+        ) : m_state{ makeState(min_threads, max_threads, max_idle_ms) } {}
 
         ThreadPool(ThreadPool const&) = delete;
         ThreadPool(ThreadPool&&) = delete;
@@ -144,9 +149,9 @@ export namespace mcr::utils {
         ThreadPool& operator=(ThreadPool&&) = delete;
 
         /**
-         * @brief Cancel pending tasks and join workers; call Wait first to finish all queued work.
+         * @brief Cancel queued tasks; join workers externally or let claimed tasks finish after self-destruction.
          */
-        virtual ~ThreadPool() { Stop(); }
+        virtual ~ThreadPool() { shutdown(s_current_state == m_state.get()); }
 
         /**
          * @brief Set the minimum worker count, starting additional workers if needed.
@@ -156,16 +161,16 @@ export namespace mcr::utils {
          */
         auto SetMinThreadNum(std::size_t min_threads) -> void {
             std::list<Worker> retired;
-            std::scoped_lock lock{ m_mutex };
-            validateLimits(min_threads, m_max_thread_num);
+            std::scoped_lock lock{ m_state->m_mutex };
+            validateLimits(min_threads, m_state->m_max_thread_num);
             collectFinished(retired);
             if (isStarted()) {
-                while (m_current_thread_num < min_threads) {
+                while (m_state->m_current_thread_num < min_threads) {
                     createThread();
                 }
             }
-            m_min_thread_num = min_threads;
-            m_task_cond.notify_all();
+            m_state->m_min_thread_num = min_threads;
+            m_state->m_task_cond.notify_all();
         }
 
         /**
@@ -176,13 +181,13 @@ export namespace mcr::utils {
          */
         auto SetMaxThreadNum(std::size_t max_threads) -> void {
             std::list<Worker> retired;
-            std::scoped_lock lock{ m_mutex };
-            validateLimits(m_min_thread_num, max_threads);
+            std::scoped_lock lock{ m_state->m_mutex };
+            validateLimits(m_state->m_min_thread_num, max_threads);
             collectFinished(retired);
-            m_max_thread_num = max_threads;
-            m_task_cond.notify_all();
+            m_state->m_max_thread_num = max_threads;
+            m_state->m_task_cond.notify_all();
             if (isStarted()) {
-                growForTasks(m_tasks.size());
+                growForTasks(m_state->m_tasks.size());
             }
         }
 
@@ -193,9 +198,9 @@ export namespace mcr::utils {
          */
         auto SetMaxIdleTime(std::chrono::milliseconds ms) -> void {
             validateIdleTime(ms);
-            std::scoped_lock lock{ m_mutex };
-            m_max_idle_time = ms;
-            m_task_cond.notify_all();
+            std::scoped_lock lock{ m_state->m_mutex };
+            m_state->m_max_idle_time = ms;
+            m_state->m_task_cond.notify_all();
         }
 
         /**
@@ -203,8 +208,8 @@ export namespace mcr::utils {
          * @return The minimum live worker count.
          */
         [[nodiscard]] auto GetMinThreadNum() const -> std::size_t {
-            std::scoped_lock lock{ m_mutex };
-            return m_min_thread_num;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_min_thread_num;
         }
 
         /**
@@ -212,8 +217,8 @@ export namespace mcr::utils {
          * @return The maximum live worker count.
          */
         [[nodiscard]] auto GetMaxThreadNum() const -> std::size_t {
-            std::scoped_lock lock{ m_mutex };
-            return m_max_thread_num;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_max_thread_num;
         }
 
         /**
@@ -221,8 +226,8 @@ export namespace mcr::utils {
          * @return The configured idle duration.
          */
         [[nodiscard]] auto GetMaxIdleTime() const -> std::chrono::milliseconds {
-            std::scoped_lock lock{ m_mutex };
-            return m_max_idle_time;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_max_idle_time;
         }
 
         /**
@@ -230,8 +235,8 @@ export namespace mcr::utils {
          * @return Workers that have not finished retiring.
          */
         [[nodiscard]] auto GetCurrentThreadNum() const -> std::size_t {
-            std::scoped_lock lock{ m_mutex };
-            return m_current_thread_num;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_current_thread_num;
         }
 
         /**
@@ -239,8 +244,8 @@ export namespace mcr::utils {
          * @return Live workers without a claimed task.
          */
         [[nodiscard]] auto GetIdleThreadNum() const -> std::size_t {
-            std::scoped_lock lock{ m_mutex };
-            return m_current_thread_num - m_active_thread_num;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_current_thread_num - m_state->m_active_thread_num;
         }
 
         /**
@@ -248,7 +253,7 @@ export namespace mcr::utils {
          * @return True while running or paused.
          */
         [[nodiscard]] auto IsStarted() const -> bool {
-            std::scoped_lock lock{ m_mutex };
+            std::scoped_lock lock{ m_state->m_mutex };
             return isStarted();
         }
 
@@ -257,8 +262,8 @@ export namespace mcr::utils {
          * @return True once all workers have been joined.
          */
         [[nodiscard]] auto IsStopped() const -> bool {
-            std::scoped_lock lock{ m_mutex };
-            return m_status == Status::STOPPED;
+            std::scoped_lock lock{ m_state->m_mutex };
+            return m_state->m_status == Status::STOPPED;
         }
 
         /**
@@ -269,9 +274,9 @@ export namespace mcr::utils {
          */
         auto Start(std::size_t start_threads = 0) -> int {
             std::list<Worker> retired;
-            std::scoped_lock lock{ m_mutex };
+            std::scoped_lock lock{ m_state->m_mutex };
             collectFinished(retired);
-            if (m_status != Status::STOPPED) {
+            if (m_state->m_status != Status::STOPPED) {
                 return -1;
             }
             start(start_threads);
@@ -286,30 +291,7 @@ export namespace mcr::utils {
          */
         auto Stop() -> int {
             checkExternalWait();
-            std::list<Worker> workers;
-            std::queue<QueuedTask> canceled;
-            {
-                std::scoped_lock lock{ m_mutex };
-                if (m_status == Status::STOPPED || m_status == Status::STOPPING) {
-                    return -1;
-                }
-                m_status = Status::STOPPING;
-                workers.splice(workers.end(), m_workers);
-                canceled.swap(m_tasks);
-            }
-            m_task_cond.notify_all();
-            m_done_cond.notify_all();
-            // Complete futures explicitly before releasing user captures, outside the pool mutex.
-            while (!canceled.empty()) {
-                canceled.front()(true);
-                canceled.pop();
-            }
-            workers.clear();
-            {
-                std::scoped_lock lock{ m_mutex };
-                m_status = Status::STOPPED;
-            }
-            return 0;
+            return shutdown(false);
         }
 
         /**
@@ -317,10 +299,10 @@ export namespace mcr::utils {
          * @return Zero, including when already paused or stopped.
          */
         auto Pause() -> int {
-            std::scoped_lock lock{ m_mutex };
-            if (m_status == Status::RUNNING) {
-                m_status = Status::PAUSED;
-                m_task_cond.notify_all();
+            std::scoped_lock lock{ m_state->m_mutex };
+            if (m_state->m_status == Status::RUNNING) {
+                m_state->m_status = Status::PAUSED;
+                m_state->m_task_cond.notify_all();
             }
             return 0;
         }
@@ -330,10 +312,10 @@ export namespace mcr::utils {
          * @return Zero, including when no transition is needed.
          */
         auto Resume() -> int {
-            std::scoped_lock lock{ m_mutex };
-            if (m_status == Status::PAUSED) {
-                m_status = Status::RUNNING;
-                m_task_cond.notify_all();
+            std::scoped_lock lock{ m_state->m_mutex };
+            if (m_state->m_status == Status::PAUSED) {
+                m_state->m_status = Status::RUNNING;
+                m_state->m_task_cond.notify_all();
             }
             return 0;
         }
@@ -345,8 +327,8 @@ export namespace mcr::utils {
          */
         auto Wait() -> void {
             checkExternalWait();
-            std::unique_lock lock{ m_mutex };
-            m_done_cond.wait(lock, [this] { return m_tasks.empty() && m_active_thread_num == 0; });
+            std::unique_lock lock{ m_state->m_mutex };
+            m_state->m_done_cond.wait(lock, [this] { return m_state->m_tasks.empty() && m_state->m_active_thread_num == 0; });
         }
 
         /**
@@ -363,6 +345,7 @@ export namespace mcr::utils {
             Fn&& fn,
             Args&&... args
         ) -> Result<std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>> {
+            auto state = m_state;
             using ReturnType = std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>;
             std::packaged_task<ReturnType(bool)> task{
                 [function = std::forward<Fn>(fn), arguments = std::tuple<std::decay_t<Args>...>(std::forward<Args>(args)...)](bool cancel) mutable -> ReturnType {
@@ -382,18 +365,18 @@ export namespace mcr::utils {
             bool rejected{};
             try {
                 queued = std::move(task);
-                std::scoped_lock lock{ m_mutex };
-                if (m_status == Status::STOPPING) {
+                std::scoped_lock lock{ m_state->m_mutex };
+                if (m_state->m_status == Status::STOPPING) {
                     rejected = true;
                 } else {
                     collectFinished(retired);
-                    if (m_status == Status::STOPPED) {
+                    if (m_state->m_status == Status::STOPPED) {
                         start(0);
                     }
-                    growForTasks(m_tasks.size() + 1);
+                    growForTasks(m_state->m_tasks.size() + 1);
                     // Allocate the queue slot before transferring ownership so failure leaves queued cancellable.
-                    m_tasks.emplace();
-                    m_tasks.back().swap(queued);
+                    m_state->m_tasks.emplace_back();
+                    m_state->m_tasks.back().swap(queued);
                 }
             } catch (...) {
                 submission_error = std::current_exception();
@@ -414,11 +397,78 @@ export namespace mcr::utils {
                     Error{ ErrorCode::FAILED_INIT, "mcr::utils::ThreadPool: cannot submit while stopping" }
                 };
             }
-            m_task_cond.notify_one();
+            state->m_task_cond.notify_one();
             return future;
         }
 
     private:
+        /**
+         * @brief Stop without waiting for the calling worker or retaining the public pool object.
+         * @param detach Let all claimed tasks finish independently when destruction occurs inside a task.
+         * @return Zero on shutdown, or -1 if already stopped or stopping.
+         */
+        auto shutdown(bool detach) noexcept -> int {
+            auto state = m_state;
+            {
+                std::scoped_lock lock{ state->m_mutex };
+                if (state->m_status == Status::STOPPED || state->m_status == Status::STOPPING) {
+                    return -1;
+                }
+                state->m_status = Status::STOPPING;
+            }
+            state->m_task_cond.notify_all();
+            // Move one item at a time: even an empty std::list can allocate on some standard libraries.
+            for (;;) {
+                QueuedTask canceled;
+                {
+                    std::scoped_lock lock{ state->m_mutex };
+                    if (state->m_tasks.empty()) {
+                        break;
+                    }
+                    canceled = std::move(state->m_tasks.front());
+                    state->m_tasks.pop_front();
+                }
+                canceled(true);
+            }
+            state->m_done_cond.notify_all();
+            for (;;) {
+                std::jthread thread;
+                {
+                    std::scoped_lock lock{ state->m_mutex };
+                    if (state->m_workers.empty()) {
+                        break;
+                    }
+                    thread = std::move(state->m_workers.front().thread);
+                    state->m_workers.pop_front();
+                }
+                if (detach) {
+                    thread.detach();
+                }
+            }
+            if (!detach) {
+                std::scoped_lock lock{ state->m_mutex };
+                state->m_status = Status::STOPPED;
+            }
+            return 0;
+        }
+
+        /**
+         * @brief Validate configuration before allocating independent worker state.
+         */
+        static auto makeState(
+            std::size_t min_threads,
+            std::size_t max_threads,
+            std::chrono::milliseconds max_idle_ms
+        ) -> std::shared_ptr<State> {
+            validateLimits(min_threads, max_threads);
+            validateIdleTime(max_idle_ms);
+            auto state = std::make_shared<State>();
+            state->m_min_thread_num = min_threads;
+            state->m_max_thread_num = max_threads;
+            state->m_max_idle_time = max_idle_ms;
+            return state;
+        }
+
         /**
          * @brief Validate the relationship between worker limits.
          */
@@ -441,67 +491,67 @@ export namespace mcr::utils {
          * @brief Prevent a worker from waiting for its own completion.
          */
         auto checkExternalWait() const -> void {
-            if (s_current_pool == this) {
+            if (s_current_state == m_state.get()) {
                 throw std::logic_error{ "mcr::utils::ThreadPool: a worker cannot Wait or Stop its own pool" };
             }
         }
 
         /**
-         * @brief Read the started state while holding m_mutex.
+         * @brief Read the started state while holding the state mutex.
          */
         auto isStarted() const -> bool {
-            return m_status == Status::RUNNING || m_status == Status::PAUSED;
+            return m_state->m_status == Status::RUNNING || m_state->m_status == Status::PAUSED;
         }
 
         /**
-         * @brief Start workers while holding m_mutex, retaining a valid state on creation failure.
+         * @brief Start workers while holding m_state->m_mutex, retaining a valid state on creation failure.
          */
         auto start(std::size_t start_threads) -> void {
-            m_status = Status::RUNNING;
+            m_state->m_status = Status::RUNNING;
             try {
-                auto const count = std::clamp(start_threads, m_min_thread_num, m_max_thread_num);
-                while (m_current_thread_num < count) {
+                auto const count = std::clamp(start_threads, m_state->m_min_thread_num, m_state->m_max_thread_num);
+                while (m_state->m_current_thread_num < count) {
                     createThread();
                 }
             } catch (...) {
-                if (m_current_thread_num == 0) {
-                    m_status = Status::STOPPED;
+                if (m_state->m_current_thread_num == 0) {
+                    m_state->m_status = Status::STOPPED;
                 }
                 throw;
             }
         }
 
         /**
-         * @brief Add workers for pending work while holding m_mutex and respecting the maximum.
+         * @brief Add workers for pending work while holding m_state->m_mutex and respecting the maximum.
          */
         auto growForTasks(std::size_t pending_tasks) -> void {
-            while (m_current_thread_num < m_max_thread_num && pending_tasks > m_current_thread_num - m_active_thread_num) {
+            while (m_state->m_current_thread_num < m_state->m_max_thread_num && pending_tasks > m_state->m_current_thread_num - m_state->m_active_thread_num) {
                 createThread();
             }
         }
 
         /**
-         * @brief Create a stable worker record before launching its thread; caller holds m_mutex.
+         * @brief Create a stable worker record before launching its thread; caller holds the state mutex.
          */
         auto createThread() -> void {
-            auto& worker = m_workers.emplace_back();
+            auto& worker = m_state->m_workers.emplace_back();
             try {
-                worker.thread = std::jthread{ [this, &worker] { runWorker(worker); } };
+                worker.thread = std::jthread{ [state = m_state, finished = worker.finished] { runWorker(*state, *finished); } };
             } catch (...) {
-                m_workers.pop_back();
+                m_state->m_workers.pop_back();
                 throw;
             }
-            ++m_current_thread_num;
+            ++m_state->m_current_thread_num;
         }
 
         /**
-         * @brief Move finished records out for joining after the caller releases m_mutex.
+         * @brief Move finished records out for joining after the caller releases the state mutex.
          */
         auto collectFinished(std::list<Worker>& retired) -> void {
-            for (auto worker = m_workers.begin(); worker != m_workers.end();) {
+            for (auto worker = m_state->m_workers.begin(); worker != m_state->m_workers.end();) {
                 auto current = worker++;
-                if (current->finished) {
-                    retired.splice(retired.end(), m_workers, current);
+                if (*current->finished) {
+                    retired.splice(retired.end(), m_state->m_workers, current);
                 }
             }
         }
@@ -509,15 +559,16 @@ export namespace mcr::utils {
         /**
          * @brief Compute a saturated idle deadline without overflowing chrono representations.
          */
-        auto idleDeadline(
+        static auto idleDeadline(
+            State const& state,
             std::chrono::steady_clock::time_point idle_since
-        ) const -> std::chrono::steady_clock::time_point {
+        ) -> std::chrono::steady_clock::time_point {
             using Clock = std::chrono::steady_clock;
             constexpr auto MAX_INTERVAL = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::duration::max());
-            if (m_max_idle_time >= MAX_INTERVAL) {
+            if (state.m_max_idle_time >= MAX_INTERVAL) {
                 return Clock::time_point::max();
             }
-            auto const interval = std::chrono::duration_cast<Clock::duration>(m_max_idle_time);
+            auto const interval = std::chrono::duration_cast<Clock::duration>(state.m_max_idle_time);
             if (idle_since > Clock::time_point::max() - interval) {
                 return Clock::time_point::max();
             }
@@ -527,47 +578,47 @@ export namespace mcr::utils {
         /**
          * @brief Execute tasks until shutdown or retirement, synchronizing all queue and count updates.
          */
-        auto runWorker(Worker& worker) -> void {
-            s_current_pool = this;
-            std::unique_lock lock{ m_mutex };
+        static auto runWorker(State& state, bool& finished) -> void {
+            s_current_state = &state;
+            std::unique_lock lock{ state.m_mutex };
             auto idle_since = std::chrono::steady_clock::now();
             for (;;) {
-                if (m_status == Status::STOPPING || m_current_thread_num > m_max_thread_num) {
+                if (state.m_status == Status::STOPPING || state.m_current_thread_num > state.m_max_thread_num) {
                     break;
                 }
-                if (m_status == Status::PAUSED) {
-                    m_task_cond.wait(lock, [this] { return m_status != Status::PAUSED || m_current_thread_num > m_max_thread_num; });
+                if (state.m_status == Status::PAUSED) {
+                    state.m_task_cond.wait(lock, [&state] { return state.m_status != Status::PAUSED || state.m_current_thread_num > state.m_max_thread_num; });
                     idle_since = std::chrono::steady_clock::now();
                     continue;
                 }
-                if (!m_tasks.empty()) {
-                    auto task = std::move(m_tasks.front());
-                    m_tasks.pop();
-                    ++m_active_thread_num;
+                if (!state.m_tasks.empty()) {
+                    auto task = std::move(state.m_tasks.front());
+                    state.m_tasks.pop_front();
+                    ++state.m_active_thread_num;
                     lock.unlock();
                     task(false);
                     task = {};
                     lock.lock();
-                    --m_active_thread_num;
-                    if (m_tasks.empty() && m_active_thread_num == 0) {
-                        m_done_cond.notify_all();
+                    --state.m_active_thread_num;
+                    if (state.m_tasks.empty() && state.m_active_thread_num == 0) {
+                        state.m_done_cond.notify_all();
                     }
                     idle_since = std::chrono::steady_clock::now();
                     continue;
                 }
-                if (m_current_thread_num > m_min_thread_num) {
-                    auto const deadline = idleDeadline(idle_since);
+                if (state.m_current_thread_num > state.m_min_thread_num) {
+                    auto const deadline = idleDeadline(state, idle_since);
                     if (std::chrono::steady_clock::now() >= deadline) {
                         break;
                     }
-                    m_task_cond.wait_until(lock, deadline);
+                    state.m_task_cond.wait_until(lock, deadline);
                 } else {
-                    m_task_cond.wait(lock);
+                    state.m_task_cond.wait(lock);
                 }
             }
-            --m_current_thread_num;
-            worker.finished = true;
-            s_current_pool = nullptr;
+            --state.m_current_thread_num;
+            finished = true;
+            s_current_state = nullptr;
         }
     };
 
