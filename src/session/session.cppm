@@ -614,6 +614,9 @@ export namespace mcr {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
+            if (low_speed.limit < 0 || low_speed.time.count() < 0 || std::cmp_greater(low_speed.time.count(), (std::numeric_limits<long>::max)())) {
+                return std::unexpected{ Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Session: low-speed limits must be nonnegative and the duration must fit curl's long." } };
+            }
             if (auto status = setOption(CURLOPT_LOW_SPEED_LIMIT, static_cast<long>(low_speed.limit)); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }

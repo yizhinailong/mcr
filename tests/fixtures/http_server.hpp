@@ -5,6 +5,7 @@
 #pragma once
 #ifdef _WIN32
     #include <winsock2.h>
+    #include <ws2tcpip.h>
     #ifdef _MSC_VER
         #pragma comment(lib, "ws2_32.lib")
     #endif
@@ -324,6 +325,24 @@ namespace mcr::test {
                     if (!awaitPair(stop)) {
                         status = "503 Requests Were Not Concurrent";
                     }
+                } else if (target.starts_with("/auth/")) {
+                    auto const& authorization = headers["Authorization"];
+                    bool const basic = authorization == "Basic dXNlcjpwYXNzd29yZA==";
+                    bool const digest = authorization.starts_with("Digest ") && authorization.contains("username=\"user\"") && authorization.contains("nonce=\"mcr-nonce\"") && authorization.contains("response=\"");
+                    bool const ntlm = authorization.starts_with("NTLM TlRMTVNTUAAB");
+                    bool const accepted = (target == "/auth/basic" && basic) || (target == "/auth/digest" && digest) || (target == "/auth/mixed" && (basic || digest)) || (target == "/auth/ntlm" && ntlm);
+                    if (!accepted) {
+                        status = "401 Unauthorized";
+                        if (target == "/auth/basic" || target == "/auth/mixed") {
+                            extra += "WWW-Authenticate: Basic realm=\"mcr\"\r\n";
+                        }
+                        if (target == "/auth/digest" || target == "/auth/mixed") {
+                            extra += "WWW-Authenticate: Digest realm=\"mcr\", nonce=\"mcr-nonce\", algorithm=MD5, qop=\"auth\"\r\n";
+                        }
+                        if (target == "/auth/ntlm") {
+                            extra += "WWW-Authenticate: NTLM\r\n";
+                        }
+                    }
                 } else if (target.ends_with("/proxy-auth")) {
                     if (headers["Proxy-Authorization"] != "Basic dSRlcjpwQHNz") {
                         status = "407 Proxy Authentication Required";
@@ -348,6 +367,8 @@ namespace mcr::test {
                     output = "missing";
                 } else if (target == "/slow") {
                     std::this_thread::sleep_for(150ms);
+                } else if (target == "/bulk") {
+                    output.assign(262144, 'b');
                 } else if (target == "/partial") {
                     (void)sendAll(socket, "HTTP/1.1 200 OK\r\nContent-Length: 99\r\n\r\nshort");
                     return;
@@ -359,6 +380,13 @@ namespace mcr::test {
                     extra += "X-Request-" + name + ": " + headers[name] + "\r\n";
                 }
                 extra += std::format("X-Method: {}\r\nX-Target: {}\r\n", method, target);
+                sockaddr_in peer{};
+                SocketLength peer_length{ sizeof(peer) };
+                std::array<char, INET_ADDRSTRLEN> peer_ip{};
+                if (getpeername(socket, reinterpret_cast<sockaddr*>(&peer), &peer_length) != 0 || !inet_ntop(AF_INET, &peer.sin_addr, peer_ip.data(), static_cast<SocketLength>(peer_ip.size()))) {
+                    throw std::runtime_error{ "fixture getpeername/inet_ntop failed" };
+                }
+                extra += std::format("X-Client-IP: {}\r\nX-Client-Port: {}\r\n", peer_ip.data(), ntohs(peer.sin_port));
                 auto response{ std::format("HTTP/1.1 {}\r\nContent-Length: {}\r\nContent-Type: {}\r\nConnection: keep-alive\r\n{}\r\n", status, output.size(), content_type, extra) };
                 if (method != "HEAD") {
                     response += output;

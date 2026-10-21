@@ -51,4 +51,6 @@ auto credentials = auth.GetAuthString(); // 借用指向 "user:password" 的指�
 
 `Session::SetAuth` 将模式映射到 `CURLOPT_HTTPAUTH`，将凭据传给 `CURLOPT_USERPWD`。
 运行 `mcpp build` 和 `mcpp test`，验证模式、空输入、有界视图、UTF-8、二进制字节及复制移动。
-认证类型测试使用模拟凭据，不执行认证请求。
+`test_auth` 使用模拟凭据验证类型；`test_transfer_options` 通过本地 Basic、Digest、NTLM 和混合挑战
+检查实际请求中的认证方案，以及 `ANYSAFE`、`NEGOTIATE` 不回退到未允许方案的行为。
+测试检查认证掩码与方案选择，不提供完整的 NTLM/Kerberos 登录服务，也不重复验证 curl 的 Digest 摘要计算。

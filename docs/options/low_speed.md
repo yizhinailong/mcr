@@ -25,6 +25,9 @@ API 参考 cpr 的 `include/cpr/low_speed.h`，采用 C++23 模块、`mcr::optio
 
 `Session::SetLowSpeed` 将速率和秒数分别传给 `CURLOPT_LOW_SPEED_LIMIT` 和
 `CURLOPT_LOW_SPEED_TIME`。curl 执行低速超时检查，失败通过 `Response::error` 返回。
+与 cpr 的直接透传不同，mcr 在写入任一 curl 选项前拒绝负速率、负时长及超出 `long` 范围的秒数，
+返回 `BAD_FUNCTION_ARGUMENT`，保留原有低速设置。零值可用于清除低速策略。
 
 运行 `mcpp build` 和 `mcpp test`。`test_low_speed` 验证单位、有符号边界、
 字段修改和数值独立性，并在编译期检查旧整数时长签名及隐式有损转换不可用。
+`test_transfer_options` 使用本地流式响应检查真实低速取消，以及非法替换后策略仍然有效。
