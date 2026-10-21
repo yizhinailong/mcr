@@ -173,6 +173,11 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
   保留 `SslFastStart` 类型，显式启用它固定返回 `NOT_BUILT_IN`；不保留旧版 curl 的设置路径。
 - TLS 文件选项接受原生 `std::filesystem::path`，传给 curl 前统一转换为 UTF-8。
   直接设置 SslOptions 的证书、私钥、CA、CRL 路径字符串时也应使用 UTF-8。
+  Windows curl 缺少 `CURL_VERSION_UNICODE` 时，mcr 在应用 TLS 配置时通过原生路径读取
+  证书、私钥和 CA 文件，并使用 curl 的复制 blob 接口。文件内容因此在设置时确定，
+  修改文件后需再次应用 TLS 配置；读取失败仍由 curl 按原文件选项报告。
+  这是 mcr 为保持 UTF-8 路径支持而有意增加的行为。后端本身不支持的 CA 目录、CRL
+  等选项仍受该后端限制。
 - 上游 #1316 要求默认启用原生 CA 存储，mcr 的默认值与之一致。上游按 libcurl 版本门控并在
   所有平台设置，mcr 改为按 `_WIN32` 门控：curl 头文件说明该标志目前只在 Windows 实现，
   非 Windows 构建设置与否效果相同。

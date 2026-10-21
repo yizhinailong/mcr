@@ -2201,6 +2201,92 @@ export namespace mcr {
         }
 
         /**
+         * @brief Stream a native filesystem path when curl lacks Unicode file support.
+         */
+        struct NativeFileUpload {
+            std::ifstream stream; ///< Native file kept alive by the MIME part.
+
+            /**
+             * @brief Open a native path for binary reads.
+             */
+            explicit NativeFileUpload(std::filesystem::path const& path) : stream{ path, std::ios::binary } {}
+
+            /**
+             * @brief Read bounded chunks without letting exceptions cross curl's C callback.
+             */
+            static auto Read(char* destination, std::size_t size, std::size_t count, void* data) noexcept -> std::size_t {
+                try {
+                    if (size && count > (std::numeric_limits<std::size_t>::max)() / size) {
+                        return CURL_READFUNC_ABORT;
+                    }
+                    auto& input{ static_cast<NativeFileUpload*>(data)->stream };
+                    auto const capacity{ (std::min)(size * count, static_cast<std::size_t>((std::numeric_limits<std::streamsize>::max)())) };
+                    if (!capacity) {
+                        return 0;
+                    }
+                    input.read(destination, static_cast<std::streamsize>(capacity));
+                    return input.bad() || (input.fail() && !input.eof()) ? CURL_READFUNC_ABORT : static_cast<std::size_t>(input.gcount());
+                } catch (...) {
+                    return CURL_READFUNC_ABORT;
+                }
+            }
+
+            /**
+             * @brief Rewind or reposition a file for authentication retries and redirects.
+             */
+            static auto Seek(void* data, curl_off_t offset, int origin) noexcept -> int {
+                try {
+                    if (!std::in_range<std::streamoff>(offset)) {
+                        return CURL_SEEKFUNC_CANTSEEK;
+                    }
+                    auto const direction{ origin == SEEK_SET ? std::ios::beg : origin == SEEK_CUR ? std::ios::cur :
+                                                                                                    std::ios::end };
+                    if (origin != SEEK_SET && origin != SEEK_CUR && origin != SEEK_END) {
+                        return CURL_SEEKFUNC_CANTSEEK;
+                    }
+                    auto& input{ static_cast<NativeFileUpload*>(data)->stream };
+                    input.clear();
+                    input.seekg(static_cast<std::streamoff>(offset), direction);
+                    return input ? CURL_SEEKFUNC_OK : CURL_SEEKFUNC_FAIL;
+                } catch (...) {
+                    return CURL_SEEKFUNC_FAIL;
+                }
+            }
+
+            /**
+             * @brief Close the stream when curl releases the MIME part.
+             */
+            static auto Free(void* data) noexcept -> void { delete static_cast<NativeFileUpload*>(data); }
+        };
+
+        /**
+         * @brief Register streaming file content using curl or native Unicode file access.
+         */
+        auto prepareFile(curl_mimepart* item, std::string const& filename) -> Result<void> {
+#ifdef _WIN32
+            if (!(curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_UNICODE)) {
+                std::filesystem::path const path{ std::u8string { filename.begin(),
+                                                                  filename.end() } };
+                std::error_code error;
+                auto const size{ std::filesystem::file_size(path, error) };
+                if (error || !std::in_range<curl_off_t>(size)) {
+                    return std::unexpected{ Error{ ErrorCode::READ_ERROR, "mcr::Session: cannot size the MIME upload file." } };
+                }
+                auto file{ std::make_unique<NativeFileUpload>(path) };
+                if (!file->stream) {
+                    return std::unexpected{ Error{ ErrorCode::READ_ERROR, "mcr::Session: cannot open the MIME upload file." } };
+                }
+                if (auto status = checkCurl(curl_mime_data_cb(item, static_cast<curl_off_t>(size), &NativeFileUpload::Read, &NativeFileUpload::Seek, &NativeFileUpload::Free, file.get())); !status) {
+                    return status;
+                }
+                (void)file.release();
+                return {};
+            }
+#endif
+            return checkCurl(curl_mime_filedata(item, filename.c_str()));
+        }
+
+        /**
          * @brief Copy MIME fields into an owned curl MIME tree.
          * @param multipart Persistent descriptors.
          * @return Success or the first operation error.
@@ -2233,7 +2319,7 @@ export namespace mcr {
                             return std::unexpected{ std::move(item_result.error()) };
                         }
                         auto* item = *item_result;
-                        if (auto status = checkCurl(curl_mime_filedata(item, file.filepath.c_str())); !status) {
+                        if (auto status = prepareFile(item, file.filepath); !status) {
                             return std::unexpected{ std::move(status.error()) };
                         }
                         auto filename = file.overriden_filename;
@@ -2923,20 +3009,35 @@ namespace mcr {
 
             return {};
         };
+        auto native_file_buffer = [](std::string const& path) -> std::string {
+#ifdef _WIN32
+            if (!path.empty() && !(curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_UNICODE)) {
+                if (auto body{ Body::FromFile(File{ path }) }; body) {
+                    return body->Str();
+                }
+            }
+#else
+            (void)path;
+#endif
+            // Keep the original path on read failure so curl reports its normal TLS file error.
+            return {};
+        };
+        auto file_or_blob = [&](CURLoption file_option, CURLoption data_option, std::string const& path, std::string_view bytes) -> Result<void> {
+            auto const native{ native_file_buffer(path) };
+            if (auto status = string_option(file_option, native.empty() ? std::string_view{ path } : std::string_view{}); !status) {
+                return status;
+            }
+            return blob_option(data_option, !native.empty() ? std::string_view{ native } : path.empty() ? bytes :
+                                                                                                          std::string_view{});
+        };
 
-        if (auto status = string_option(CURLOPT_SSLCERT, options.cert_file); !status) {
-            return std::unexpected{ std::move(status.error()) };
-        }
-        if (auto status = blob_option(CURLOPT_SSLCERT_BLOB, options.cert_file.empty() ? std::string_view{ options.cert_blob } : std::string_view{}); !status) {
+        if (auto status = file_or_blob(CURLOPT_SSLCERT, CURLOPT_SSLCERT_BLOB, options.cert_file, options.cert_blob); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
         if (auto status = setOption(CURLOPT_SSLCERTTYPE, options.cert_type.empty() ? "PEM" : options.cert_type.c_str()); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
-        if (auto status = string_option(CURLOPT_SSLKEY, options.key_file); !status) {
-            return std::unexpected{ std::move(status.error()) };
-        }
-        if (auto status = blob_option(CURLOPT_SSLKEY_BLOB, options.key_file.empty() ? std::string_view{ options.key_blob } : std::string_view{}); !status) {
+        if (auto status = file_or_blob(CURLOPT_SSLKEY, CURLOPT_SSLKEY_BLOB, options.key_file, options.key_blob); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
         if (auto status = setOption(CURLOPT_SSLKEYTYPE, options.key_type.empty() ? "PEM" : options.key_type.c_str()); !status) {
@@ -2978,10 +3079,14 @@ namespace mcr {
 
         char* default_ca{ nullptr };
         (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CAINFO, &default_ca);
-        if (auto status = setOption(CURLOPT_CAINFO, options.ca_info.empty() ? default_ca : options.ca_info.c_str()); !status) {
+        auto const ca_blob{ options.ca_buffer.empty() ? std::string_view{ options.ca_info_blob } : std::string_view{ options.ca_buffer } };
+        auto const native_ca{ ca_blob.empty() ? native_file_buffer(options.ca_info) : std::string{} };
+        if (auto status = setOption(CURLOPT_CAINFO, !native_ca.empty() ? nullptr : options.ca_info.empty() ? default_ca :
+                                                                                                             options.ca_info.c_str());
+            !status) {
             return std::unexpected{ std::move(status.error()) };
         }
-        if (auto status = blob_option(CURLOPT_CAINFO_BLOB, options.ca_buffer.empty() ? options.ca_info_blob : options.ca_buffer); !status) {
+        if (auto status = blob_option(CURLOPT_CAINFO_BLOB, native_ca.empty() ? ca_blob : std::string_view{ native_ca }); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
         char* default_path{ nullptr };

@@ -78,6 +78,9 @@ namespace {
         auto const filename = "filename=\"" + path_bytes(temporary.file.filename()) + "\"";
         auto const first = response.text.find(filename);
         require(!response.error && response.status_code == 200 && response.text.contains(bytes) && first != std::string::npos && response.text.find(filename, first + filename.size()) != std::string::npos, "file and buffer parts must send Unicode filenames as UTF-8 and retain their binary bytes");
+        session->SetUrl(server.Url("/redirect/307")).value();
+        auto repeated{ session->Post().value() };
+        require(!repeated.error && repeated.redirect_count == 1 && repeated.text.contains(bytes) && repeated.text.contains(filename), "Unicode file uploads must rewind and retain filenames after a 307 redirect");
         auto const tls = mcr::options::Ssl(mcr::options::ssl::PemCert{ temporary.file }, mcr::options::ssl::PemKey{ temporary.file }, mcr::options::ssl::CaInfo{ temporary.file }, mcr::options::ssl::CaPath{ temporary.directory }, mcr::options::ssl::Crl{ temporary.file });
         require(tls.cert_file == input && tls.key_file == input && tls.ca_info == input && tls.crl_file == input && tls.ca_path == path_bytes(temporary.directory), "native certificate, key, CA, and CRL paths must be passed to curl as UTF-8");
     }

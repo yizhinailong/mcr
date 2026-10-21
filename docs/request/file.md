@@ -27,7 +27,9 @@ File 保留上游公开字符串字段 `filepath` 和 `overriden_filename`，包
 路径按值接收并移动到存储，文件名从 `std::string_view` 按长度复制，无需空字符结尾。
 字段均可修改，保留所有输入字节。
 `filepath` 和上传文件名使用 UTF-8；Windows 上也采用同一约定。
-`Body::FromFile` 将 UTF-8 转为原生文件系统路径后读取，Multipart 向 curl 传递 UTF-8。
+`Body::FromFile` 将 UTF-8 转为原生文件系统路径后读取。
+Windows curl 未启用 `CURL_VERSION_UNICODE` 时，Multipart 通过原生路径打开文件，
+使用可回退的流式回调上传；其他构建使用 curl 的文件接口。上传文件名始终使用 UTF-8。
 路径和替换文件名不能包含内嵌 NUL，否则传给 curl 的 C 字符串会在该处截断。
 
 `HasOverridenFilename() const noexcept` 替代上游的 `hasOverridenFilename()`，
