@@ -2,7 +2,7 @@
 
 [项目首页](../README.md) · [可运行示例](../example/README.md)
 
-文档统一使用简体中文，保留 API 标识符、命令、协议值和真实终端输出。代码块未包含完整 `main()` 时视为用法片段；涉及 curl 的片段需在成功初始化 curl 后执行，并在清理 curl 前结束其资源生命周期。完整运行方式见项目首页和示例说明。
+文档统一使用简体中文，保留 API 标识符、命令、协议值和真实终端输出。代码块未包含完整 `main()` 时视为用法片段；涉及 curl 的片段需在成功初始化 curl 后执行（可使用 [GlobalInit](session/global_init.md) 守卫），并在清理 curl 前结束其资源生命周期。完整运行方式见项目首页和示例说明。
 简短用法片段中的 `.value()` 假定操作成功；实际应用应先检查结果再访问 `*result` 或 `result.error()`，见[错误处理](utils/error.md)。
 
 文档目录与 `src/` 的组件划分一致，子目录对应同名源码目录；入口和项目维护文档留在本目录。
@@ -41,6 +41,7 @@
 | [Session](session/session.md) | 会话复用、响应、TLS、代理认证、拦截器和批量执行 |
 | [异步运行时](session/async.md) | 全局线程池、任务提交和清理 |
 | [ConnectionPool](session/connection_pool.md) | 连接和 TLS 会话共享、生命周期与线程限制 |
+| [GlobalInit](session/global_init.md) | curl 全局初始化守卫与进程级运行时的关闭顺序 |
 
 ## 协程（`src/coro/`）
 

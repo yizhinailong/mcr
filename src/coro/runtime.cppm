@@ -126,6 +126,7 @@ export namespace mcr::detail {
         Result<void> m_initialization; ///< Curl initialization result, retained for later submissions.
         bool m_stopping{ false };
         bool m_io_done{ false };
+        inline static std::atomic_bool s_created{ false }; ///< Whether the lazily created runtime has been constructed.
         std::jthread m_io_thread;
         std::jthread m_completion_thread;
 
@@ -152,6 +153,12 @@ export namespace mcr::detail {
             static Owner owner;
             return *owner.runtime;
         }
+
+        /**
+         * @brief Check whether Instance() has constructed the runtime without creating it.
+         * @return True once construction has started, including after cleanup.
+         */
+        [[nodiscard]] static auto Created() noexcept -> bool { return s_created.load(std::memory_order_acquire); }
 
         CoroRuntime(CoroRuntime const&) = delete;
         auto operator=(CoroRuntime const&) -> CoroRuntime& = delete;
@@ -271,6 +278,7 @@ export namespace mcr::detail {
          * @brief Initialize curl and start the I/O and continuation workers.
          */
         CoroRuntime() {
+            s_created.store(true, std::memory_order_release);
             auto holder = curl::CurlMultiHolder::Create();
             if (!holder) {
                 m_initialization = std::unexpected{ std::move(holder.error()) };

@@ -13,7 +13,7 @@
 | `src/` | `mcr.cppm`、`api.cppm` | 库入口和一次性请求 API |
 | `src/request/` | `body.cppm`、`buffer.cppm`、`file.cppm`、`multipart.cppm`、`fields.cppm` | 请求正文、上传数据、查询参数和表单 |
 | `src/http/` | `response.cppm`、`cookies.cppm`、`cert_info.cppm`、`status_code.cppm`、`sse.cppm` | 响应、HTTP 元数据和事件流 |
-| `src/session/` | `session.cppm`、`async.cppm`、`callback.cppm`、`connection_pool.cppm` | 会话、异步运行时、回调、连接共享和批量执行 |
+| `src/session/` | `session.cppm`、`async.cppm`、`callback.cppm`、`connection_pool.cppm`、`global_init.cppm` | 会话、异步运行时、回调、连接共享、批量执行和 curl 全局初始化守卫 |
 | `src/coro/` | `task.cppm`、`runtime.cppm` | `mcr::Task<T>` 与 curl multi 协程运行时，公共请求函数仍位于 `src/api.cppm`，详见[协程请求](coro/coro.md) |
 | `src/options/` | `auth.cppm`、`proxy.cppm`、`http.cppm`、`transfer_options.cppm`、`interface.cppm`、`ssl_options.cppm` | 请求配置，详见[选项说明](options/options.md) |
 | `src/curl/` | `curlholder.cppm`、`curlmultiholder.cppm`、`curl_container.cppm`、`ssl_ctx.cppm` | curl 句柄、容器编码和 TLS 后端支持，详见[curl 模块](curl/curl.md) |

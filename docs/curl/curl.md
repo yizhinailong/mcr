@@ -40,5 +40,6 @@ auto main() -> int {
 ```
 
 调用方继续负责 curl 的全局初始化和清理，并确保所有句柄先于全局清理销毁。
+也可以用 [GlobalInit](../session/global_init.md) 守卫代替手动调用。
 `mcr::Session::GetCurlHolder()` 现在返回 `std::shared_ptr<mcr::curl::CurlHolder>`。
 SSL 上下文回调的后端限制和使用方式见 [API 文档](../api.md)。

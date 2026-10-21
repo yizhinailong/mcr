@@ -53,6 +53,15 @@ export namespace mcr::utils {
         }
 
         /**
+         * @brief Check whether an instance is currently published.
+         * @return True after successful GetInstance and before ExitInstance.
+         * @note The result may be stale unless callers coordinate with initialization and shutdown.
+         */
+        [[nodiscard]] static auto HasInstance() noexcept -> bool {
+            return s_instance.load(std::memory_order_acquire) != nullptr;
+        }
+
+        /**
          * @brief Destroy the instance once; later calls have no effect.
          * @throws std::logic_error If no GetInstance call has successfully initialized T yet.
          * @throws std::system_error If std::call_once cannot complete.

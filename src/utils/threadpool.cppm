@@ -249,6 +249,12 @@ export namespace mcr::utils {
         }
 
         /**
+         * @brief Check whether the calling thread is executing a task of this pool.
+         * @return True on this pool's workers while they run a claimed task.
+         */
+        [[nodiscard]] auto IsWorkerThread() const noexcept -> bool { return s_current_state == m_state.get(); }
+
+        /**
          * @brief Inspect the lifecycle state.
          * @return True while running or paused.
          */

@@ -59,15 +59,13 @@ GET 示例会输出 `Status code: 200` 和 `Text: GET single`。下载、批量�
 mcr = { path = "../mcr" }
 ```
 
-下面是完整的同步请求程序，可保存为消费项目的 `src/main.cpp`。它连接上面启动的本地服务，检查传输错误和 HTTP 状态，并在 Session 及响应销毁后清理 curl：
+下面是完整的同步请求程序，可保存为消费项目的 `src/main.cpp`。它连接上面启动的本地服务，检查传输错误和 HTTP 状态；`mcr::GlobalInit` 守卫负责初始化 curl，并在响应销毁后清理，不需要包含 curl 头文件：
 
 ```cpp
 /**
  * @file main.cpp
  * @brief 向本地 HTTP 服务发送请求。
  */
-#include <curl/curl.h>
-
 import std;
 import mcr;
 
@@ -76,7 +74,9 @@ import mcr;
  * @return 请求成功时返回零，否则返回一。
  */
 auto main() -> int {
-    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+    auto const curl = mcr::GlobalInit::Create();
+    if (!curl) {
+        std::println("curl 初始化失败：{}", curl.error().message);
         return 1;
     }
     int result{ 1 };
@@ -97,10 +97,11 @@ auto main() -> int {
     } catch (std::exception const& error) {
         std::println("请求异常：{}", error.what());
     }
-    curl_global_cleanup();
     return result;
 }
 ```
+
+守卫是可选的：不创建时 curl 在首次请求时隐式初始化，与 cpr 一致。守卫的生命周期和关闭顺序见 [GlobalInit](docs/session/global_init.md)。
 
 `import mcr;` 导出库的全部公开接口；直接调用 curl 的 C API 时仍需包含其头文件。组件实现为 `mcr:api`、`mcr:session` 等模块分区，外部只需导入总入口，见 [模块与命名空间说明](docs/structure.md)。
 

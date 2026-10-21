@@ -20,6 +20,7 @@ export import :curlholder;
 export import :curlmultiholder;
 export import :error;
 export import :fields;
+export import :global_init;
 export import :file;
 export import :http;
 export import :interface;

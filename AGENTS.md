@@ -20,7 +20,7 @@
   以及上传缓冲区、文件和分段表单；公开类型位于 mcr。
 - `src/http/`：响应、Cookie、证书信息、状态码和服务端发送事件（SSE）。
   公开类型位于 mcr，状态常量位于 mcr::status，保留 mcr:response、mcr:sse 等现有分区名。
-- `src/session/`：会话、异步运行时、回调和连接池。
+- `src/session/`：会话、异步运行时、回调、连接池和 curl 全局初始化守卫。
   session.cppm 包含会话、TLS、拦截器和批量实现；
   mcr:session 分区导出 Session、Interceptor、InterceptorMulti 和 MultiPerform。
 - `src/coro/`：Task 和 curl multi 协程运行时，公开请求函数仍位于 src/api.cppm。
