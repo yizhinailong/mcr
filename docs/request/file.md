@@ -11,7 +11,8 @@ import std;
 import mcr;
 
 std::filesystem::path path{ std::filesystem::path{ "uploads" } / "report.txt" };
-mcr::File file{ path.string(), "download.txt" };
+auto const utf8 = path.u8string();
+mcr::File file{ std::string{ reinterpret_cast<char const*>(utf8.data()), utf8.size() }, "download.txt" };
 bool overridden = file.HasOverridenFilename(); // true
 mcr::Files single = file;
 mcr::Files paths{ "first.txt", "second.txt" };
@@ -25,6 +26,9 @@ File 保留上游公开字符串字段 `filepath` 和 `overriden_filename`，包
 显式构造必须提供路径，可选的替换文件名默认为空。
 路径按值接收并移动到存储，文件名从 `std::string_view` 按长度复制，无需空字符结尾。
 字段均可修改，保留所有输入字节。
+`filepath` 和上传文件名使用 UTF-8；Windows 上也采用同一约定。
+`Body::FromFile` 将 UTF-8 转为原生文件系统路径后读取，Multipart 向 curl 传递 UTF-8。
+路径和替换文件名不能包含内嵌 NUL，否则传给 curl 的 C 字符串会在该处截断。
 
 `HasOverridenFilename() const noexcept` 替代上游的 `hasOverridenFilename()`，
 只判断替换文件名是否非空。空白也算替换名，不去空白、提取基本文件名或验证文件名；
@@ -32,7 +36,7 @@ File 保留上游公开字符串字段 `filepath` 和 `overriden_filename`，包
 
 File 是描述符：构造和复制不打开、读取、创建、检查或规范化文件。
 相对路径、空路径和不存在的路径均原样保存。
-需要路径操作时显式使用 `std::filesystem::path`，再将 `.string()` 传给该字符串接口。
+需要路径操作时显式使用 `std::filesystem::path`，再将 `.u8string()` 的字节传给该字符串接口。
 
 Files 拥有私有 vector `m_files`，支持空默认构造、从一个 File 隐式构造，
 以及 File 描述符或路径字符串的初始化列表。
@@ -55,7 +59,7 @@ Files 拥有私有 vector `m_files`，支持空默认构造、从一个 File 隐
 `std::string_view`，以及迭代器访问器上的 `noexcept`；描述符和集合行为保持一致。
 
 Session 将 `filepath` 传给 `curl_mime_filedata`，传输文件名使用替换名，
-或 `std::filesystem::path(filepath).filename().string()`。
+或按 UTF-8 解析路径并提取基本文件名，再转换为 UTF-8。
 [Multipart](multipart.md) 提供相应描述符，Session 在准备请求时序列化它们。
 
 运行 `mcpp build` 和 `mcpp test`，验证所有权、替换名、列表构造、遍历、追加删除、

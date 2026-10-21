@@ -11,6 +11,7 @@ export namespace mcr {
     /**
      * @brief Store a file path and an optional filename to send with a multipart upload.
      * @note Paths and filenames are stored verbatim without filesystem access or normalization.
+     * Paths and upload filenames use UTF-8. Embedded NUL bytes cannot be passed through curl.
      * The public overriden_filename spelling is retained from cpr.
      */
     struct File {
@@ -24,7 +25,7 @@ export namespace mcr {
             std::string_view overriden_filename_param = {}
         ) : filepath{ std::move(filepath_param) }, overriden_filename{ overriden_filename_param } {}
 
-        std::string filepath;           ///< Publicly mutable path text; does not own an open file.
+        std::string filepath;           ///< Publicly mutable UTF-8 path; does not own an open file.
         std::string overriden_filename; ///< Publicly mutable upload filename override, empty when absent.
 
         /**

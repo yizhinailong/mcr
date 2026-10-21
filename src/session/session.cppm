@@ -2220,7 +2220,11 @@ export namespace mcr {
                         if (auto status = checkCurl(curl_mime_filedata(item, file.filepath.c_str())); !status) {
                             return std::unexpected{ std::move(status.error()) };
                         }
-                        auto const filename{ file.HasOverridenFilename() ? file.overriden_filename : std::filesystem::path{ file.filepath }.filename().string() };
+                        auto filename = file.overriden_filename;
+                        if (!file.HasOverridenFilename()) {
+                            auto const utf8 = std::filesystem::path{ std::u8string{ file.filepath.begin(), file.filepath.end() } }.filename().u8string();
+                            filename.assign(reinterpret_cast<char const*>(utf8.data()), utf8.size());
+                        }
                         if (auto status = checkCurl(curl_mime_filename(item, filename.c_str())); !status) {
                             return std::unexpected{ std::move(status.error()) };
                         }

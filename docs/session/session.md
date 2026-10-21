@@ -167,6 +167,8 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
   TLS 替换、blob 复制、代理凭据解码、批次归属检查和异常恢复采用上述行为。
 - 当前 curl 8.21 依赖不再支持的 SSLv2、SSLv3、NPN 不提供选项。
   保留 `SslFastStart` 类型，显式启用它固定返回 `NOT_BUILT_IN`；不保留旧版 curl 的设置路径。
+- TLS 文件选项接受原生 `std::filesystem::path`，传给 curl 前统一转换为 UTF-8。
+  直接设置 SslOptions 的证书、私钥、CA、CRL 路径字符串时也应使用 UTF-8。
 - 上游 #1316 要求默认启用原生 CA 存储，mcr 的默认值与之一致。上游按 libcurl 版本门控并在
   所有平台设置，mcr 改为按 `_WIN32` 门控：curl 头文件说明该标志目前只在 Windows 实现，
   非 Windows 构建设置与否效果相同。

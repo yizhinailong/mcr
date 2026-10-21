@@ -496,7 +496,8 @@ export namespace mcr::options {
          * @param opt Certificate option.
          */
         auto SetOption(ssl::CertFile const& opt) -> void {
-            cert_file = opt.filename.string();
+            auto const filename = opt.filename.u8string();
+            cert_file.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
             cert_blob.clear();
             cert_type = opt.GetCertType();
         }
@@ -516,7 +517,8 @@ export namespace mcr::options {
          * @param opt Key option.
          */
         auto SetOption(ssl::KeyFile const& opt) -> void {
-            key_file = opt.filename.string();
+            auto const filename = opt.filename.u8string();
+            key_file.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
             key_blob.clear();
             key_type = opt.GetKeyType();
             key_pass = opt.password;
@@ -586,7 +588,8 @@ export namespace mcr::options {
          * @param opt Value to copy.
          */
         auto SetOption(ssl::CaInfo const& opt) -> void {
-            ca_info = opt.filename.string();
+            auto const filename = opt.filename.u8string();
+            ca_info.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
             ca_info_blob.clear();
             ca_buffer.clear();
         }
@@ -605,7 +608,10 @@ export namespace mcr::options {
          * @brief Apply CaPath.
          * @param opt Value to copy.
          */
-        auto SetOption(ssl::CaPath const& opt) -> void { ca_path = opt.filename.string(); }
+        auto SetOption(ssl::CaPath const& opt) -> void {
+            auto const filename = opt.filename.u8string();
+            ca_path.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
+        }
 
         /**
          * @brief Apply CaBuffer.
@@ -621,7 +627,10 @@ export namespace mcr::options {
          * @brief Apply Crl.
          * @param opt Value to copy.
          */
-        auto SetOption(ssl::Crl const& opt) -> void { crl_file = opt.filename.string(); }
+        auto SetOption(ssl::Crl const& opt) -> void {
+            auto const filename = opt.filename.u8string();
+            crl_file.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
+        }
 
         /**
          * @brief Apply Ciphers.

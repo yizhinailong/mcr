@@ -74,9 +74,10 @@ export namespace mcr {
          */
         [[nodiscard]] static auto FromFile(File const& file) -> Result<Body> {
             Body result;
-            std::ifstream stream{ file.filepath, std::ios::binary };
+            std::filesystem::path const path{ std::u8string{ file.filepath.begin(), file.filepath.end() } };
+            std::ifstream stream{ path, std::ios::binary };
             std::error_code error;
-            if (!stream || std::filesystem::is_directory(file.filepath, error)) {
+            if (!stream || std::filesystem::is_directory(path, error)) {
                 return std::unexpected{
                     Error{ ErrorCode::FILE_COULDNT_READ_FILE, "Can't open the file for HTTP request body!" }
                 };

@@ -63,9 +63,14 @@ namespace {
      * @brief Own only this test's generated fixture directory.
      */
     struct TempDirectory {
-        std::filesystem::path path{ std::filesystem::temp_directory_path() / std::format("mcr-tls-{}-{}", GetCurrentProcessId(), std::chrono::steady_clock::now().time_since_epoch().count()) };
+        std::filesystem::path path{ std::filesystem::temp_directory_path() / std::filesystem::path{ u8"mcr-证书" } };
 
-        TempDirectory() { std::filesystem::create_directory(path); }
+        TempDirectory() {
+            path += std::format("-{}-{}", GetCurrentProcessId(), std::chrono::steady_clock::now().time_since_epoch().count());
+            if (!std::filesystem::create_directory(path)) {
+                throw std::runtime_error{ "Could not create a unique TLS fixture directory." };
+            }
+        }
 
         ~TempDirectory() {
             std::error_code error;
@@ -218,7 +223,8 @@ namespace {
         passed &= check(bool(session.Get().value().error), "mutual TLS must reject a request without a client certificate");
         bool const schannel{ version->ssl_version && std::string_view{ version->ssl_version }.starts_with("Schannel") };
         if (schannel) {
-            trust.cert_file = fixture.Path("client.p12").string();
+            auto const filename = fixture.Path("client.p12").u8string();
+            trust.cert_file.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
             trust.cert_type = "P12";
             trust.key_pass = "incorrect-password";
             session.SetSslOptions(trust).value();

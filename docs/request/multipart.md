@@ -34,7 +34,7 @@ Part 有五个构造函数，接收字段名、下表中的输入及可选媒体
 | `std::int32_t` | `std::to_string` 生成的有符号十进制文本 | false | false |
 | `Files const&` | 空，文件描述复制到 files | true | false |
 | `Files&&` | 空，文件描述移动到 files | true | false |
-| `Buffer const&` | `buffer.filename.string()` | false | true |
+| `Buffer const&` | `buffer.filename` 的 UTF-8 字节 | false | true |
 
 公开字段保留上游名称和类型：字符串 `name`、`value`、`content_type`，
 `Buffer::data_t data`、`std::size_t datalen`、布尔值 `is_file`、`is_buffer` 和 `Files files`。
@@ -46,7 +46,7 @@ Part 有五个构造函数，接收字段名、下表中的输入及可选媒体
 构造描述符不打开或检查路径，不执行 I/O。
 
 Buffer 构造仅复制元数据：data 和 datalen 保存当时的借用范围，
-value 拥有通过标准路径 `.string()` 转换得到的完整文件名，不剥离目录。
+value 拥有通过标准路径 `.u8string()` 转换得到的完整 UTF-8 文件名，不剥离目录。
 空 Buffer 仍选择缓冲区模式，数据为空、长度为零。
 随后可销毁或修改 Buffer 描述符，但底层字节必须存活且地址有效到全部消费者结束。
 复制移动 Part 或 Multipart 不延长字节生命周期。
@@ -69,6 +69,8 @@ const 输入仍复制，文件系统转换直接使用标准库。
 
 `Session::SetMultipart` 保存描述符，并在准备请求时构造 curl MIME 树。
 文本和缓冲区使用显式长度，保留内嵌空字节；文件通过 `curl_mime_filedata` 提供。
+字段名、Content-Type、文件路径和上传文件名通过 curl 的 C 字符串接口传递，
+不能包含内嵌 NUL，否则会在该处截断。此限制不适用于带显式长度的文本或缓冲区正文。
 借用缓冲区和源文件必须在传输期间可用，见 [Session](../session/session.md)。
 
 运行 `mcpp build` 和 `mcpp test`，验证构造、整数边界、文件复制移动、

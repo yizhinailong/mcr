@@ -71,16 +71,19 @@ export namespace mcr {
          * @param name_param Field name to own.
          * @param buffer Descriptor whose address and length are retained without copying its bytes.
          * @param content_type_param Optional content type to own.
-         * @note value stores buffer.filename.string(), including any directory components.
+         * @note value stores buffer.filename as UTF-8, including any directory components.
          */
         Part(
             std::string_view name_param,
             Buffer const& buffer,
             std::string_view content_type_param = {}
-        ) : name{ name_param }, value{ buffer.filename.string() }, content_type{ content_type_param }, data{ buffer.data }, datalen{ buffer.datalen }, is_buffer{ true } {}
+        ) : name{ name_param }, value{}, content_type{ content_type_param }, data{ buffer.data }, datalen{ buffer.datalen }, is_buffer{ true } {
+            auto const filename = buffer.filename.u8string();
+            value.assign(reinterpret_cast<char const*>(filename.data()), filename.size());
+        }
 
         std::string name;               ///< Owned field name.
-        std::string value;              ///< Owned text or buffer filename; empty for a file field.
+        std::string value;              ///< Owned text or UTF-8 buffer filename; empty for a file field.
         std::string content_type;       ///< Owned optional content type, empty when unspecified.
         Buffer::data_t data{ nullptr }; ///< Borrowed byte address, used only for buffer fields.
         std::size_t datalen{ 0 };       ///< Borrowed byte count, zero for text and file fields.
