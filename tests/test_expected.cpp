@@ -22,8 +22,7 @@ namespace {
     /**
      * @brief Check failure propagation without consuming an invalid expected value.
      */
-    auto check_requests() -> void {
-        mcr::test::HttpServer server;
+    auto check_requests(mcr::test::HttpServer& server) -> void {
         mcr::options::HttpVersion const invalid{ static_cast<mcr::options::HttpVersionCode>(255) };
         mcr::options::Proxies const proxies{
             { "http", "" },
@@ -73,7 +72,6 @@ namespace {
         auto retained = std::move(emptied);
         snapshot = mcr::Response::FromCurl(emptied, {}, {});
         require(!snapshot && snapshot.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "borrowed response factories must reject a moved-from holder");
-        server.Check();
     }
 } // namespace
 
@@ -86,8 +84,20 @@ int main() {
     }
     bool passed{ true };
     try {
-        mcr::Async::Startup(2, 4).value();
-        check_requests();
+        mcr::test::HttpServer server;
+        try {
+            mcr::Async::Startup(2, 4).value();
+            check_requests(server);
+        } catch (std::exception const& error) {
+            std::println("test_expected: {}", error.what());
+            passed = false;
+        }
+        try {
+            server.Check();
+        } catch (std::exception const& error) {
+            std::println("test_expected fixture worker: {}", error.what());
+            passed = false;
+        }
     } catch (std::exception const& error) {
         std::println("test_expected: {}", error.what());
         passed = false;

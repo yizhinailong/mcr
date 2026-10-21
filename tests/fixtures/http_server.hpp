@@ -23,6 +23,26 @@ namespace mcr::test {
     using namespace std::chrono_literals;
 
 #ifdef _WIN32
+    /**
+     * @brief Balance this fixture's Winsock reference independently of libcurl initialization.
+     */
+    struct SocketRuntime {
+        /**
+         * @brief Initialize the socket API before creating any fixture sockets.
+         */
+        SocketRuntime() {
+            WSADATA data{};
+            if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+                throw std::runtime_error{ "fixture WSAStartup failed" };
+            }
+        }
+
+        /**
+         * @brief Release the fixture's reference after all sockets and workers are gone.
+         */
+        ~SocketRuntime() { WSACleanup(); }
+    };
+
     using NativeSocket = SOCKET;
     using SocketLength = int;
     constexpr NativeSocket INVALID_NATIVE_SOCKET{ INVALID_SOCKET };
@@ -80,10 +100,16 @@ namespace mcr::test {
      */
     class HttpServer {
     private:
+#ifdef _WIN32
+        SocketRuntime m_socket_runtime; ///< Initialized before sockets and destroyed after them.
+#endif
         Socket m_listener{ socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) };
         std::string m_url;
         std::atomic_int m_connections{};
-        std::atomic_int m_barrier_arrivals{};
+        std::mutex m_barrier_mutex;              ///< Protects reusable barrier generations.
+        std::condition_variable m_barrier_ready; ///< Wakes the current pair together.
+        unsigned m_barrier_arrivals{};           ///< Arrivals in the current generation.
+        std::size_t m_barrier_generation{};      ///< Incremented after each complete pair.
         std::mutex m_failure_mutex;
         std::exception_ptr m_failure;
         std::vector<std::jthread> m_clients;
@@ -138,6 +164,25 @@ namespace mcr::test {
         }
 
     private:
+        /**
+         * @brief Pair concurrent requests without letting arrivals from an older group satisfy a new one.
+         */
+        auto awaitPair(std::stop_token stop) -> bool {
+            std::unique_lock lock{ m_barrier_mutex };
+            auto const generation = m_barrier_generation;
+            if (++m_barrier_arrivals == 2) {
+                m_barrier_arrivals = 0;
+                ++m_barrier_generation;
+                m_barrier_ready.notify_all();
+                return true;
+            }
+            bool const ready = m_barrier_ready.wait_for(lock, 2s, [&] { return m_barrier_generation != generation; });
+            if (!ready) {
+                --m_barrier_arrivals;
+            }
+            return ready && !stop.stop_requested();
+        }
+
         auto stop() -> void {
             if (m_worker.joinable()) {
                 m_worker.request_stop();
@@ -276,12 +321,7 @@ namespace mcr::test {
                     }
                     return;
                 } else if (target == "/barrier") {
-                    ++m_barrier_arrivals;
-                    auto const deadline{ std::chrono::steady_clock::now() + 2s };
-                    while (m_barrier_arrivals.load() < 2 && std::chrono::steady_clock::now() < deadline && !stop.stop_requested()) {
-                        std::this_thread::sleep_for(1ms);
-                    }
-                    if (m_barrier_arrivals.load() < 2) {
+                    if (!awaitPair(stop)) {
                         status = "503 Requests Were Not Concurrent";
                     }
                 } else if (target.ends_with("/proxy-auth")) {
