@@ -291,6 +291,10 @@ namespace mcr::test {
                     }
                 } else if (target.starts_with("/echo")) {
                     output = body;
+                } else if (target.starts_with("/redirect/")) {
+                    status = target.substr(std::string_view{ "/redirect/" }.size()) + " Redirect";
+                    auto const location = headers["X-Redirect-To"].empty() ? std::string{ "/echo" } : headers["X-Redirect-To"];
+                    extra = "Location: " + location + "\r\n";
                 } else if (target == "/redirect" || target == "/loop") {
                     status = "302 Found";
                     output = "redirect body";

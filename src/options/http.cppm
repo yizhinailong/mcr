@@ -269,7 +269,7 @@ export namespace mcr::options {
         long maximum{ 50L };                                     ///< Maximum redirects to follow; zero refuses redirects and -1 means unlimited.
         bool follow{ true };                                     ///< Whether to follow 3xx redirect responses.
         bool cont_send_cred{ false };                            ///< Whether to continue sending authentication credentials when the hostname changes.
-        PostRedirectFlags post_flags{ PostRedirectFlags::NONE }; ///< Which redirect statuses preserve POST.
+        PostRedirectFlags post_flags{ PostRedirectFlags::NONE }; ///< Default NONE follows cpr's include/cpr/redirect.h and curl's POSTREDIR default.
 
         /**
          * @brief Follow up to 50 redirects with default credential and POST handling.

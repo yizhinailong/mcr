@@ -134,6 +134,11 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
 
 ## 生命周期与错误
 
+默认重定向策略与 [cpr 的 Redirect](https://github.com/libcpr/cpr/blob/master/include/cpr/redirect.h)
+一致：`post_flags = PostRedirectFlags::NONE`。POST 遇到 301、302、303 时改发 GET 并丢弃正文。
+通过 `POST_301`、`POST_302`、`POST_303` 或 `POST_ALL` 可按状态保留 POST 及正文。
+跨主机重定向默认不转发用户名密码；只有 `cont_send_cred = true` 才继续发送。
+
 - 同一个 Session 的配置与请求必须串行使用。异步请求需要
   `Session::Create()` 提供的共享所有权；任务持有 Session 直到执行结束。
 - Body 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
