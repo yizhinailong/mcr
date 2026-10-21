@@ -136,16 +136,122 @@ auto b = mcr::sync_wait(std::move(second)).value();
 需要再次进入后续处理线程时，显式等待 `Schedule()`。排队期间协程帧必须有效；
 `Task` 自行管理已启动帧，其他协程框架需要由调用方保证等待者的生命周期。
 
+## 定时等待
+
+`Coro::ScheduleAfter` 和 `Coro::ScheduleAt` 让协程等待一段时间或等到指定时刻，
+不阻塞任何线程，适合请求失败后的退避重试等场景。它们与 `Schedule()` 并列，
+每次调用返回一个仅移动、单次使用的 awaiter，`co_await` 的结果为 `Result<void>`：
+
+```cpp
+// mcr::Coro 的静态成员
+template <typename Rep, typename Period>
+[[nodiscard]] static auto ScheduleAfter(
+    std::chrono::duration<Rep, Period> duration, std::stop_token token = {}
+) -> detail::CoroTimerAwaiter;
+
+[[nodiscard]] static auto ScheduleAt(
+    std::chrono::steady_clock::time_point deadline, std::stop_token token = {}
+) -> detail::CoroTimerAwaiter;
+```
+
+被移动或已经等待过的 awaiter 再次等待时抛出 `std::logic_error`。
+mcr 不提供重试策略，下面的退避循环由调用方编写：
+
+```cpp
+auto fetch_with_retry(mcr::Url url, std::stop_token stop) -> mcr::Task<mcr::Result<mcr::Response>> {
+    auto delay = std::chrono::milliseconds{ 500 };
+    for (;;) {
+        auto response = co_await mcr::request_coro<mcr::method::Get>(
+            url, mcr::options::Timeout{ std::chrono::seconds{ 10 } }
+        );
+        if (!response || !response->error || delay > std::chrono::seconds{ 8 }) {
+            co_return std::move(response);
+        }
+        auto waited = co_await mcr::Coro::ScheduleAfter(delay, stop);
+        if (!waited) {
+            co_return std::unexpected{ std::move(waited.error()) }; // 已取消或运行时已关闭，不再重试。
+        }
+        delay *= 2;
+    }
+}
+```
+
+| 情况 | `co_await` 结果 | 恢复位置 |
+| --- | --- | --- |
+| 正常到期 | 成功 | 后续处理线程，不早于截止时间 |
+| 时长 ≤ 0 或截止时间已到 | 成功，等同 `Schedule()` | 后续处理线程，排在已入队工作之后 |
+| 等待前或等待中请求停止 | `ErrorCode::ABORTED_BY_CALLBACK` | 后续处理线程，请求停止时立即入队 |
+| 等待中调用 `Coro::Cleanup()` | `ErrorCode::FAILED_INIT` | 后续处理线程，在清理返回前恢复 |
+| 清理之后或运行时初始化失败时发起等待 | `ErrorCode::FAILED_INIT` 或初始化错误 | 不挂起，留在当前线程 |
+
+### 截止时间与精度
+
+计时基于 `std::chrono::steady_clock`，不受系统时间调整影响。
+`ScheduleAfter` 在调用时计算截止时间：当前时刻加上用 `std::chrono::ceil` 向上取整到
+`steady_clock::duration` 的时长，等价于 `ScheduleAt(steady_clock::now() + ceil(duration))`。
+先创建 awaiter、稍后才等待时，计时从调用 `ScheduleAfter` 时开始。
+超出 `steady_clock` 表示范围的时长（例如 `std::chrono::hours::max()`）按
+`steady_clock::time_point::max()` 处理，这样的等待只能由停止请求或清理结束。
+
+协程不会早于截止时间恢复，延迟只来自调度：操作系统计时器的唤醒粒度
+（Windows 默认可能约为 15.6 ms）、后续处理队列中排在前面的工作，以及正在执行的用户代码。
+这不是实时保证。时长 ≤ 0 或截止时间已到时，行为等同 `Schedule()`：
+不经过 I/O 线程，直接排入恢复队列并返回成功。
+
+### 恢复线程与顺序
+
+到期、取消和关闭三种结果都经后续处理线程的同一个先进先出队列恢复，
+与 `Spawn`、`Schedule` 和 HTTP 完成共用；不会在 I/O 线程、curl 回调中或持有运行时锁时恢复协程。
+多个定时器按截止时间先后入队，截止时间相同时保持发起等待的顺序。
+可以从任意线程发起等待，包括任务首次挂起前仍在调用线程上运行的代码。
+等待期间协程帧必须保持有效，规则与 `Schedule()` 相同。
+
+### 取消
+
+在 mcr `Task` 中等待时，awaiter 自动读取当前任务的停止令牌，
+因此 `Task::Cancel()`、经 `GetStopSource()` 从其他线程请求停止，以及父任务取消的传播都会结束等待。
+可选的 `token` 参数与任务令牌任一触发即结束等待。promise 未提供 `GetStopToken()` 的其他协程
+只观察显式令牌。
+
+停止请求无论发生在等待前还是等待中，都会立即把协程排入恢复队列，不会拖到截止时间，
+结果为 `ABORTED_BY_CALLBACK`，与被取消的传输一致。停止回调在发出请求的线程上
+直接从截止时间队列移除定时器，不依赖 I/O 线程轮询。发起等待时令牌已经触发的，
+即使截止时间已到也返回 `ABORTED_BY_CALLBACK`。
+到期与取消竞争时协程只恢复一次，以先进入恢复队列的结果为准，
+之后到达的停止请求或截止时间不会改写它。
+
+### 关闭
+
+`Coro::Cleanup()` 之后发起等待不会挂起，直接在当前线程返回 `FAILED_INIT`，
+与 `Schedule` 被拒绝时一致；运行时已关闭时，该结果优先于已触发的令牌。
+清理时尚未到期的等待全部以 `FAILED_INIT` 恢复，已经到期但尚未恢复的仍返回成功。
+清理不等待截止时间，并在返回前排空这些恢复，不会遗留协程帧。
+关闭期间恢复的协程如再次发起等待，同样立即得到 `FAILED_INIT`。
+multi 句柄发生致命错误导致运行时停止时，待定的等待也以 `FAILED_INIT` 恢复。
+
+因此 `ABORTED_BY_CALLBACK` 表示停止令牌已触发，`FAILED_INIT` 表示运行时已经停止，
+二者都说明不应继续重试。
+
+### 调度实现
+
+定时器并入现有 I/O 线程，不增加线程。待定的等待按截止时间保存在有序队列中，
+插入和取消移除的复杂度均为 O(log n)，可同时存在数千个等待。
+I/O 线程不按固定周期空转：既无传输也无定时器时，在条件变量上等待新工作；
+只有定时器时，等待到最近的截止时间；有活动传输时，`curl_multi_poll` 的超时取 100 ms
+与距最近截止时间（向上取整到毫秒）中的较小值。新的等待成为最早的截止时间时，
+运行时同时通知条件变量并调用 `curl_multi_wakeup`。等待所需的状态在创建 awaiter 时分配，
+运行时接受等待后不再分配内存或抛出异常。
+
 ## 网络与恢复线程
 
 运行时首次提交时自动启动，也可以显式 `mcr::Coro::Startup()`。它拥有：
 
-- 一个 I/O 线程，通过 `curl_multi_perform` / `curl_multi_poll` 管理多个 easy handle。
-  提交和取消通过 `curl_multi_wakeup` 唤醒等待。每轮独立处理完成的请求，
-  无需等待同批的其他请求。
+- 一个 I/O 线程，通过 `curl_multi_perform` / `curl_multi_poll` 管理多个 easy handle，
+  同时负责定时等待的到期。提交和取消通过 `curl_multi_wakeup` 唤醒等待。
+  每轮独立处理完成的请求，无需等待同批的其他请求。
 - 一个后续处理线程，串行恢复完成请求的协程。用户在 `co_await` 之后的代码
   不保证回到原调用线程。连续等待下一个请求会再次挂起，从而释放该线程。
-  `Spawn` 的初始执行、`Schedule` 的恢复与已完成的 HTTP 请求共用先进先出的队列，
+  `Spawn` 的初始执行、`Schedule` 的恢复、定时等待与已完成的 HTTP 请求共用先进先出的队列，
   执行用户代码时不持有运行时锁。
 
 所有 curl 读写、Header、Progress、Debug 等传输回调在 I/O 线程执行，需及时返回。
@@ -195,11 +301,11 @@ HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl
 
 ## 清理
 
-`mcr::Coro::Cleanup()` 停止接受新请求，取消排队和正在传输的请求，排空完成队列，
-等待 I/O 与后续处理线程退出后释放 multi handle。正常清理以
-`ABORTED_BY_CALLBACK` 结束尚未完成的传输，已经完成的请求保留其结果。
+`mcr::Coro::Cleanup()` 停止接受新请求，取消排队和正在传输的请求，以 `FAILED_INIT`
+结束尚未到期的定时等待，排空完成队列，等待 I/O 与后续处理线程退出后释放 multi handle。
+正常清理以 `ABORTED_BY_CALLBACK` 结束尚未完成的传输，已经完成的请求保留其结果。
 方法可重复调用，也可以和提交、取消并发调用；开始关闭之后的新提交返回 `FAILED_INIT`。
-关闭期间恢复的协程如再发起新请求，同样会收到该错误。
+关闭期间恢复的协程如再发起新请求或定时等待，同样会收到该错误。
 清理还会排空已经接受的 `Spawn` 启动和 `Schedule` 恢复；任务继续发起 HTTP 请求或
 再次调度时会收到 `FAILED_INIT`。尚未开始的通用任务仍会执行其函数体，用户计算的停止由
 任务自身的协作取消逻辑负责。
@@ -208,7 +314,7 @@ HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl
 应用应先结束自己的工作链，在运行时线程之外调用清理，并在它返回之后才能执行
 `curl_global_cleanup()`。静态析构提供退出时的兜底，但不替代显式的 curl 生命周期顺序。
 使用 [GlobalInit](../session/global_init.md) 守卫时，最后一个守卫销毁会按此顺序自动清理。
-清理只等待本运行时处理的 HTTP 请求及其恢复过程；用户协程若转而等待其他执行器，
+清理只等待本运行时处理的 HTTP 请求、定时等待及其恢复过程；用户协程若转而等待其他执行器，
 仍需要由应用等待整条任务链。
 
 `Coro::IsRuntimeThread()` 是只读查询，在 I/O 和后续处理线程返回 `true`，
@@ -217,10 +323,10 @@ HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl
 线程状态保留到进程终止，避免自我等待和释放仍在使用的对象。
 正常线程上的显式清理和静态清理仍会等待线程并释放资源。
 
-有活动传输时，单次 `curl_multi_poll` 的等待上限为 100 ms；curl 定时器可能缩短等待。
-提交、取消和清理通过 `curl_multi_wakeup` 提前唤醒；该上限不是协程恢复耗时的保证，
-用户回调和已排队的后续处理也会影响延迟。没有活动传输时，I/O 线程使用条件变量等待新工作，
-不按 100 ms 周期空转。
+有活动传输时，单次 `curl_multi_poll` 的等待上限为 100 ms 与距最近定时等待截止时间中的较小值；
+curl 定时器可能缩短等待。提交、取消、清理和更早的定时等待通过 `curl_multi_wakeup` 提前唤醒；
+该上限不是协程恢复耗时的保证，用户回调和已排队的后续处理也会影响延迟。
+没有活动传输时，I/O 线程使用条件变量等待新工作或最近的截止时间，不按 100 ms 周期空转。
 
 ## 上游参考与验证
 
@@ -241,6 +347,12 @@ mcr 使用 `Coro::Spawn` 返回可消费的 Task，通过 `Schedule` 显式调�
 父子 Task 使用 C++ 协程句柄的对称转移，网络仍由 libcurl 驱动。
 这些接口不依赖 Asio 的完成令牌、executor 或 `awaitable_thread` 帧栈。
 
+cpr 没有对应的定时等待，`Coro::ScheduleAfter` / `ScheduleAt` 是 mcr 的扩展。
+其语义参考 [Asio 1.38.2 steady_timer](https://think-async.com/Asio/asio-1.38.2/doc/asio/reference/steady_timer.html)
+（基于单调时钟、取消后以错误完成）和 [cppcoro](https://github.com/lewissbaker/cppcoro) 的
+`io_service::schedule_after`（在调度器上恢复的定时等待），但不引入这些依赖：
+结果使用 `Result<void>`，取消来自 `std::stop_token`，恢复固定经过 mcr 的后续处理队列。
+
 按照 [C++ 协程挂起规则](https://eel.is/c++draft/expr.await#5)，进入 `await_suspend`
 时协程已经挂起；另一线程可以在该函数返回前恢复协程，甚至销毁帧。
 运行时在入队前初始化全部恢复状态，成功入队后只访问独立的局部状态，
@@ -254,5 +366,9 @@ mcr 使用 `Coro::Spawn` 返回可消费的 Task，通过 `Schedule` 显式调�
 运行 `mcpp test` 验证整个库。
 `tests/test_coro_publication.cpp` 通过四个调用线程反复执行 4000 次调度和
 4000 次启动前取消，并验证重复提交不会破坏已有传输。
+`tests/test_coro_timer.cpp` 验证定时等待的最短时长与取整、恢复线程、截止时间顺序、
+时长 ≤ 0 与饱和时长、各种取消来源（含父任务、其他线程、后续处理线程和 curl 回调）、
+先到结果不被改写、非 mcr 协程、活动 HTTP 传输期间的到期、4000 个定时器与随机取消的
+压力测试，以及清理时的待定等待和清理后的拒绝。
 `tests/test_coro_exit.cpp` 和 `tests/test_coro_exit_io.cpp` 分别从后续处理线程与真实
 HTTP 回调触发进程退出，验证静态清理不会自我等待或导致异常终止。

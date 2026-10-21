@@ -1,6 +1,6 @@
 /**
  * @file runtime.cppm
- * @brief Curl multi transfers and queued task execution on a separate continuation thread.
+ * @brief Curl multi transfers, steady-clock timers, and queued task execution on a separate continuation thread.
  */
 module;
 #include <curl/curl.h>
@@ -15,12 +15,27 @@ import std;
 
 export namespace mcr::detail {
     class CoroRuntime;
+    struct CoroTimer;
+
+    /**
+     * @brief Order armed timers by deadline; equal deadlines keep their arming order.
+     */
+    using CoroTimerQueue = std::multimap<std::chrono::steady_clock::time_point, std::shared_ptr<CoroTimer>>;
 
     /**
      * @brief Wake the runtime when a task's stop token is signalled.
      */
     struct WakeCoroRuntime {
         CoroRuntime* runtime;
+        auto operator()() const noexcept -> void;
+    };
+
+    /**
+     * @brief Complete an armed timer when one of its stop tokens is signalled.
+     */
+    struct CancelCoroTimer {
+        CoroRuntime* runtime; ///< Runtime owning the deadline queue.
+        CoroTimer* timer;     ///< Timer that owns this callback.
         auto operator()() const noexcept -> void;
     };
 
@@ -109,8 +124,77 @@ export namespace mcr::detail {
     };
 
     /**
-     * @brief Serialize curl operations on one I/O thread and resume tasks on a second thread.
-     * @note Submission, cancellation, and shutdown synchronize the multi handle's lifetime.
+     * @brief Describe how a timed wait finished.
+     */
+    enum class CoroTimerOutcome : std::uint8_t {
+        PENDING,   ///< Not yet completed.
+        EXPIRED,   ///< The deadline was reached.
+        CANCELLED, ///< A stop token was signalled before the deadline.
+        CLOSED,    ///< The runtime stopped before the deadline.
+    };
+
+    /**
+     * @brief Own one timed wait until its awaiting coroutine has resumed.
+     * @note The runtime lock guards arming state and the outcome until the timer is queued for resumption.
+     */
+    struct CoroTimer : CoroWork {
+        std::chrono::steady_clock::time_point deadline;                 ///< Earliest resumption time.
+        std::stop_token stop;                                           ///< Explicit cancellation token.
+        std::stop_token task_stop;                                      ///< Awaiting task's token, empty for other coroutines.
+        std::coroutine_handle<> continuation{};                         ///< Frame to resume exactly once.
+        CoroTimerQueue::iterator position{};                            ///< Deadline queue entry, valid while armed.
+        bool armed{ false };                                            ///< Whether the deadline queue owns this timer.
+        CoroTimerOutcome outcome{ CoroTimerOutcome::PENDING };          ///< Written once before queuing the resumption.
+        std::optional<std::stop_callback<CancelCoroTimer>> cancel;      ///< Explicit token callback, destroyed before the fields it reads.
+        std::optional<std::stop_callback<CancelCoroTimer>> task_cancel; ///< Task token callback, destroyed before the fields it reads.
+
+        /**
+         * @brief Capture the deadline and explicit token before publication.
+         * @param expiry Earliest steady-clock time at which to resume.
+         * @param token Explicit cancellation token, possibly empty.
+         */
+        CoroTimer(
+            std::chrono::steady_clock::time_point expiry,
+            std::stop_token token
+        ) : deadline{ expiry }, stop{ std::move(token) } {}
+
+        /**
+         * @brief Disconnect cancellation before resuming on the continuation thread.
+         */
+        auto Run() noexcept -> void override {
+            task_cancel.reset();
+            cancel.reset();
+            auto handle = std::exchange(continuation, {});
+            handle.resume();
+        }
+    };
+
+    /**
+     * @brief Convert a relative wait to a deadline that is never earlier than requested.
+     * @tparam Rep Duration representation.
+     * @tparam Period Duration tick period.
+     * @param duration Requested wait; values that are not positive yield the current time.
+     * @return Current time plus the duration rounded up to steady_clock ticks, saturated at the maximum time point.
+     */
+    template <typename Rep, typename Period>
+    [[nodiscard]] auto coro_timer_deadline(std::chrono::duration<Rep, Period> duration) -> std::chrono::steady_clock::time_point {
+        using Clock = std::chrono::steady_clock;
+        using Wide = std::chrono::duration<long double, Clock::period>;
+        auto const now = Clock::now();
+        if (!(duration > duration.zero())) {
+            return now;
+        }
+        // Compare in floating point so coarse and fine periods saturate before ceil can overflow;
+        // the margin absorbs rounding near the representable limit.
+        if (Wide{ duration } >= Wide{ (Clock::time_point::max)() - now } - std::chrono::seconds{ 1 }) {
+            return (Clock::time_point::max)();
+        }
+        return now + std::chrono::ceil<Clock::duration>(duration);
+    }
+
+    /**
+     * @brief Serialize curl operations and timers on one I/O thread and resume tasks on a second thread.
+     * @note Submission, timer arming, cancellation, and shutdown synchronize the multi handle's lifetime.
      * Internal transfer entry points accept only exclusively owned, freshly configured sessions.
      */
     class CoroRuntime {
@@ -123,6 +207,7 @@ export namespace mcr::detail {
         std::shared_ptr<CoroTransfer> m_pending_tail;
         std::shared_ptr<CoroWork> m_completed_head;
         std::shared_ptr<CoroWork> m_completed_tail;
+        CoroTimerQueue m_timers;       ///< Armed timers, released to the continuation queue in deadline order.
         Result<void> m_initialization; ///< Curl initialization result, retained for later submissions.
         bool m_stopping{ false };
         bool m_io_done{ false };
@@ -235,6 +320,65 @@ export namespace mcr::detail {
         }
 
         /**
+         * @brief Arm a timer whose continuation and cancellation callbacks are already installed.
+         * @param entry Preallocated deadline entry owning the timer, so arming never allocates.
+         * @return Success or an initialization/shutdown error; a rejected timer is never queued.
+         * @note A stop request or reached deadline completes immediately through the continuation queue;
+         * a stop request takes precedence. Callbacks signalled before arming are observed here.
+         */
+        auto Arm(CoroTimerQueue::node_type entry) -> Result<void> {
+            auto& timer = *entry.mapped();
+            {
+                std::lock_guard lock{ m_mutex };
+                if (m_stopping) {
+                    return std::unexpected{
+                        Error{ ErrorCode::FAILED_INIT, "mcr::Coro: runtime has been cleaned up." }
+                    };
+                }
+                if (!m_initialization) {
+                    return m_initialization;
+                }
+                if (timer.stop.stop_requested() || timer.task_stop.stop_requested()) {
+                    timer.outcome = CoroTimerOutcome::CANCELLED;
+                } else if (entry.key() <= std::chrono::steady_clock::now()) {
+                    timer.outcome = CoroTimerOutcome::EXPIRED;
+                } else {
+                    auto const position = m_timers.insert(std::move(entry));
+                    timer.position = position;
+                    timer.armed = true;
+                    if (position == m_timers.begin()) {
+                        // A new earliest deadline shortens both idle waiting and active polling.
+                        m_io_ready.notify_one();
+                        (void)curl_multi_wakeup(m_multi->handle);
+                    }
+                    return {};
+                }
+                append(m_completed_head, m_completed_tail, std::move(entry.mapped()));
+            }
+            m_completion_ready.notify_one();
+            return {};
+        }
+
+        /**
+         * @brief Complete an armed timer after a stop request, leaving finished timers unchanged.
+         * @param timer Timer whose cancellation callback is still registered.
+         * @note The I/O thread recomputes its wait when it next wakes, at the latest by the removed deadline.
+         */
+        auto Cancel(CoroTimer& timer) noexcept -> void {
+            {
+                std::lock_guard lock{ m_mutex };
+                if (!timer.armed) {
+                    return;
+                }
+                auto entry = m_timers.extract(timer.position);
+                timer.armed = false;
+                timer.outcome = CoroTimerOutcome::CANCELLED;
+                append(m_completed_head, m_completed_tail, std::move(entry.mapped()));
+            }
+            m_completion_ready.notify_one();
+        }
+
+        /**
          * @brief Wake polling without racing destruction of the multi handle.
          */
         auto Wake() noexcept -> void {
@@ -245,7 +389,7 @@ export namespace mcr::detail {
         }
 
         /**
-         * @brief Cancel unfinished transfers, drain continuations, join threads, and release curl.
+         * @brief Cancel unfinished transfers and timers, drain continuations, join threads, and release curl.
          * @note Repeated calls are harmless; later submissions fail. Call before curl_global_cleanup.
          * @return Success or the first operation error.
          */
@@ -354,6 +498,29 @@ export namespace mcr::detail {
         }
 
         /**
+         * @brief Queue timers in deadline order without allocating; caller owns the runtime lock.
+         * @param now Deadlines at or before this time complete as expired.
+         * @param closing Whether later deadlines also complete, reporting runtime shutdown.
+         */
+        auto releaseTimers(
+            std::chrono::steady_clock::time_point now,
+            bool closing
+        ) noexcept -> void {
+            bool released{ false };
+            while (!m_timers.empty() && (closing || m_timers.begin()->first <= now)) {
+                auto entry = m_timers.extract(m_timers.begin());
+                auto& timer = *entry.mapped();
+                timer.armed = false;
+                timer.outcome = entry.key() <= now ? CoroTimerOutcome::EXPIRED : CoroTimerOutcome::CLOSED;
+                append(m_completed_head, m_completed_tail, std::move(entry.mapped()));
+                released = true;
+            }
+            if (released) {
+                m_completion_ready.notify_one();
+            }
+        }
+
+        /**
          * @brief Resume outside all runtime locks and outside curl's callback stack.
          */
         auto runCompletions() noexcept -> void {
@@ -378,7 +545,7 @@ export namespace mcr::detail {
         }
 
         /**
-         * @brief Drive all active HTTP transfers and collect each completion independently.
+         * @brief Drive all active HTTP transfers and timers, collecting each completion independently.
          */
         auto runIo() noexcept -> void {
             coro_runtime_thread = true;
@@ -388,16 +555,31 @@ export namespace mcr::detail {
             try {
                 for (;;) {
                     std::shared_ptr<CoroTransfer> pending;
+                    std::optional<std::chrono::steady_clock::time_point> deadline;
                     {
                         std::unique_lock lock{ m_mutex };
-                        if (active.empty()) {
-                            m_io_ready.wait(lock, [this] { return m_stopping || m_pending_head; });
+                        for (;;) {
+                            releaseTimers(std::chrono::steady_clock::now(), false);
+                            if (m_stopping || m_pending_head || !active.empty()) {
+                                break;
+                            }
+                            // Without transfers, sleep until new work or the earliest deadline.
+                            if (m_timers.empty()) {
+                                m_io_ready.wait(lock);
+                            } else {
+                                // Copy the key: cancellation may free its node while the lock is released.
+                                auto const next = m_timers.begin()->first;
+                                m_io_ready.wait_until(lock, next);
+                            }
                         }
                         if (m_stopping) {
                             break;
                         }
                         pending = std::move(m_pending_head);
                         m_pending_tail.reset();
+                        if (!m_timers.empty()) {
+                            deadline = m_timers.begin()->first;
+                        }
                     }
                     while (pending) {
                         auto transfer = std::move(pending);
@@ -466,7 +648,13 @@ export namespace mcr::detail {
                     if (active.empty()) {
                         continue;
                     }
-                    multi_error = curl_multi_poll(m_multi->handle, nullptr, 0, 100, nullptr);
+                    // Arm interrupts polling whenever it adds an earlier deadline than this snapshot.
+                    std::chrono::milliseconds timeout{ 100 };
+                    if (deadline) {
+                        auto const remaining = *deadline - std::chrono::steady_clock::now();
+                        timeout = (std::min)(timeout, remaining > remaining.zero() ? std::chrono::ceil<std::chrono::milliseconds>(remaining) : std::chrono::milliseconds{});
+                    }
+                    multi_error = curl_multi_poll(m_multi->handle, nullptr, 0, static_cast<int>(timeout.count()), nullptr);
                     if (multi_error != CURLM_OK) {
                         break;
                     }
@@ -480,6 +668,8 @@ export namespace mcr::detail {
                 m_stopping = true;
                 pending = std::move(m_pending_head);
                 m_pending_tail.reset();
+                // Deadlines already reached still succeed; later ones report shutdown.
+                releaseTimers(std::chrono::steady_clock::now(), true);
             }
             for (auto& [handle, transfer] : active) {
                 (void)curl_multi_remove_handle(m_multi->handle, handle);
@@ -501,6 +691,10 @@ export namespace mcr::detail {
 
     auto WakeCoroRuntime::operator()() const noexcept -> void {
         runtime->Wake();
+    }
+
+    auto CancelCoroTimer::operator()() const noexcept -> void {
+        runtime->Cancel(*timer);
     }
 
     /**
@@ -552,6 +746,99 @@ export namespace mcr::detail {
          * @brief Report success on the continuation thread or rejection on the calling thread.
          */
         auto await_resume() -> Result<void> { return std::move(m_status); }
+    };
+
+    /**
+     * @brief Resume an existing coroutine through the runtime's serialized queue at a steady-clock deadline.
+     */
+    class CoroTimerAwaiter {
+        std::shared_ptr<CoroTimer> m_timer; ///< Outcome storage shared with the runtime.
+        CoroTimerQueue::node_type m_entry;  ///< Deadline entry allocated before publication.
+        Result<void> m_status;              ///< Rejection returned without suspending or transferring execution.
+
+    public:
+        /**
+         * @brief Allocate all timer state before its coroutine suspends.
+         * @param deadline Earliest steady-clock time at which to resume.
+         * @param token Explicit cancellation token, observed together with the awaiting task's token.
+         */
+        CoroTimerAwaiter(
+            std::chrono::steady_clock::time_point deadline,
+            std::stop_token token
+        ) : m_timer{ std::make_shared<CoroTimer>(deadline, std::move(token)) } {
+            CoroTimerQueue staging;
+            staging.emplace(deadline, m_timer);
+            m_entry = staging.extract(staging.begin());
+        }
+
+        CoroTimerAwaiter(CoroTimerAwaiter const&) = delete;
+        CoroTimerAwaiter(CoroTimerAwaiter&&) = default;
+
+        /**
+         * @brief Validate ownership and suspend even for past deadlines.
+         * @throws std::logic_error If the awaiter was moved or already consumed.
+         */
+        auto await_ready() const -> bool {
+            if (!m_timer || m_entry.empty()) {
+                throw std::logic_error{ "mcr::Coro::ScheduleAt: awaiter has been consumed." };
+            }
+            return false;
+        }
+
+        /**
+         * @brief Observe the task's stop token, then publish without accessing this after acceptance.
+         * @tparam Promise Awaiting promise, optionally exposing GetStopToken.
+         * @param continuation Already suspended coroutine to resume.
+         * @return Whether the runtime accepted responsibility for resumption.
+         * @note Cancellation may resume the coroutine on the continuation thread before this returns.
+         */
+        template <typename Promise>
+        auto await_suspend(std::coroutine_handle<Promise> continuation) -> bool {
+            auto timer = m_timer;
+            auto entry = std::move(m_entry);
+            auto& runtime = CoroRuntime::Instance();
+            timer->continuation = continuation;
+            if constexpr (requires(Promise& promise) {
+                              { promise.GetStopToken() } -> std::convertible_to<std::stop_token>;
+                          }) {
+                timer->task_stop = continuation.promise().GetStopToken();
+            }
+            // Register before arming: Arm observes, under the runtime lock, any signal that precedes it.
+            timer->cancel.emplace(timer->stop, CancelCoroTimer{ &runtime, timer.get() });
+            timer->task_cancel.emplace(timer->task_stop, CancelCoroTimer{ &runtime, timer.get() });
+            auto status = runtime.Arm(std::move(entry));
+            if (!status) {
+                timer->task_cancel.reset();
+                timer->cancel.reset();
+                timer->continuation = {};
+                m_status = std::move(status);
+                return false;
+            }
+            // Only locals may be accessed after acceptance, including during their destruction.
+            return true;
+        }
+
+        /**
+         * @brief Report the wait outcome on the continuation thread or rejection on the calling thread.
+         * @return Success at the deadline, ABORTED_BY_CALLBACK after a stop request, or FAILED_INIT on shutdown.
+         */
+        auto await_resume() -> Result<void> {
+            auto timer = std::move(m_timer);
+            if (!m_status) {
+                return std::move(m_status);
+            }
+            if (timer->outcome == CoroTimerOutcome::EXPIRED) {
+                return {};
+            }
+            if (timer->outcome == CoroTimerOutcome::CANCELLED) {
+                return std::unexpected{
+                    Error{ ErrorCode::ABORTED_BY_CALLBACK, "mcr::Coro: timed wait was cancelled." }
+                };
+            }
+            return std::unexpected{
+                Error{ ErrorCode::FAILED_INIT, "mcr::Coro: runtime stopped before the timed wait expired." }
+            };
+        }
     };
 
     /**
@@ -669,13 +956,46 @@ export namespace mcr {
         [[nodiscard]] static auto Schedule() -> detail::CoroScheduleAwaiter { return {}; }
 
         /**
+         * @brief Wait without blocking a thread, resuming through the continuation queue after a duration.
+         * @tparam Rep Duration representation.
+         * @tparam Period Duration tick period.
+         * @param duration Minimum wait from this call, rounded up to steady_clock ticks; values beyond its range saturate.
+         * @param token Optional cancellation token, observed together with the awaiting Task's token.
+         * @return Awaiter yielding Result<void> with the same outcomes as ScheduleAt().
+         * @note The deadline is fixed when this function is called; a non-positive duration behaves like Schedule().
+         */
+        template <typename Rep, typename Period>
+        [[nodiscard]] static auto ScheduleAfter(
+            std::chrono::duration<Rep, Period> duration,
+            std::stop_token token = {}
+        ) -> detail::CoroTimerAwaiter {
+            return ScheduleAt(detail::coro_timer_deadline(duration), std::move(token));
+        }
+
+        /**
+         * @brief Wait without blocking a thread, resuming through the continuation queue at a steady-clock deadline.
+         * @param deadline Earliest resumption time; a reached deadline behaves like Schedule().
+         * @param token Optional cancellation token, observed together with the awaiting Task's token.
+         * @return Single-use awaiter yielding success at the deadline, ABORTED_BY_CALLBACK once either token
+         * is stopped, or FAILED_INIT when the runtime stops first. Rejection continues on the calling thread.
+         * @note A token stopped before the wait takes precedence over a reached deadline. Only the first
+         * outcome is reported, and the waiting coroutine must remain alive until it resumes.
+         */
+        [[nodiscard]] static auto ScheduleAt(
+            std::chrono::steady_clock::time_point deadline,
+            std::stop_token token = {}
+        ) -> detail::CoroTimerAwaiter {
+            return detail::CoroTimerAwaiter{ deadline, std::move(token) };
+        }
+
+        /**
          * @brief Start lazily and return FAILED_INIT after permanent cleanup.
          * @return Success or the first operation error.
          */
         [[nodiscard]] static auto Startup() -> Result<void> { return detail::CoroRuntime::Instance().CheckRunning(); }
 
         /**
-         * @brief Cancel outstanding HTTP transfers and wait for their continuations to finish.
+         * @brief Cancel outstanding HTTP transfers and timed waits, then wait for their continuations to finish.
          * @note Call outside tasks before curl_global_cleanup; this permanently closes the runtime.
          * @return Success or the first operation error.
          */

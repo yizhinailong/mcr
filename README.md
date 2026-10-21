@@ -2,7 +2,7 @@
 
 基于 libcurl 的 C++23 模块化 HTTP 客户端库，使用 [mcpp](https://github.com/mcpp-community/mcpp) 构建和管理依赖，API 设计参考 [cpr](https://github.com/libcpr/cpr)。
 
-通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程、完成回调、批量请求和文件下载，以及按编译期方法参数分派的 `request<M>` 系列入口。库还提供可复用的 Session、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
+通过 `import mcr;` 即可使用全部公开接口，包括同步请求、基于 future 的异步请求、协程及其可取消的定时等待、完成回调、批量请求和文件下载，以及按编译期方法参数分派的 `request<M>` 系列入口。库还提供可复用的 Session、表单与文件上传、代理、TLS 配置、取消和服务端发送事件（SSE）。
 
 [快速开始](#快速开始) · [文档索引](docs/README.md) · [可运行示例](example/README.md) · [源码结构](docs/structure.md) · [expected 接口迁移](docs/expected_migration.md)
 
@@ -115,6 +115,7 @@ auto main() -> int {
 | 在线程池执行请求 | `GetAsync` 等 | `Result<AsyncResponse>`，提交成功后通过 `Get()` 取请求结果 |
 | 在协程中等待请求 | `GetCoro` 等 | `Task<Result<Response>>`，支持 `co_await` 和 `sync_wait` |
 | 排队启动或让出协程执行 | `Coro::Spawn`、`Coro::Schedule` | `Result<Task<T>>`、可等待的 `Result<void>` |
+| 在协程中定时等待，例如退避重试 | `Coro::ScheduleAfter`、`Coro::ScheduleAt` | 可等待、可取消的 `Result<void>`，不阻塞线程 |
 | 请求完成后执行回调 | `GetCallback` 等 | `Result<AsyncWrapper<回调返回类型, true>>` |
 | 同步并发批次 | `MultiGet` 等、`MultiPerform` | 按输入顺序排列的响应 |
 | 可分别取消的异步批次 | `MultiGetAsync` 等 | 按输入顺序排列的可取消任务 |

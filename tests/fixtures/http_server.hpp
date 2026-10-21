@@ -367,6 +367,11 @@ namespace mcr::test {
                     output = "missing";
                 } else if (target == "/slow") {
                     std::this_thread::sleep_for(150ms);
+                } else if (target == "/delay") {
+                    // Keep a transfer active without socket traffic; fixture shutdown still ends the wait promptly.
+                    for (int index{}; index < 200 && !stop.stop_requested(); ++index) {
+                        std::this_thread::sleep_for(50ms);
+                    }
                 } else if (target == "/bulk") {
                     output.assign(262144, 'b');
                 } else if (target == "/partial") {
