@@ -15,6 +15,7 @@ curl 与异步运行时生命周期、响应输出和错误处理。
 
 此目录使用自己的 `mcpp.toml`，通过 `mcr = { path = ".." }` 引用本地库。
 主项目的 `mcpp.toml` 保持库配置，根目录的 `mcpp build` 仍构建库。
+根项目和示例均以清单声明依赖；生成的 `mcpp.lock` 是本机的平台解析快照，统一不纳入版本控制。
 
 请求示例显式检查 `Result`，操作失败输出错误码和诊断；传输失败与 HTTP 状态分别处理。
 接口变化见 [expected 接口迁移](../docs/expected_migration.md)。
