@@ -81,8 +81,16 @@ jobs:
       - name: Build
         run: mcpp build
 
+      - name: Verify TLS fixture dependencies
+        run: |
+          openssl version
+          python3 -c 'import ssl; print(ssl.OPENSSL_VERSION)'
+
       - name: Test
-        run: mcpp test
+        run: |
+          set -o pipefail
+          mcpp test | tee "$RUNNER_TEMP/mcr-tests.log"
+          grep -F 'test_ssl_options: verified HTTPS and mutual TLS file/blob paths' "$RUNNER_TEMP/mcr-tests.log"
 
       - name: Package release
         if: github.ref_type == 'tag'

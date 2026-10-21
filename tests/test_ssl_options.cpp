@@ -6,6 +6,14 @@
     #define WIN32_LEAN_AND_MEAN
     #define NOMINMAX
     #include <windows.h>
+#else
+    #include <cerrno>
+
+    #include <fcntl.h>
+    #include <signal.h>
+    #include <spawn.h>
+    #include <sys/wait.h>
+    #include <unistd.h>
 #endif
 #include <curl/curl.h>
 import std;
@@ -58,7 +66,17 @@ namespace {
         return passed;
     }
 
+    /**
+     * @brief Identify the process when creating a unique fixture directory.
+     */
+    auto process_id() -> unsigned long {
 #ifdef _WIN32
+        return GetCurrentProcessId();
+#else
+        return static_cast<unsigned long>(getpid());
+#endif
+    }
+
     /**
      * @brief Own only this test's generated fixture directory.
      */
@@ -66,7 +84,7 @@ namespace {
         std::filesystem::path path{ std::filesystem::temp_directory_path() / std::filesystem::path{ u8"mcr-证书" } };
 
         TempDirectory() {
-            path += std::format("-{}-{}", GetCurrentProcessId(), std::chrono::steady_clock::now().time_since_epoch().count());
+            path += std::format("-{}-{}", process_id(), std::chrono::steady_clock::now().time_since_epoch().count());
             if (!std::filesystem::create_directory(path)) {
                 throw std::runtime_error{ "Could not create a unique TLS fixture directory." };
             }
@@ -82,6 +100,7 @@ namespace {
      * @brief Own a hidden fixture process and its output log.
      */
     struct ChildProcess {
+#ifdef _WIN32
         PROCESS_INFORMATION info{};
         HANDLE log{ INVALID_HANDLE_VALUE };
         std::filesystem::path directory;
@@ -108,7 +127,7 @@ namespace {
         auto Start(
             std::filesystem::path const& script,
             std::filesystem::path const& directory
-        ) -> void {
+        ) -> bool {
             this->directory = directory;
             SECURITY_ATTRIBUTES attributes{ sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
             log = CreateFileW((directory / "server.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -124,9 +143,106 @@ namespace {
             startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
             auto command{ std::format(L"pwsh.exe -NoLogo -NoProfile -NonInteractive -File \"{}\" -Directory \"{}\"", script.wstring(), directory.wstring()) };
             if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &info)) {
-                throw std::runtime_error{ "TLS fixture requires PowerShell 7.5 or later (pwsh) on PATH." };
+                if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+                    return false;
+                }
+                throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not start TLS fixture" };
+            }
+            return true;
+        }
+
+        /**
+         * @brief Poll child exit while allowing a bounded readiness wait.
+         */
+        auto WaitForExit(std::chrono::milliseconds delay) -> std::optional<int> {
+            auto const state = WaitForSingleObject(info.hProcess, static_cast<DWORD>(delay.count()));
+            if (state == WAIT_OBJECT_0) {
+                DWORD exit_code{};
+                if (!GetExitCodeProcess(info.hProcess, &exit_code)) {
+                    throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not query TLS fixture exit code" };
+                }
+                return static_cast<int>(exit_code);
+            }
+            if (state == WAIT_FAILED) {
+                throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not wait for TLS fixture" };
+            }
+            return {};
+        }
+#else
+        pid_t process{};                 ///< Owned Python child, zero after it has been reaped.
+        std::filesystem::path directory; ///< Parent-owned fixture directory.
+
+        /**
+         * @brief Request graceful shutdown, then reap the child even if it cannot finish normally.
+         */
+        ~ChildProcess() {
+            if (process > 0) {
+                std::ofstream{ directory / "stop" };
+                auto const deadline = std::chrono::steady_clock::now() + 5s;
+                try {
+                    while (process > 0 && std::chrono::steady_clock::now() < deadline) {
+                        (void)WaitForExit(20ms);
+                    }
+                } catch (...) {}
+                if (process > 0) {
+                    (void)kill(process, SIGKILL);
+                    while (waitpid(process, nullptr, 0) < 0 && errno == EINTR) {}
+                }
             }
         }
+
+        /**
+         * @brief Start Python without a shell and redirect fixture diagnostics to its log.
+         */
+        auto Start(
+            std::filesystem::path const& script,
+            std::filesystem::path const& fixture_directory
+        ) -> bool {
+            directory = fixture_directory;
+            auto const script_text = script.string();
+            auto const directory_text = directory.string();
+            auto const log_text = (directory / "server.log").string();
+            posix_spawn_file_actions_t actions;
+            int result = posix_spawn_file_actions_init(&actions);
+            if (result != 0) {
+                throw std::system_error{ result, std::system_category(), "Could not initialize TLS process actions" };
+            }
+            result = posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, log_text.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            if (result == 0) {
+                result = posix_spawn_file_actions_adddup2(&actions, STDOUT_FILENO, STDERR_FILENO);
+            }
+            std::array<char*, 5> arguments{ const_cast<char*>("python3"), const_cast<char*>(script_text.c_str()), const_cast<char*>("--directory"), const_cast<char*>(directory_text.c_str()), nullptr };
+            if (result == 0) {
+                result = posix_spawnp(&process, "python3", &actions, nullptr, arguments.data(), environ);
+            }
+            (void)posix_spawn_file_actions_destroy(&actions);
+            if (result != 0) {
+                process = 0;
+                throw std::system_error{ result, std::system_category(), "Could not start Python TLS fixture" };
+            }
+            return true;
+        }
+
+        /**
+         * @brief Poll and reap a finished child, retaining exclusive ownership of its process ID.
+         */
+        auto WaitForExit(std::chrono::milliseconds delay) -> std::optional<int> {
+            int status{};
+            auto result = waitpid(process, &status, WNOHANG);
+            if (result < 0) {
+                if (errno == EINTR) {
+                    return {};
+                }
+                throw std::system_error{ errno, std::system_category(), "Could not poll TLS fixture" };
+            }
+            if (result == process) {
+                process = 0;
+                return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+            }
+            std::this_thread::sleep_for(delay);
+            return {};
+        }
+#endif
     };
 
     struct HttpsFixture {
@@ -134,31 +250,32 @@ namespace {
         ChildProcess child;
         unsigned short port{};
         unsigned short mutual_port{};
+        bool available{ true }; ///< False only when the optional Windows PowerShell executable is absent.
 
         /**
-         * @brief Wait for generated certificates and bound listeners, including a cold PowerShell startup.
+         * @brief Wait for generated certificates and bound listeners on either supported fixture backend.
          * @throws std::runtime_error If the fixture exits early or fails to become ready within 60 seconds.
          * @throws std::system_error If waiting for the child process or querying its exit code fails.
          */
         HttpsFixture() {
-            auto const script{ std::filesystem::absolute(std::filesystem::path{ __FILE__ }.parent_path() / "fixtures" / "https_server.ps1") };
-            child.Start(script, directory.path);
+#ifdef _WIN32
+            constexpr auto SCRIPT = "https_server.ps1";
+#else
+            constexpr auto SCRIPT = "https_server.py";
+#endif
+            auto const script{ std::filesystem::absolute(std::filesystem::path{ __FILE__ }.parent_path() / "fixtures" / SCRIPT) };
+            available = child.Start(script, directory.path);
+            if (!available) {
+                return;
+            }
             auto const deadline{ std::chrono::steady_clock::now() + 60s };
             while (std::chrono::steady_clock::now() < deadline) {
                 std::ifstream ready{ directory.path / "ready" };
                 if (ready >> port >> mutual_port) {
                     return;
                 }
-                auto const state{ WaitForSingleObject(child.info.hProcess, 20) };
-                if (state == WAIT_OBJECT_0) {
-                    DWORD exit_code{};
-                    if (!GetExitCodeProcess(child.info.hProcess, &exit_code)) {
-                        throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not query TLS fixture exit code" };
-                    }
-                    throw std::runtime_error{ std::format("TLS fixture exited before readiness (exit {}):\n{}", exit_code, read_file(directory.path / "server.log")) };
-                }
-                if (state == WAIT_FAILED) {
-                    throw std::system_error{ static_cast<int>(GetLastError()), std::system_category(), "Could not wait for TLS fixture" };
+                if (auto const exit_code = child.WaitForExit(20ms)) {
+                    throw std::runtime_error{ std::format("TLS fixture exited before readiness (exit {}):\n{}", *exit_code, read_file(directory.path / "server.log")) };
                 }
             }
             throw std::runtime_error{ "TLS fixture startup timed out after 60 seconds:\n" + read_file(directory.path / "server.log") };
@@ -173,6 +290,10 @@ namespace {
 
     auto check_https() -> bool {
         HttpsFixture fixture;
+        if (!fixture.available) {
+            std::println("test_ssl_options: SKIP HTTPS checks: pwsh is not installed.");
+            return true;
+        }
         auto const* version{ curl_version_info(CURLVERSION_NOW) };
         std::println("test_ssl_options: TLS backend {}", version->ssl_version ? version->ssl_version : "none");
         auto session_owner = mcr::Session::Create().value();
@@ -202,6 +323,10 @@ namespace {
             std::println("test_ssl_options: trusted handshake error {}: {}", mcr::to_string(trusted.error.code), trusted.error.message);
         }
         passed &= check(!trusted.error && trusted.text == "TLS works" && !trusted.GetCertInfos().empty(), "CA files and TLS 1.2 bounds must permit a verified connection and capture certificates");
+        session.SetSslOptions(local_tls(mcr::options::ssl::CaInfo{ fixture.Path("ca.pem") }, mcr::options::ssl::TLSv1_3{})).value();
+        passed &= check(bool(session.Get().value().error), "a TLS 1.3 minimum must reject the TLS 1.2-only fixture");
+        session.SetSslOptions(trust).value();
+        passed &= check(session.Get().value().text == "TLS works", "restoring TLS 1.2 bounds must permit a fresh verified handshake");
         session.SetUrl(fixture.Url(false, "127.0.0.1")).value();
         passed &= check(bool(session.Get().value().error), "trusted certificates must still fail hostname mismatch");
         trust.SetOption(mcr::options::ssl::VerifyHost{ false });
@@ -267,10 +392,11 @@ namespace {
         passed &= check(trusted.status_code == 200 && !trusted.GetCertInfos().empty(), "earlier certificate snapshots must survive later failed handshakes");
         if (!passed) {
             std::println("test_ssl_options: fixture log: {}", read_file(fixture.Path("server.log")));
+        } else if (!limited) {
+            std::println("test_ssl_options: verified HTTPS and mutual TLS file/blob paths");
         }
         return passed;
     }
-#endif
 } // namespace
 
 auto main() -> int {
@@ -280,11 +406,7 @@ auto main() -> int {
     bool passed{ true };
     try {
         passed &= check_options();
-#ifdef _WIN32
         passed &= check_https();
-#else
-        std::println("test_ssl_options: SKIP HTTPS checks: generated fixture requires Windows with PowerShell 7.5 or later.");
-#endif
     } catch (std::exception const& error) {
         passed = check(false, error.what());
     }
