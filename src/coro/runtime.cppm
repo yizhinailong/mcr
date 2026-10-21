@@ -48,6 +48,9 @@ export namespace mcr::detail {
         std::coroutine_handle<> continuation{}; ///< Frame to resume exactly once.
         bool owns_frame{ false };               ///< Destroy an unstarted frame if posting fails.
 
+        /**
+         * @brief Construct empty work before installing a continuation.
+         */
         CoroResume() = default;
         CoroResume(CoroResume const&) = delete;
         auto operator=(CoroResume const&) -> CoroResume& = delete;
@@ -86,6 +89,9 @@ export namespace mcr::detail {
         bool prepared{ false };
         std::shared_ptr<CoroTransfer> pending_next; ///< Intrusive link used before submission to curl.
 
+        /**
+         * @brief Own a session, preparation operation, and cancellation token before publication.
+         */
         CoroTransfer(
             std::shared_ptr<Session> owned_session,
             std::function<Result<void>(Session&)> prepare_request,
@@ -111,6 +117,7 @@ export namespace mcr::detail {
         std::mutex m_mutex;
         std::mutex m_cleanup_mutex;
         std::condition_variable m_completion_ready;
+        std::condition_variable m_io_ready; ///< Sleep without polling while no transfers are active.
         std::unique_ptr<curl::CurlMultiHolder> m_multi;
         std::shared_ptr<CoroTransfer> m_pending_head;
         std::shared_ptr<CoroTransfer> m_pending_tail;
@@ -127,8 +134,23 @@ export namespace mcr::detail {
          * @brief Create the runtime once, on first use.
          */
         static auto Instance() -> CoroRuntime& {
-            static CoroRuntime runtime;
-            return runtime;
+            /**
+             * @brief Join at normal exit, retaining live state if exit begins on a runtime thread.
+             */
+            struct Owner {
+                CoroRuntime* runtime{ new CoroRuntime }; ///< Remains a static root during runtime-thread process exit.
+
+                ~Owner() {
+                    if (is_coro_runtime_thread()) {
+                        runtime->requestStop();
+                    } else {
+                        delete runtime;
+                    }
+                }
+            };
+
+            static Owner owner;
+            return *owner.runtime;
         }
 
         CoroRuntime(CoroRuntime const&) = delete;
@@ -136,7 +158,8 @@ export namespace mcr::detail {
 
         /**
          * @brief Destroy the runtime at exit, normally after Cleanup() has already run.
-         * @note Teardown is unconditional here because a destructor cannot report the recursive-call error.
+         * @note The singleton owner deletes only outside runtime threads. Process exit on a runtime
+         * thread retains the live runtime until termination instead of joining or freeing its own state.
          */
         ~CoroRuntime() {
             Teardown();
@@ -177,6 +200,7 @@ export namespace mcr::detail {
                 m_pending_head = transfer;
             }
             m_pending_tail = std::move(transfer);
+            m_io_ready.notify_one();
             (void)curl_multi_wakeup(m_multi->handle);
             return {};
         }
@@ -219,7 +243,7 @@ export namespace mcr::detail {
          * @return Success or the first operation error.
          */
         auto Cleanup() -> Result<void> {
-            if (coro_runtime_thread) {
+            if (is_coro_runtime_thread()) {
                 return std::unexpected{
                     Error{ ErrorCode::RECURSIVE_API_CALL, "mcr::Coro::Cleanup: must be called outside runtime threads." }
                 };
@@ -229,6 +253,23 @@ export namespace mcr::detail {
         }
 
     private:
+        /**
+         * @brief Stop accepting work and wake both idle waiting and active curl polling.
+         */
+        auto requestStop() noexcept -> void {
+            {
+                std::lock_guard lock{ m_mutex };
+                m_stopping = true;
+                if (m_multi) {
+                    (void)curl_multi_wakeup(m_multi->handle);
+                }
+            }
+            m_io_ready.notify_all();
+        }
+
+        /**
+         * @brief Initialize curl and start the I/O and continuation workers.
+         */
         CoroRuntime() {
             auto holder = curl::CurlMultiHolder::Create();
             if (!holder) {
@@ -258,13 +299,7 @@ export namespace mcr::detail {
          */
         auto Teardown() -> void {
             std::lock_guard cleanup_lock{ m_cleanup_mutex };
-            {
-                std::lock_guard lock{ m_mutex };
-                m_stopping = true;
-                if (m_multi) {
-                    (void)curl_multi_wakeup(m_multi->handle);
-                }
-            }
+            requestStop();
             if (m_io_thread.joinable()) {
                 m_io_thread.join();
             }
@@ -346,7 +381,10 @@ export namespace mcr::detail {
                 for (;;) {
                     std::shared_ptr<CoroTransfer> pending;
                     {
-                        std::lock_guard lock{ m_mutex };
+                        std::unique_lock lock{ m_mutex };
+                        if (active.empty()) {
+                            m_io_ready.wait(lock, [this] { return m_stopping || m_pending_head; });
+                        }
                         if (m_stopping) {
                             break;
                         }
@@ -416,6 +454,9 @@ export namespace mcr::detail {
                                 complete(std::move(node.mapped()), result);
                             }
                         }
+                    }
+                    if (active.empty()) {
+                        continue;
                     }
                     multi_error = curl_multi_poll(m_multi->handle, nullptr, 0, 100, nullptr);
                     if (multi_error != CURLM_OK) {
@@ -582,6 +623,12 @@ export namespace mcr {
      */
     class Coro {
     public:
+        /**
+         * @brief Check whether blocking waits and cleanup are forbidden on this thread.
+         * @return True on the runtime's I/O and continuation threads.
+         */
+        [[nodiscard]] static auto IsRuntimeThread() noexcept -> bool { return detail::is_coro_runtime_thread(); }
+
         /**
          * @brief Start a cold task on the continuation thread and retain its result and cancellation.
          * @tparam T Value, lvalue reference, or void result type.

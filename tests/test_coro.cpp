@@ -440,12 +440,16 @@ namespace {
         require(mcr::sync_wait(std::move(parent)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK, "parent cancellation must wake polling and remove the active child transfer");
     }
 
+    /**
+     * @brief Verify runtime affinity and rejection of operations that would wait for this thread.
+     */
     auto continuation_checks(
         HttpServer const& server,
         std::thread::id& resumed
     ) -> mcr::Task<void> {
         (void)co_await get(server, "/hello");
         resumed = std::this_thread::get_id();
+        require(mcr::Coro::IsRuntimeThread(), "continuations must report runtime affinity");
         bool wait_rejected{}, cleanup_rejected{};
         try {
             (void)mcr::sync_wait(get(server, "/hello")).value();
@@ -633,9 +637,15 @@ int main() {
         independent_io(server);
         downloads(server);
         std::thread::id resumed, io;
-        (void)mcr::sync_wait(get(server, "/hello", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) { io = std::this_thread::get_id(); return true; } })).value();
+        (void)mcr::sync_wait(get(server, "/hello", mcr::HeaderCallback{ [&](std::string_view, std::intptr_t) {
+                                     require(mcr::Coro::IsRuntimeThread(), "curl callbacks must report runtime affinity");
+                                     io = std::this_thread::get_id();
+                                     return true;
+                                 } }))
+            .value();
         mcr::sync_wait(continuation_checks(server, resumed));
         require(resumed != io && resumed != std::this_thread::get_id(), "continuations must run separately from I/O and caller threads");
+        require(!mcr::Coro::IsRuntimeThread(), "the caller must remain outside runtime threads");
         shutdown(server);
         server.Check();
     } catch (std::exception const& error) {

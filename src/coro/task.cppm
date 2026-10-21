@@ -7,7 +7,15 @@ export module mcr:task;
 import std;
 
 namespace mcr::detail {
-    export inline thread_local bool coro_runtime_thread{ false }; ///< Reject blocking waits on runtime threads.
+    inline thread_local bool coro_runtime_thread{ false }; ///< Internal runtime-thread marker; callers cannot mutate it.
+
+    /**
+     * @brief Query runtime affinity without exposing the mutable thread marker.
+     * @return Whether the current thread drives curl or resumes coroutine work.
+     */
+    export inline auto is_coro_runtime_thread() noexcept -> bool {
+        return coro_runtime_thread;
+    }
 
     /**
      * @brief Store a coroutine result independently of its frame.
@@ -117,14 +125,26 @@ namespace mcr::detail {
     export struct TaskStopToken {
         std::stop_token token;
 
+        /**
+         * @brief Read the enclosing promise before continuing inline.
+         */
         bool await_ready() const noexcept { return false; }
 
+        /**
+         * @brief Capture the promise's cancellation token without suspending.
+         * @tparam Promise Promise exposing GetStopToken.
+         * @param handle Current suspended coroutine.
+         * @return False to continue execution immediately.
+         */
         template <typename Promise>
         bool await_suspend(std::coroutine_handle<Promise> handle) noexcept {
             token = handle.promise().GetStopToken();
             return false;
         }
 
+        /**
+         * @brief Return the captured cancellation token.
+         */
         auto await_resume() const noexcept -> std::stop_token { return token; }
     };
 } // namespace mcr::detail
@@ -186,8 +206,16 @@ export namespace mcr {
              * @brief Release the completed frame before notifying its consumer.
              */
             struct FinalAwaiter {
+                /**
+                 * @brief Transfer through final suspension to release the frame.
+                 */
                 bool await_ready() const noexcept { return false; }
 
+                /**
+                 * @brief Destroy the completed frame and publish its independent result.
+                 * @param handle Completed coroutine whose frame is no longer needed.
+                 * @return Continuation to resume, or the no-op coroutine.
+                 */
                 auto await_suspend(
                     std::coroutine_handle<promise_type> handle
                 ) const noexcept -> std::coroutine_handle<> {
@@ -196,6 +224,9 @@ export namespace mcr {
                     return state->Complete();
                 }
 
+                /**
+                 * @brief Complete the compiler-facing final suspension protocol.
+                 */
                 auto await_resume() const noexcept -> void {}
             };
 
@@ -211,6 +242,9 @@ export namespace mcr {
         Handle m_coroutine{}; ///< Owned only until the task starts.
         std::shared_ptr<detail::TaskState<T>> m_state;
 
+        /**
+         * @brief Own a cold frame and its independently allocated result state.
+         */
         Task(Handle coroutine, std::shared_ptr<detail::TaskState<T>> state) noexcept
             : m_coroutine{ coroutine }, m_state{ std::move(state) } {}
 
@@ -220,10 +254,16 @@ export namespace mcr {
         friend class Coro;
 
     public:
+        /**
+         * @brief Construct an empty task with no frame or result.
+         */
         Task() = default;
         Task(Task const&) = delete;
         auto operator=(Task const&) -> Task& = delete;
 
+        /**
+         * @brief Transfer the frame and result, leaving the source empty.
+         */
         Task(Task&& other) noexcept
             : m_coroutine{ std::exchange(other.m_coroutine, {}) }, m_state{ std::move(other.m_state) } {}
 
@@ -284,6 +324,9 @@ export namespace mcr {
             std::unique_ptr<std::stop_callback<detail::ForwardTaskStop>> m_parent_stop;
 
         public:
+            /**
+             * @brief Consume a task's cold frame and independent result state.
+             */
             Awaiter(Handle coroutine, std::shared_ptr<detail::TaskState<T>> state) noexcept
                 : m_coroutine{ coroutine }, m_state{ std::move(state) } {}
 
@@ -296,6 +339,10 @@ export namespace mcr {
                 }
             }
 
+            /**
+             * @brief Check whether a valid task already has a completed result.
+             * @throws std::logic_error If the task was empty or already consumed.
+             */
             bool await_ready() const {
                 if (!m_state) {
                     throw std::logic_error{ "mcr::Task: cannot await an empty task." };
@@ -304,6 +351,12 @@ export namespace mcr {
                 return m_state->done;
             }
 
+            /**
+             * @brief Forward cancellation and publish the parent continuation.
+             * @tparam Promise Parent promise, optionally exposing GetStopToken.
+             * @param continuation Parent coroutine to resume after completion.
+             * @return Cold child frame, completed parent, or the no-op coroutine.
+             */
             template <typename Promise>
             auto await_suspend(
                 std::coroutine_handle<Promise> continuation
@@ -327,6 +380,9 @@ export namespace mcr {
                 return handle ? std::coroutine_handle<>{ handle } : std::noop_coroutine();
             }
 
+            /**
+             * @brief Consume the completed value or rethrow the stored exception.
+             */
             auto await_resume() -> T { return m_state->TakeResult(); }
         };
 
@@ -340,7 +396,7 @@ export namespace mcr {
 
     template <typename T>
     auto sync_wait(Task<T> task) -> T {
-        if (detail::coro_runtime_thread) {
+        if (detail::is_coro_runtime_thread()) {
             throw std::logic_error{ "mcr::sync_wait: cannot block a coroutine runtime thread." };
         }
         task.Start();
