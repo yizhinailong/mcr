@@ -102,7 +102,10 @@ export namespace mcr::utils {
      * @return True for every pair of secure allocators.
      */
     template <typename T, typename U>
-    [[nodiscard]] auto operator==(SecureAllocator<T> const& lhs, SecureAllocator<U> const& rhs) noexcept -> bool {
+    [[nodiscard]] auto operator==(
+        SecureAllocator<T> const& lhs,
+        SecureAllocator<U> const& rhs
+    ) noexcept -> bool {
         return lhs.IsEqual(rhs);
     }
 
@@ -115,7 +118,10 @@ export namespace mcr::utils {
      * @return False for every pair of secure allocators.
      */
     template <typename T, typename U>
-    [[nodiscard]] auto operator!=(SecureAllocator<T> const& lhs, SecureAllocator<U> const& rhs) noexcept -> bool {
+    [[nodiscard]] auto operator!=(
+        SecureAllocator<T> const& lhs,
+        SecureAllocator<U> const& rhs
+    ) noexcept -> bool {
         return !lhs.IsEqual(rhs);
     }
 

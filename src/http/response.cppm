@@ -59,7 +59,13 @@ export namespace mcr {
          * @param transfer_error Transport outcome.
          * @return A response snapshot, or BAD_FUNCTION_ARGUMENT when the holder or easy handle is null.
          */
-        [[nodiscard]] static auto FromCurl(std::shared_ptr<curl::CurlHolder> curl, std::string body, std::string headers, Cookies received_cookies = {}, Error transfer_error = {}) -> Result<Response> {
+        [[nodiscard]] static auto FromCurl(
+            std::shared_ptr<curl::CurlHolder> curl,
+            std::string body,
+            std::string headers,
+            Cookies received_cookies = {},
+            Error transfer_error = {}
+        ) -> Result<Response> {
             Response result;
             result.text = std::move(body);
             result.cookies = std::move(received_cookies);

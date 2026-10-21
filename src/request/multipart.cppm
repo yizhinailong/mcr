@@ -23,8 +23,11 @@ export namespace mcr {
          * @param value_param Field value to own, including embedded null bytes.
          * @param content_type_param Optional content type; an empty view leaves it unspecified.
          */
-        Part(std::string_view name_param, std::string_view value_param, std::string_view content_type_param = {})
-            : name{ name_param }, value{ value_param }, content_type{ content_type_param } {}
+        Part(
+            std::string_view name_param,
+            std::string_view value_param,
+            std::string_view content_type_param = {}
+        ) : name{ name_param }, value{ value_param }, content_type{ content_type_param } {}
 
         /**
          * @brief Store an integer field as signed decimal text.
@@ -32,8 +35,11 @@ export namespace mcr {
          * @param value_param Integer to format, including the full int32_t range.
          * @param content_type_param Optional content type to own.
          */
-        Part(std::string_view name_param, std::int32_t value_param, std::string_view content_type_param = {})
-            : name{ name_param }, value{ std::to_string(value_param) }, content_type{ content_type_param } {}
+        Part(
+            std::string_view name_param,
+            std::int32_t value_param,
+            std::string_view content_type_param = {}
+        ) : name{ name_param }, value{ std::to_string(value_param) }, content_type{ content_type_param } {}
 
         /**
          * @brief Copy a collection of file descriptors into a file field.
@@ -42,8 +48,11 @@ export namespace mcr {
          * @param content_type_param Optional content type to own.
          * @note A File implicitly converts to a one-element Files collection.
          */
-        Part(std::string_view name_param, Files const& files_param, std::string_view content_type_param = {})
-            : name{ name_param }, content_type{ content_type_param }, is_file{ true }, files{ files_param } {}
+        Part(
+            std::string_view name_param,
+            Files const& files_param,
+            std::string_view content_type_param = {}
+        ) : name{ name_param }, content_type{ content_type_param }, is_file{ true }, files{ files_param } {}
 
         /**
          * @brief Move a collection of file descriptors into a file field.
@@ -51,8 +60,11 @@ export namespace mcr {
          * @param files_param Ordered file descriptors whose storage is transferred.
          * @param content_type_param Optional content type to own.
          */
-        Part(std::string_view name_param, Files&& files_param, std::string_view content_type_param = {})
-            : name{ name_param }, content_type{ content_type_param }, is_file{ true }, files{ std::move(files_param) } {}
+        Part(
+            std::string_view name_param,
+            Files&& files_param,
+            std::string_view content_type_param = {}
+        ) : name{ name_param }, content_type{ content_type_param }, is_file{ true }, files{ std::move(files_param) } {}
 
         /**
          * @brief Borrow buffer bytes and own the buffer's filename as a string.
@@ -61,8 +73,11 @@ export namespace mcr {
          * @param content_type_param Optional content type to own.
          * @note value stores buffer.filename.string(), including any directory components.
          */
-        Part(std::string_view name_param, Buffer const& buffer, std::string_view content_type_param = {})
-            : name{ name_param }, value{ buffer.filename.string() }, content_type{ content_type_param }, data{ buffer.data }, datalen{ buffer.datalen }, is_buffer{ true } {}
+        Part(
+            std::string_view name_param,
+            Buffer const& buffer,
+            std::string_view content_type_param = {}
+        ) : name{ name_param }, value{ buffer.filename.string() }, content_type{ content_type_param }, data{ buffer.data }, datalen{ buffer.datalen }, is_buffer{ true } {}
 
         std::string name;               ///< Owned field name.
         std::string value;              ///< Owned text or buffer filename; empty for a file field.
@@ -97,7 +112,9 @@ export namespace mcr {
          * @brief Transfer a vector of descriptors without copying.
          * @param parts_param Vector whose storage is moved.
          */
-        explicit Multipart(std::vector<Part>&& parts_param) noexcept : parts{ std::move(parts_param) } {}
+        explicit Multipart(
+            std::vector<Part>&& parts_param
+        ) noexcept : parts{ std::move(parts_param) } {}
 
         std::vector<Part> parts; ///< Publicly mutable descriptors in insertion order.
     };

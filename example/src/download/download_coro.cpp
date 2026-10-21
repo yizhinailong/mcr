@@ -12,7 +12,10 @@ import mcr_example.support;
  * @param output Destination opened and closed by DownloadCoro.
  * @return Task yielding the download metadata.
  */
-auto download(std::string url, std::filesystem::path output) -> mcr::Task<mcr::Result<mcr::Response>> {
+auto download(
+    std::string url,
+    std::filesystem::path output
+) -> mcr::Task<mcr::Result<mcr::Response>> {
     co_return co_await mcr::DownloadCoro(std::move(output), mcr::Url{ std::move(url) }, mcr::options::Timeout{ std::chrono::seconds{ 10 } });
 }
 

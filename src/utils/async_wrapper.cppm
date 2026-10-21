@@ -46,7 +46,9 @@ export namespace mcr::utils {
          * @brief Take ownership of a future, leaving its source invalid.
          * @param future Future to move; an invalid future is accepted.
          */
-        explicit AsyncWrapper(std::future<RetType>&& future) noexcept : m_future{ std::move(future) } {}
+        explicit AsyncWrapper(
+            std::future<RetType>&& future
+        ) noexcept : m_future{ std::move(future) } {}
 
         AsyncWrapper(AsyncWrapper const&) = delete;
         auto operator=(AsyncWrapper const&) -> AsyncWrapper& = delete;
@@ -91,7 +93,9 @@ export namespace mcr::utils {
          * @throws std::logic_error If the future has no shared state.
          */
         template <typename Rep, typename Period>
-        auto WaitFor(std::chrono::duration<Rep, Period> const& timeout_duration) const -> std::future_status {
+        auto WaitFor(
+            std::chrono::duration<Rep, Period> const& timeout_duration
+        ) const -> std::future_status {
             checkValid("mcr::utils::AsyncWrapper::WaitFor: associated future is invalid.");
             return m_future.wait_for(timeout_duration);
         }
@@ -105,7 +109,9 @@ export namespace mcr::utils {
          * @throws std::logic_error If the future has no shared state.
          */
         template <typename Clock, typename Duration>
-        auto WaitUntil(std::chrono::time_point<Clock, Duration> const& timeout_time) const -> std::future_status {
+        auto WaitUntil(
+            std::chrono::time_point<Clock, Duration> const& timeout_time
+        ) const -> std::future_status {
             checkValid("mcr::utils::AsyncWrapper::WaitUntil: associated future is invalid.");
             return m_future.wait_until(timeout_time);
         }
@@ -153,8 +159,10 @@ export namespace mcr::utils {
          * @throws std::invalid_argument If the flag is null; the future is not consumed in that case.
          * @note A flag already set to true is accepted and produces a cancelled wrapper.
          */
-        AsyncWrapper(std::future<RetType>&& future, std::shared_ptr<std::atomic_bool>&& cancellation_state)
-            : m_cancellation_state{ std::move(cancellation_state) } {
+        AsyncWrapper(
+            std::future<RetType>&& future,
+            std::shared_ptr<std::atomic_bool>&& cancellation_state
+        ) : m_cancellation_state{ std::move(cancellation_state) } {
             if (!m_cancellation_state) {
                 throw std::invalid_argument{ "mcr::utils::AsyncWrapper: cancellation state must not be null." };
             }
@@ -224,7 +232,9 @@ export namespace mcr::utils {
          * @throws std::logic_error If cancelled or the future has no shared state.
          */
         template <typename Rep, typename Period>
-        auto WaitFor(std::chrono::duration<Rep, Period> const& timeout_duration) const -> std::future_status {
+        auto WaitFor(
+            std::chrono::duration<Rep, Period> const& timeout_duration
+        ) const -> std::future_status {
             checkCancelled("mcr::utils::AsyncWrapper::WaitFor: request is cancelled.");
             return Base::WaitFor(timeout_duration);
         }
@@ -238,7 +248,9 @@ export namespace mcr::utils {
          * @throws std::logic_error If cancelled or the future has no shared state.
          */
         template <typename Clock, typename Duration>
-        auto WaitUntil(std::chrono::time_point<Clock, Duration> const& timeout_time) const -> std::future_status {
+        auto WaitUntil(
+            std::chrono::time_point<Clock, Duration> const& timeout_time
+        ) const -> std::future_status {
             checkCancelled("mcr::utils::AsyncWrapper::WaitUntil: request is cancelled.");
             return Base::WaitUntil(timeout_time);
         }
@@ -297,6 +309,9 @@ export namespace mcr::utils {
      * @tparam RetType Future result type.
      */
     template <typename RetType>
-    AsyncWrapper(std::future<RetType>&&, std::shared_ptr<std::atomic_bool>&&) -> AsyncWrapper<RetType, true>;
+    AsyncWrapper(
+        std::future<RetType>&&,
+        std::shared_ptr<std::atomic_bool>&&
+    ) -> AsyncWrapper<RetType, true>;
 
 } // namespace mcr::utils

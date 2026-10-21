@@ -22,7 +22,10 @@ namespace {
         return condition;
     }
 
-    auto has_names(mcr::options::AcceptEncoding const& option, std::vector<std::string> expected) -> bool {
+    auto has_names(
+        mcr::options::AcceptEncoding const& option,
+        std::vector<std::string> expected
+    ) -> bool {
         std::string const text{ option.GetString() };
         std::vector<std::string> actual;
         for (auto const part : text | std::views::split(std::string_view{ ", " })) {

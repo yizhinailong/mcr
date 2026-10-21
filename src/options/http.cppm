@@ -94,7 +94,9 @@ export namespace mcr::options {
          * @note Mixing disabled with another method is checked by Disabled(), not during construction.
          * @return Success or the first operation error.
          */
-        [[nodiscard]] static auto Create(std::initializer_list<AcceptEncodingMethods> const& methods) -> Result<AcceptEncoding> {
+        [[nodiscard]] static auto Create(
+            std::initializer_list<AcceptEncodingMethods> const& methods
+        ) -> Result<AcceptEncoding> {
             AcceptEncoding result;
             for (auto const method : methods) {
                 auto const entry = ACCEPT_ENCODING_METHODS_STRING_MAP.find(method);
@@ -168,7 +170,10 @@ export namespace mcr::options {
      * @param rhs Second flag value.
      * @return Bits set in either operand.
      */
-    [[nodiscard]] constexpr auto operator|(PostRedirectFlags lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags {
+    [[nodiscard]] constexpr auto operator|(
+        PostRedirectFlags lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags {
         return static_cast<PostRedirectFlags>(std::to_underlying(lhs) | std::to_underlying(rhs));
     }
 
@@ -178,7 +183,10 @@ export namespace mcr::options {
      * @param rhs Second flag value.
      * @return Bits set in both operands.
      */
-    [[nodiscard]] constexpr auto operator&(PostRedirectFlags lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags {
+    [[nodiscard]] constexpr auto operator&(
+        PostRedirectFlags lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags {
         return static_cast<PostRedirectFlags>(std::to_underlying(lhs) & std::to_underlying(rhs));
     }
 
@@ -188,7 +196,10 @@ export namespace mcr::options {
      * @param rhs Second flag value.
      * @return Bits set in exactly one operand.
      */
-    [[nodiscard]] constexpr auto operator^(PostRedirectFlags lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags {
+    [[nodiscard]] constexpr auto operator^(
+        PostRedirectFlags lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags {
         return static_cast<PostRedirectFlags>(std::to_underlying(lhs) ^ std::to_underlying(rhs));
     }
 
@@ -207,7 +218,10 @@ export namespace mcr::options {
      * @param rhs Bits to add.
      * @return A reference to lhs after the update.
      */
-    constexpr auto operator|=(PostRedirectFlags& lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags& {
+    constexpr auto operator|=(
+        PostRedirectFlags& lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags& {
         return lhs = lhs | rhs;
     }
 
@@ -217,7 +231,10 @@ export namespace mcr::options {
      * @param rhs Bits to retain.
      * @return A reference to lhs after the update.
      */
-    constexpr auto operator&=(PostRedirectFlags& lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags& {
+    constexpr auto operator&=(
+        PostRedirectFlags& lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags& {
         return lhs = lhs & rhs;
     }
 
@@ -227,7 +244,10 @@ export namespace mcr::options {
      * @param rhs Bits to toggle.
      * @return A reference to lhs after the update.
      */
-    constexpr auto operator^=(PostRedirectFlags& lhs, PostRedirectFlags rhs) noexcept -> PostRedirectFlags& {
+    constexpr auto operator^=(
+        PostRedirectFlags& lhs,
+        PostRedirectFlags rhs
+    ) noexcept -> PostRedirectFlags& {
         return lhs = lhs ^ rhs;
     }
 
@@ -290,8 +310,10 @@ export namespace mcr::options {
          * @param follow_param Whether to follow redirects.
          * @param cont_send_cred_param Whether to forward authentication credentials across hostnames.
          */
-        Redirect(bool follow_param, bool cont_send_cred_param)
-            : follow{ follow_param }, cont_send_cred{ cont_send_cred_param } {}
+        Redirect(
+            bool follow_param,
+            bool cont_send_cred_param
+        ) : follow{ follow_param }, cont_send_cred{ cont_send_cred_param } {}
 
         /**
          * @brief Set POST preservation flags while keeping the remaining defaults.
@@ -312,8 +334,10 @@ export namespace mcr::options {
          * @param resume_from_param Starting position, defaulting to zero when absent.
          * @param finish_at_param Ending position, defaulting to -1 when absent.
          */
-        explicit Range(std::optional<std::int64_t> resume_from_param = std::nullopt, std::optional<std::int64_t> finish_at_param = std::nullopt)
-            : resume_from{ resume_from_param.value_or(0) }, finish_at{ finish_at_param.value_or(-1) } {}
+        explicit Range(
+            std::optional<std::int64_t> resume_from_param = std::nullopt,
+            std::optional<std::int64_t> finish_at_param = std::nullopt
+        ) : resume_from{ resume_from_param.value_or(0) }, finish_at{ finish_at_param.value_or(-1) } {}
 
         std::int64_t resume_from; ///< Publicly mutable starting position; any negative value omits the start.
         std::int64_t finish_at;   ///< Publicly mutable ending position; any negative value omits the finish.

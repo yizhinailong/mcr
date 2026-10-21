@@ -48,7 +48,10 @@ export namespace mcr {
      * not prevent or interrupt task execution. Thread creation and allocation exceptions propagate.
      */
     template <bool is_cancellable = false, typename Fn, typename... Args>
-    [[nodiscard]] auto async(Fn&& fn, Args&&... args) -> Result<utils::AsyncWrapper<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>, is_cancellable>> {
+    [[nodiscard]] auto async(
+        Fn&& fn,
+        Args&&... args
+    ) -> Result<utils::AsyncWrapper<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>, is_cancellable>> {
         auto* pool{ GlobalThreadPool::GetInstance() };
         if (!pool) {
             return std::unexpected{

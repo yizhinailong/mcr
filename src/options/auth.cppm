@@ -40,8 +40,11 @@ export namespace mcr::options {
          * @throws std::bad_alloc If allocating credential storage fails.
          * @throws std::length_error If the combined credentials exceed string capacity.
          */
-        Authentication(std::string_view username, std::string_view password, AuthMode auth_mode)
-            : m_auth_string{ username }, m_auth_mode{ auth_mode } {
+        Authentication(
+            std::string_view username,
+            std::string_view password,
+            AuthMode auth_mode
+        ) : m_auth_string{ username }, m_auth_mode{ auth_mode } {
             m_auth_string += ':';
             m_auth_string += password;
         }

@@ -146,15 +146,20 @@ export namespace mcr {
          * @param cookies Cookies to store.
          * @param encode_param Whether to percent-encode names and unquoted values.
          */
-        Cookies(std::initializer_list<Cookie> const& cookies, bool encode_param = true)
-            : m_cookies{ cookies }, encode{ encode_param } {}
+        Cookies(
+            std::initializer_list<Cookie> const& cookies,
+            bool encode_param = true
+        ) : m_cookies{ cookies }, encode{ encode_param } {}
 
         /**
          * @brief Copy one cookie into a collection.
          * @param cookie Cookie to store.
          * @param encode_param Whether to percent-encode names and unquoted values.
          */
-        Cookies(Cookie const& cookie, bool encode_param = true) : m_cookies{ cookie }, encode{ encode_param } {}
+        Cookies(
+            Cookie const& cookie,
+            bool encode_param = true
+        ) : m_cookies{ cookie }, encode{ encode_param } {}
 
         /**
          * @brief Access a cookie by its insertion position.

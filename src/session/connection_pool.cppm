@@ -96,7 +96,12 @@ export namespace mcr {
         /**
          * @brief Lock the mutex for the data type requested by libcurl.
          */
-        static auto lock(CURL*, curl_lock_data data, curl_lock_access, void* userptr) noexcept -> void {
+        static auto lock(
+            CURL*,
+            curl_lock_data data,
+            curl_lock_access,
+            void* userptr
+        ) noexcept -> void {
             (*static_cast<Mutexes*>(userptr))[static_cast<std::size_t>(data)].lock();
         }
 
@@ -124,7 +129,10 @@ export namespace mcr {
          * @param operation Name of the option being configured.
          * @return Success or the first operation error.
          */
-        static auto checkShareResult(CURLSHcode result, std::string_view operation) -> Result<void> {
+        static auto checkShareResult(
+            CURLSHcode result,
+            std::string_view operation
+        ) -> Result<void> {
             if (result != CURLSHE_OK) {
                 return std::unexpected{
                     Error{ ErrorCode::FAILED_INIT, std::format("mcr::ConnectionPool: {} failed: {}", operation, curl_share_strerror(result)) }

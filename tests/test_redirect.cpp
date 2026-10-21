@@ -44,7 +44,13 @@ namespace {
         return condition;
     }
 
-    auto matches(mcr::options::Redirect const& option, long maximum, bool follow, bool cont_send_cred, Flags post_flags) -> bool {
+    auto matches(
+        mcr::options::Redirect const& option,
+        long maximum,
+        bool follow,
+        bool cont_send_cred,
+        Flags post_flags
+    ) -> bool {
         return option.maximum == maximum && option.follow == follow && option.cont_send_cred == cont_send_cred && option.post_flags == post_flags;
     }
 

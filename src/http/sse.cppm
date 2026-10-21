@@ -58,7 +58,10 @@ export namespace mcr {
          * returns false or throws; remaining bytes are retained for the next Parse().
          * @pre Calls on one parser must be serialized, and callbacks must not reenter or reset that parser.
          */
-        [[nodiscard]] auto Parse(std::string_view data, std::function<bool(ServerSentEvent&&)> const& callback) -> bool {
+        [[nodiscard]] auto Parse(
+            std::string_view data,
+            std::function<bool(ServerSentEvent&&)> const& callback
+        ) -> bool {
             m_buffer.erase(0, m_line_start);
             m_scan_position -= m_line_start;
             m_line_start = 0;
@@ -122,7 +125,10 @@ export namespace mcr {
          * @param callback Consumer for an event completed by this line.
          * @return Whether parsing should continue.
          */
-        auto processLine(std::string_view line, std::function<bool(ServerSentEvent&&)> const& callback) -> bool {
+        auto processLine(
+            std::string_view line,
+            std::function<bool(ServerSentEvent&&)> const& callback
+        ) -> bool {
             if (line.empty()) {
                 return dispatchEvent(callback);
             }
@@ -196,7 +202,10 @@ export namespace mcr {
          * @param callback_param Consumer returning false to abort the transfer.
          * @param userdata_param Opaque value passed unchanged to the consumer.
          */
-        ServerSentEventCallback(std::function<bool(ServerSentEvent&&, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        ServerSentEventCallback(
+            std::function<bool(ServerSentEvent&&, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, callback{ std::move(callback_param) } {}
 
         /**

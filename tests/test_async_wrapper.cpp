@@ -302,7 +302,11 @@ namespace {
         require(std::ranges::count(results, CancelResult::success) == 1 && std::ranges::count(results, CancelResult::invalid_operation) == 7 && wrapper.IsCancelled() && peer.IsCancelled(), "concurrent cancellation of a shared flag must report exactly one successful transition");
     }
 
-    auto cooperative_future(std::shared_ptr<std::atomic_bool> state, std::promise<void>& started, std::atomic_bool& observed) -> std::future<int> {
+    auto cooperative_future(
+        std::shared_ptr<std::atomic_bool> state,
+        std::promise<void>& started,
+        std::atomic_bool& observed
+    ) -> std::future<int> {
         return std::async(std::launch::async, [state = std::move(state), &started, &observed] {
             mcr::CancellationCallback callback{ std::shared_ptr{ state } };
             auto const deadline{ std::chrono::steady_clock::now() + 3s };

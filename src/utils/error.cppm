@@ -175,7 +175,9 @@ export namespace mcr {
      * @param curl_code Numeric CURLcode returned by a curl operation.
      * @return The mapped error code, or ErrorCode::UNKNOWN_ERROR for unsupported or unrecognized codes.
      */
-    [[nodiscard]] constexpr auto error_code_from_curl(std::int32_t curl_code) noexcept -> ErrorCode {
+    [[nodiscard]] constexpr auto error_code_from_curl(
+        std::int32_t curl_code
+    ) noexcept -> ErrorCode {
         switch (curl_code) {
             case CURLE_OK                      : return ErrorCode::OK;
             case CURLE_UNSUPPORTED_PROTOCOL    : return ErrorCode::UNSUPPORTED_PROTOCOL;
@@ -261,16 +263,20 @@ export namespace mcr {
          * @param error_code Error classification to store.
          * @param error_message Diagnostic to take ownership of; defaults to an empty string.
          */
-        explicit Error(ErrorCode error_code, std::string error_message = {})
-            : code{ error_code }, message{ std::move(error_message) } {}
+        explicit Error(
+            ErrorCode error_code,
+            std::string error_message = {}
+        ) : code{ error_code }, message{ std::move(error_message) } {}
 
         /**
          * @brief Construct an error by mapping a curl status.
          * @param curl_code Numeric CURLcode to convert with error_code_from_curl().
          * @param error_message Diagnostic to take ownership of; defaults to an empty string.
          */
-        explicit Error(std::int32_t curl_code, std::string error_message = {})
-            : code{ error_code_from_curl(curl_code) }, message{ std::move(error_message) } {}
+        explicit Error(
+            std::int32_t curl_code,
+            std::string error_message = {}
+        ) : code{ error_code_from_curl(curl_code) }, message{ std::move(error_message) } {}
 
         /**
          * @brief Check whether this object describes a failure.
@@ -296,7 +302,10 @@ export namespace mcr {
      * @return A successful Result<void> for CURLE_OK;
      * otherwise an unexpected Error with the mapped code and supplied message.
      */
-    [[nodiscard]] inline auto check_curl_error(std::int32_t curl_code, std::string error_message = {}) -> Result<void> {
+    [[nodiscard]] inline auto check_curl_error(
+        std::int32_t curl_code,
+        std::string error_message = {}
+    ) -> Result<void> {
         if (curl_code == CURLE_OK) {
             return {};
         }

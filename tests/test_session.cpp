@@ -27,7 +27,11 @@ namespace {
         return condition;
     }
 
-    auto configure(mcr::Session& session, HttpServer const& server, std::string_view path = "/hello") -> void {
+    auto configure(
+        mcr::Session& session,
+        HttpServer const& server,
+        std::string_view path = "/hello"
+    ) -> void {
         session.SetOption(server.Url(path)).value();
         session.SetOption(mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } })
             .value();
@@ -401,7 +405,9 @@ namespace {
 
         explicit FunctionalMultiInterceptor(decltype(action) value) : action{ std::move(value) } {}
 
-        auto Intercept(mcr::MultiPerform& multi) -> mcr::Result<std::vector<mcr::Response>> override { return action(multi); }
+        auto Intercept(
+            mcr::MultiPerform& multi
+        ) -> mcr::Result<std::vector<mcr::Response>> override { return action(multi); }
     };
 
     template <typename Fn>
@@ -418,7 +424,10 @@ namespace {
         return false;
     }
 
-    auto make_session(HttpServer const& server, std::string_view path = "/hello") -> std::shared_ptr<mcr::Session> {
+    auto make_session(
+        HttpServer const& server,
+        std::string_view path = "/hello"
+    ) -> std::shared_ptr<mcr::Session> {
         auto result{ mcr::Session::Create().value() };
         configure(*result, server, path);
         return result;

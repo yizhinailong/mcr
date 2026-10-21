@@ -111,7 +111,10 @@ export namespace mcr::options {
              * @param value Key path.
              * @param passphrase Optional key password.
              */
-            KeyFile(std::filesystem::path value, std::string_view passphrase = {}) : filename{ std::move(value) }, password{ passphrase } {}
+            KeyFile(
+                std::filesystem::path value,
+                std::string_view passphrase = {}
+            ) : filename{ std::move(value) }, password{ passphrase } {}
 
             virtual ~KeyFile() = default;
 
@@ -147,7 +150,10 @@ export namespace mcr::options {
              * @param value Key contents.
              * @param passphrase Optional key password.
              */
-            KeyBlob(std::string value, std::string_view passphrase = {}) : blob{ std::move(value) }, password{ passphrase } {}
+            KeyBlob(
+                std::string value,
+                std::string_view passphrase = {}
+            ) : blob{ std::move(value) }, password{ passphrase } {}
 
             virtual ~KeyBlob() = default;
 

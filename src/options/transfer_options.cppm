@@ -25,8 +25,9 @@ export namespace mcr::options {
          * Floating-point durations must be finite and convert within the milliseconds representation.
          */
         template <typename Rep, typename Period>
-        Timeout(std::chrono::duration<Rep, Period> const& duration)
-            : ms{ std::chrono::duration_cast<std::chrono::milliseconds>(duration) } {}
+        Timeout(
+            std::chrono::duration<Rep, Period> const& duration
+        ) : ms{ std::chrono::duration_cast<std::chrono::milliseconds>(duration) } {}
 
         /**
          * @brief Construct a timeout from an integer millisecond count.
@@ -89,8 +90,10 @@ export namespace mcr::options {
          * @param limit_param Minimum transfer rate in bytes per second.
          * @param time_param Duration during which the transfer rate may remain below the limit.
          */
-        LowSpeed(std::int32_t limit_param, std::chrono::seconds time_param)
-            : limit{ limit_param }, time{ time_param } {}
+        LowSpeed(
+            std::int32_t limit_param,
+            std::chrono::seconds time_param
+        ) : limit{ limit_param }, time{ time_param } {}
 
         std::int32_t limit;        ///< Publicly mutable minimum transfer rate in bytes per second.
         std::chrono::seconds time; ///< Publicly mutable observation duration in whole seconds.
@@ -108,8 +111,10 @@ export namespace mcr::options {
          * @param downrate_param Download limit in bytes per second, stored without modification.
          * @param uprate_param Upload limit in bytes per second, stored without modification.
          */
-        LimitRate(std::int64_t downrate_param, std::int64_t uprate_param)
-            : downrate{ downrate_param }, uprate{ uprate_param } {}
+        LimitRate(
+            std::int64_t downrate_param,
+            std::int64_t uprate_param
+        ) : downrate{ downrate_param }, uprate{ uprate_param } {}
 
         std::int64_t downrate{ 0 }; ///< Publicly mutable download rate limit in bytes per second.
         std::int64_t uprate{ 0 };   ///< Publicly mutable upload rate limit in bytes per second.

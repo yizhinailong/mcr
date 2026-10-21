@@ -49,7 +49,11 @@ export namespace mcr::utils {
      * @note Outputs remain unchanged when no status line occurs. Status lines are never header fields,
      * and a response without a reason clears a previous reason, correcting cpr's stale output.
      */
-    [[nodiscard]] auto parse_header(std::string_view headers, std::string* status_line = nullptr, std::string* reason = nullptr) -> Header {
+    [[nodiscard]] auto parse_header(
+        std::string_view headers,
+        std::string* status_line = nullptr,
+        std::string* reason = nullptr
+    ) -> Header {
         Header result;
         std::string parsed_status;
         std::string parsed_reason;
@@ -214,7 +218,12 @@ export namespace mcr::utils {
      * @param read Borrowed producer, which may reduce the byte count to indicate a short read or EOF.
      * @return The producer's updated byte count on success, or CURL_READFUNC_ABORT on cancellation.
      */
-    auto read_user_function(char* ptr, std::size_t size, std::size_t nitems, ReadCallback const* read) -> std::size_t {
+    auto read_user_function(
+        char* ptr,
+        std::size_t size,
+        std::size_t nitems,
+        ReadCallback const* read
+    ) -> std::size_t {
         auto count{ size * nitems };
         return (*read)(ptr, count) ? count : CURL_READFUNC_ABORT;
     }
@@ -227,7 +236,12 @@ export namespace mcr::utils {
      * @param header Borrowed header consumer.
      * @return size * nmemb if accepted, or zero if cancelled.
      */
-    auto header_user_function(char* ptr, std::size_t size, std::size_t nmemb, HeaderCallback const* header) -> std::size_t {
+    auto header_user_function(
+        char* ptr,
+        std::size_t size,
+        std::size_t nmemb,
+        HeaderCallback const* header
+    ) -> std::size_t {
         auto const count{ size * nmemb };
         return (*header)({ ptr, count }) ? count : 0;
     }
@@ -257,7 +271,12 @@ export namespace mcr::utils {
      * @note Unlike cpr, stream failure is not reported as successful consumption. Buffered errors
      * discovered only on flush or close still need to be checked by the caller.
      */
-    auto write_file_function(char* ptr, std::size_t size, std::size_t nmemb, std::ofstream* file) -> std::size_t {
+    auto write_file_function(
+        char* ptr,
+        std::size_t size,
+        std::size_t nmemb,
+        std::ofstream* file
+    ) -> std::size_t {
         auto const count{ size * nmemb };
         file->write(ptr, static_cast<std::streamsize>(count));
         return *file ? count : 0;
@@ -271,7 +290,12 @@ export namespace mcr::utils {
      * @param write Borrowed body consumer.
      * @return size * nmemb if accepted, or zero if cancelled.
      */
-    auto write_user_function(char* ptr, std::size_t size, std::size_t nmemb, WriteCallback const* write) -> std::size_t {
+    auto write_user_function(
+        char* ptr,
+        std::size_t size,
+        std::size_t nmemb,
+        WriteCallback const* write
+    ) -> std::size_t {
         auto const count{ size * nmemb };
         return (*write)({ ptr, count }) ? count : 0;
     }
@@ -284,7 +308,12 @@ export namespace mcr::utils {
      * @param sse Borrowed callback retaining parsing state between invocations.
      * @return size * nmemb if accepted, or zero if an event callback cancels.
      */
-    auto write_sse_function(char* ptr, std::size_t size, std::size_t nmemb, ServerSentEventCallback* sse) -> std::size_t {
+    auto write_sse_function(
+        char* ptr,
+        std::size_t size,
+        std::size_t nmemb,
+        ServerSentEventCallback* sse
+    ) -> std::size_t {
         auto const count{ size * nmemb };
         return sse->HandleData({ ptr, count }) ? count : 0;
     }
@@ -321,7 +350,13 @@ export namespace mcr::utils {
      * @return Zero, as required by curl's debug callback contract.
      * @note The curl handle is unused, as in cpr.
      */
-    auto debug_user_function(CURL* /*handle*/, curl_infotype type, char* data, std::size_t size, DebugCallback const* debug) -> int {
+    auto debug_user_function(
+        CURL* /*handle*/,
+        curl_infotype type,
+        char* data,
+        std::size_t size,
+        DebugCallback const* debug
+    ) -> int {
         (*debug)(static_cast<DebugCallback::InfoType>(type), { data, size });
         return 0;
     }

@@ -500,7 +500,11 @@ export namespace mcr::detail {
         std::shared_ptr<CoroTransfer> m_transfer;
 
     public:
-        CoroTransferAwaiter(std::shared_ptr<Session> session, std::function<Result<void>(Session&)> prepare, std::stop_token token)
+        CoroTransferAwaiter(
+            std::shared_ptr<Session> session,
+            std::function<Result<void>(Session&)> prepare,
+            std::stop_token token
+        )
             : m_transfer{ std::make_shared<CoroTransfer>(std::move(session), std::move(prepare), token) } {}
 
         bool await_ready() const noexcept { return false; }

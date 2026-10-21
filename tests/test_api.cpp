@@ -67,7 +67,15 @@ namespace {
      * @return Whether all entries preserve the expected behavior.
      */
     template <mcr::Method M, typename Sync, typename Async, typename Callback, typename Multi, typename MultiAsync>
-    auto check_family(HttpServer const& server, std::string_view method, Sync sync, Async asynchronous, Callback callback, Multi multi, MultiAsync multi_async) -> bool {
+    auto check_family(
+        HttpServer const& server,
+        std::string_view method,
+        Sync sync,
+        Async asynchronous,
+        Callback callback,
+        Multi multi,
+        MultiAsync multi_async
+    ) -> bool {
         static_assert(RequestAvailable<M> && RequestAvailable<M, mcr::Url, mcr::Body>);
         auto const args{ options(server) };
         bool passed{ check_response(std::apply(sync, args), method) };

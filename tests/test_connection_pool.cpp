@@ -292,7 +292,11 @@ namespace {
         return passed;
     }
 
-    auto request(std::string const& url, mcr::ConnectionPool const* pool, long expected_connections) -> bool {
+    auto request(
+        std::string const& url,
+        mcr::ConnectionPool const* pool,
+        long expected_connections
+    ) -> bool {
         auto holder = mcr::curl::CurlHolder::Create().value();
         if (pool) {
             pool->SetupHandler(holder.handle).value();

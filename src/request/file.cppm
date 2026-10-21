@@ -19,8 +19,10 @@ export namespace mcr {
          * @param filepath_param Path text to store; empty paths are accepted.
          * @param overriden_filename_param Filename override, with an empty view meaning no override.
          */
-        explicit File(std::string filepath_param, std::string_view overriden_filename_param = {})
-            : filepath{ std::move(filepath_param) }, overriden_filename{ overriden_filename_param } {}
+        explicit File(
+            std::string filepath_param,
+            std::string_view overriden_filename_param = {}
+        ) : filepath{ std::move(filepath_param) }, overriden_filename{ overriden_filename_param } {}
 
         std::string filepath;           ///< Publicly mutable path text; does not own an open file.
         std::string overriden_filename; ///< Publicly mutable upload filename override, empty when absent.
@@ -77,7 +79,9 @@ export namespace mcr {
          * @brief Copy paths into descriptors without filename overrides.
          * @param filepaths Path strings to retain in order, including duplicates and empty strings.
          */
-        Files(std::initializer_list<std::string> const& filepaths) : m_files{ filepaths.begin(), filepaths.end() } {}
+        Files(
+            std::initializer_list<std::string> const& filepaths
+        ) : m_files{ filepaths.begin(), filepaths.end() } {}
 
         /**
          * @brief Release the owned descriptor storage.

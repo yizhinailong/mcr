@@ -20,8 +20,10 @@ export namespace mcr {
          * @param key_param Key bytes to store without normalization.
          * @param value_param Value bytes to store, including an empty string.
          */
-        Parameter(std::string key_param, std::string value_param)
-            : key{ std::move(key_param) }, value{ std::move(value_param) } {}
+        Parameter(
+            std::string key_param,
+            std::string value_param
+        ) : key{ std::move(key_param) }, value{ std::move(value_param) } {}
 
         std::string key;   ///< Publicly mutable, owned key bytes.
         std::string value; ///< Publicly mutable, owned value bytes.
@@ -36,8 +38,10 @@ export namespace mcr {
          * @param key_param Key bytes, emitted verbatim even when encoding is enabled.
          * @param value_param Value bytes to store, including an empty string.
          */
-        Pair(std::string key_param, std::string value_param)
-            : key{ std::move(key_param) }, value{ std::move(value_param) } {}
+        Pair(
+            std::string key_param,
+            std::string value_param
+        ) : key{ std::move(key_param) }, value{ std::move(value_param) } {}
 
         std::string key;   ///< Publicly mutable, owned key bytes.
         std::string value; ///< Publicly mutable, owned value bytes.
@@ -116,7 +120,11 @@ export namespace mcr::curl {
          * @param holder Encoding helper, or null to append the input verbatim.
          * @return Success or the first operation error.
          */
-        static auto appendComponent(std::string& output, std::string_view input, CurlHolder const* holder) -> Result<void> {
+        static auto appendComponent(
+            std::string& output,
+            std::string_view input,
+            CurlHolder const* holder
+        ) -> Result<void> {
             if (holder) {
                 auto const escaped{ holder->UrlEncode(input) };
                 if (!escaped) {

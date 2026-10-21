@@ -21,7 +21,12 @@ namespace {
         return condition;
     }
 
-    auto make_event(std::string data, std::string type = "message", std::optional<std::string> id = {}, std::optional<std::size_t> retry = {}) -> Event {
+    auto make_event(
+        std::string data,
+        std::string type = "message",
+        std::optional<std::string> id = {},
+        std::optional<std::size_t> retry = {}
+    ) -> Event {
         Event event;
         event.data = std::move(data);
         event.event = std::move(type);

@@ -271,7 +271,9 @@ namespace mcr::detail {
      * @return Response future sharing the task's cancellation flag.
      */
     template <auto Action, typename Tuple>
-    auto cancellable_request(Tuple&& options) -> Result<utils::AsyncWrapper<Result<Response>, true>> {
+    auto cancellable_request(
+        Tuple&& options
+    ) -> Result<utils::AsyncWrapper<Result<Response>, true>> {
         auto* pool{ GlobalThreadPool::GetInstance() };
         if (!pool) {
             return std::unexpected{
@@ -310,7 +312,9 @@ namespace mcr::detail {
      * @return One future per request.
      */
     template <auto Action, typename... Tuples>
-    auto multi_async(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+    auto multi_async(
+        Tuples&&... options
+    ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         std::vector<utils::AsyncWrapper<Result<Response>, true>> responses;
         responses.reserve(sizeof...(Tuples));
         auto submit = [&](auto&& value) -> Result<void> {
@@ -411,7 +415,9 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]] auto MultiGetAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+    [[nodiscard]] auto MultiGetAsync(
+        Tuples&&... options
+    ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Get>(std::forward<Tuples>(options)...);
     }
 
@@ -481,7 +487,9 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]] auto MultiPostAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+    [[nodiscard]] auto MultiPostAsync(
+        Tuples&&... options
+    ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Post>(std::forward<Tuples>(options)...);
     }
 
@@ -551,7 +559,9 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]] auto MultiPutAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+    [[nodiscard]] auto MultiPutAsync(
+        Tuples&&... options
+    ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Put>(std::forward<Tuples>(options)...);
     }
 
@@ -621,7 +631,9 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]] auto MultiHeadAsync(Tuples&&... options) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
+    [[nodiscard]] auto MultiHeadAsync(
+        Tuples&&... options
+    ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Head>(std::forward<Tuples>(options)...);
     }
 
@@ -691,8 +703,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]]
-    auto MultiDeleteAsync(
+    [[nodiscard]] auto MultiDeleteAsync(
         Tuples&&... options
     ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Delete>(std::forward<Tuples>(options)...);
@@ -764,8 +775,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]]
-    auto MultiOptionsAsync(
+    [[nodiscard]] auto MultiOptionsAsync(
         Tuples&&... options
     ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Options>(std::forward<Tuples>(options)...);
@@ -837,8 +847,7 @@ export namespace mcr {
      * @return Futures in argument order; cancellation is observed before execution and during transfer.
      */
     template <typename... Tuples>
-    [[nodiscard]]
-    auto MultiPatchAsync(
+    [[nodiscard]] auto MultiPatchAsync(
         Tuples&&... options
     ) -> Result<std::vector<utils::AsyncWrapper<Result<Response>, true>>> {
         return detail::multi_async<&Session::Patch>(std::forward<Tuples>(options)...);
@@ -898,7 +907,10 @@ export namespace mcr {
      * @note Failed transfers may leave a partial file.
      */
     template <typename... Ts>
-    [[nodiscard]] auto DownloadAsync(std::filesystem::path local_path, Ts... options) -> Result<AsyncResponse> {
+    [[nodiscard]] auto DownloadAsync(
+        std::filesystem::path local_path,
+        Ts... options
+    ) -> Result<AsyncResponse> {
         return mcr::async(
             [](std::filesystem::path path, auto... values) -> Result<Response> {
                 std::ofstream file{ path, std::ios::binary | std::ios::trunc };
@@ -928,7 +940,10 @@ export namespace mcr {
      * @note Failed or cancelled transfers may leave a partial file.
      */
     template <typename... Ts>
-    [[nodiscard]] auto DownloadCoro(std::filesystem::path local_path, Ts... options) -> Task<Result<Response>> {
+    [[nodiscard]] auto DownloadCoro(
+        std::filesystem::path local_path,
+        Ts... options
+    ) -> Task<Result<Response>> {
         std::ofstream file{ local_path, std::ios::binary | std::ios::trunc };
         if (!file.is_open() || !file.good()) {
             co_return std::unexpected{

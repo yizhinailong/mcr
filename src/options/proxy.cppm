@@ -30,15 +30,17 @@ export namespace mcr::options {
          * @brief Copy protocol-to-proxy pairs from an initializer list.
          * @param hosts Mappings to store using std::map's duplicate-key initialization rules.
          */
-        Proxies(std::initializer_list<std::pair<std::string const, std::string>> hosts)
-            : m_hosts{ hosts } {}
+        Proxies(
+            std::initializer_list<std::pair<std::string const, std::string>> hosts
+        ) : m_hosts{ hosts } {}
 
         /**
          * @brief Explicitly copy protocol-to-proxy mappings from a standard map.
          * @param hosts Source map, which remains independent of this option.
          */
-        explicit Proxies(std::map<std::string, std::string> const& hosts)
-            : m_hosts{ hosts.begin(), hosts.end() } {}
+        explicit Proxies(
+            std::map<std::string, std::string> const& hosts
+        ) : m_hosts{ hosts.begin(), hosts.end() } {}
 
         /**
          * @brief Check for an exactly matching protocol without inserting or copying the key.
@@ -81,7 +83,10 @@ export namespace mcr::options {
          * @param password Raw password.
          * @return Success or the first operation error.
          */
-        [[nodiscard]] static auto Create(std::string_view username, std::string_view password) -> Result<EncodedAuthentication> {
+        [[nodiscard]] static auto Create(
+            std::string_view username,
+            std::string_view password
+        ) -> Result<EncodedAuthentication> {
             auto encoded_username = utils::url_encode(username);
             if (!encoded_username) {
                 return std::unexpected{ std::move(encoded_username.error()) };
@@ -141,13 +146,17 @@ export namespace mcr::options {
          * @brief Copy protocol credentials.
          * @param auths Entries to own.
          */
-        ProxyAuthentication(std::initializer_list<std::pair<std::string const, EncodedAuthentication>> auths) : m_auths{ auths } {}
+        ProxyAuthentication(
+            std::initializer_list<std::pair<std::string const, EncodedAuthentication>> auths
+        ) : m_auths{ auths } {}
 
         /**
          * @brief Copy a standard map.
          * @param auths Entries to own.
          */
-        explicit ProxyAuthentication(std::map<std::string, EncodedAuthentication> const& auths) : m_auths{ auths.begin(), auths.end() } {}
+        explicit ProxyAuthentication(
+            std::map<std::string, EncodedAuthentication> const& auths
+        ) : m_auths{ auths.begin(), auths.end() } {}
 
         /**
          * @brief Inspect membership without insertion.
@@ -176,7 +185,9 @@ export namespace mcr::options {
          * @return Encoded username.
          * @throws std::out_of_range If absent.
          */
-        [[nodiscard]] auto GetUsernameUnderlying(std::string_view protocol) const -> utils::SecureString const& { return find(protocol).GetUsernameUnderlying(); }
+        [[nodiscard]] auto GetUsernameUnderlying(
+            std::string_view protocol
+        ) const -> utils::SecureString const& { return find(protocol).GetUsernameUnderlying(); }
 
         /**
          * @brief Borrow existing secure password storage.
@@ -184,7 +195,9 @@ export namespace mcr::options {
          * @return Encoded password.
          * @throws std::out_of_range If absent.
          */
-        [[nodiscard]] auto GetPasswordUnderlying(std::string_view protocol) const -> utils::SecureString const& { return find(protocol).GetPasswordUnderlying(); }
+        [[nodiscard]] auto GetPasswordUnderlying(
+            std::string_view protocol
+        ) const -> utils::SecureString const& { return find(protocol).GetPasswordUnderlying(); }
 
     private:
         auto find(std::string_view protocol) const -> EncodedAuthentication const& {

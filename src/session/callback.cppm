@@ -26,7 +26,10 @@ export namespace mcr {
          * @param callback_param Producer returning true to continue or false to abort.
          * @param userdata_param Opaque value passed unchanged to the producer.
          */
-        ReadCallback(std::function<bool(char*, std::size_t&, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        ReadCallback(
+            std::function<bool(char*, std::size_t&, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, size{ -1 }, callback{ std::move(callback_param) } {}
 
         /**
@@ -35,7 +38,11 @@ export namespace mcr {
          * @param callback_param Producer returning true to continue or false to abort.
          * @param userdata_param Opaque value passed unchanged to the producer.
          */
-        ReadCallback(CprOffT size_param, std::function<bool(char*, std::size_t&, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        ReadCallback(
+            CprOffT size_param,
+            std::function<bool(char*, std::size_t&, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, size{ size_param }, callback{ std::move(callback_param) } {}
 
         /**
@@ -74,7 +81,10 @@ export namespace mcr {
          * @param callback_param Consumer returning true to continue or false to abort.
          * @param userdata_param Opaque value passed unchanged to the consumer.
          */
-        HeaderCallback(std::function<bool(std::string_view, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        HeaderCallback(
+            std::function<bool(std::string_view, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, callback{ std::move(callback_param) } {}
 
         /**
@@ -109,7 +119,10 @@ export namespace mcr {
          * @param callback_param Consumer returning true to continue or false to abort.
          * @param userdata_param Opaque value passed unchanged to the consumer.
          */
-        WriteCallback(std::function<bool(std::string_view, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        WriteCallback(
+            std::function<bool(std::string_view, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, callback{ std::move(callback_param) } {}
 
         /**
@@ -145,7 +158,10 @@ export namespace mcr {
          * upload current, and user data; returns true to continue or false to abort.
          * @param userdata_param Opaque value passed unchanged to the observer.
          */
-        ProgressCallback(std::function<bool(CprPfArgT, CprPfArgT, CprPfArgT, CprPfArgT, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        ProgressCallback(
+            std::function<bool(CprPfArgT, CprPfArgT, CprPfArgT, CprPfArgT, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, callback{ std::move(callback_param) } {}
 
         /**
@@ -156,7 +172,12 @@ export namespace mcr {
          * @param upload_now Uploaded byte count reported by curl.
          * @return The observer's result, or true when no observer is installed.
          */
-        [[nodiscard]] auto operator()(CprPfArgT download_total, CprPfArgT download_now, CprPfArgT upload_total, CprPfArgT upload_now) const -> bool {
+        [[nodiscard]] auto operator()(
+            CprPfArgT download_total,
+            CprPfArgT download_now,
+            CprPfArgT upload_total,
+            CprPfArgT upload_now
+        ) const -> bool {
             if (!callback) {
                 return true;
             }
@@ -196,7 +217,10 @@ export namespace mcr {
          * @param callback_param Consumer receiving category, raw bytes, and user data.
          * @param userdata_param Opaque value passed unchanged to the consumer.
          */
-        DebugCallback(std::function<void(InfoType, std::string_view, std::intptr_t)> callback_param, std::intptr_t userdata_param = 0)
+        DebugCallback(
+            std::function<void(InfoType, std::string_view, std::intptr_t)> callback_param,
+            std::intptr_t userdata_param = 0
+        )
             : userdata{ userdata_param }, callback{ std::move(callback_param) } {}
 
         /**
@@ -236,8 +260,9 @@ export namespace mcr {
          * @brief Take shared ownership of a cancellation flag.
          * @param cancellation_state Flag to observe; an empty pointer means no cancellation flag.
          */
-        explicit CancellationCallback(std::shared_ptr<std::atomic_bool>&& cancellation_state)
-            : m_cancellation_state{ std::move(cancellation_state) } {}
+        explicit CancellationCallback(
+            std::shared_ptr<std::atomic_bool>&& cancellation_state
+        ) : m_cancellation_state{ std::move(cancellation_state) } {}
 
         /**
          * @brief Take shared ownership of a cancellation flag and borrow a progress observer.
@@ -245,7 +270,10 @@ export namespace mcr {
          * @param user_callback Observer invoked only when the flag is not set.
          * @pre user_callback must outlive every invocation that references it, including through copies.
          */
-        CancellationCallback(std::shared_ptr<std::atomic_bool>&& cancellation_state, ProgressCallback& user_callback)
+        CancellationCallback(
+            std::shared_ptr<std::atomic_bool>&& cancellation_state,
+            ProgressCallback& user_callback
+        )
             : m_cancellation_state{ std::move(cancellation_state) }, m_user_cb{ std::ref(user_callback) } {}
 
         /**
@@ -257,7 +285,12 @@ export namespace mcr {
          * @return False if cancelled or the observer returns false; true otherwise.
          * @note Observer exceptions propagate unless cancellation prevents its invocation.
          */
-        [[nodiscard]] auto operator()(CprPfArgT download_total, CprPfArgT download_now, CprPfArgT upload_total, CprPfArgT upload_now) const -> bool {
+        [[nodiscard]] auto operator()(
+            CprPfArgT download_total,
+            CprPfArgT download_now,
+            CprPfArgT upload_total,
+            CprPfArgT upload_now
+        ) const -> bool {
             if (m_cancellation_state && m_cancellation_state->load()) {
                 return false;
             }

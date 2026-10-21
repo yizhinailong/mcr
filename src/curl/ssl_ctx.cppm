@@ -33,7 +33,11 @@ export namespace mcr::curl {
      * is unused, as in cpr. This callback never throws or owns the supplied pointers.
      * Prefer options::Ssl(options::ssl::CaBuffer{...}) for portable CA loading.
      */
-    auto sslctx_function_load_ca_cert_from_buffer(CURL* /*curl*/, void* sslctx, void* raw_cert_buf) noexcept -> CURLcode {
+    auto sslctx_function_load_ca_cert_from_buffer(
+        CURL* /*curl*/,
+        void* sslctx,
+        void* raw_cert_buf
+    ) noexcept -> CURLcode {
         if (!sslctx || !raw_cert_buf) {
             return CURLE_ABORTED_BY_CALLBACK;
         }

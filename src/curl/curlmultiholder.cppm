@@ -46,7 +46,9 @@ export namespace mcr::curl {
          * @brief Transfer ownership while preserving options and attached easy handles.
          * @param other Holder whose handle is set to null.
          */
-        CurlMultiHolder(CurlMultiHolder&& other) noexcept : handle{ std::exchange(other.handle, nullptr) } {}
+        CurlMultiHolder(
+            CurlMultiHolder&& other
+        ) noexcept : handle{ std::exchange(other.handle, nullptr) } {}
 
         /**
          * @brief Release the owned multi handle; attached easy handles must already be removed.

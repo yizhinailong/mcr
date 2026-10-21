@@ -33,7 +33,11 @@ namespace {
         return condition;
     }
 
-    auto matches(mcr::options::Authentication const& auth, std::string_view expected, Mode mode) -> bool {
+    auto matches(
+        mcr::options::Authentication const& auth,
+        std::string_view expected,
+        Mode mode
+    ) -> bool {
         auto const* bytes{ auth.GetAuthString() };
         return bytes && std::string_view{ bytes, expected.size() } == expected && bytes[expected.size()] == '\0' && auth.GetAuthMode() == mode;
     }

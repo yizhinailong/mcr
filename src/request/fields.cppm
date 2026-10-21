@@ -28,7 +28,9 @@ export namespace mcr {
          * @brief Copy query parameters in their supplied order.
          * @param parameters Initial key/value entries, including an empty list or duplicate keys.
          */
-        Parameters(std::initializer_list<Parameter> const& parameters) : curl::CurlContainer<Parameter>{ parameters } {}
+        Parameters(
+            std::initializer_list<Parameter> const& parameters
+        ) : curl::CurlContainer<Parameter>{ parameters } {}
     };
 
     /**

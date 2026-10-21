@@ -100,7 +100,10 @@ namespace {
             }
         }
 
-        auto Start(std::filesystem::path const& script, std::filesystem::path const& directory) -> void {
+        auto Start(
+            std::filesystem::path const& script,
+            std::filesystem::path const& directory
+        ) -> void {
             this->directory = directory;
             SECURITY_ATTRIBUTES attributes{ sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE };
             log = CreateFileW((directory / "server.log").c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

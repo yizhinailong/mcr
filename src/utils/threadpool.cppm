@@ -42,7 +42,9 @@ export namespace mcr::utils {
              * @throws std::bad_alloc If storage cannot be allocated.
              */
             template <typename Fn>
-            QueuedTask(Fn&& fn) : m_target{ std::make_unique<Target<std::decay_t<Fn>>>(std::forward<Fn>(fn)) } {}
+            QueuedTask(
+                Fn&& fn
+            ) : m_target{ std::make_unique<Target<std::decay_t<Fn>>>(std::forward<Fn>(fn)) } {}
 
             /**
              * @brief Check whether a callable is stored.
@@ -357,7 +359,10 @@ export namespace mcr::utils {
          * @throws std::system_error If a required worker cannot be created.
          */
         template <typename Fn, typename... Args>
-        auto Submit(Fn&& fn, Args&&... args) -> Result<std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>> {
+        auto Submit(
+            Fn&& fn,
+            Args&&... args
+        ) -> Result<std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>> {
             using ReturnType = std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>;
             std::packaged_task<ReturnType(bool)> task{
                 [function = std::forward<Fn>(fn), arguments = std::tuple<std::decay_t<Args>...>(std::forward<Args>(args)...)](bool cancel) mutable -> ReturnType {
@@ -504,7 +509,9 @@ export namespace mcr::utils {
         /**
          * @brief Compute a saturated idle deadline without overflowing chrono representations.
          */
-        auto idleDeadline(std::chrono::steady_clock::time_point idle_since) const -> std::chrono::steady_clock::time_point {
+        auto idleDeadline(
+            std::chrono::steady_clock::time_point idle_since
+        ) const -> std::chrono::steady_clock::time_point {
             using Clock = std::chrono::steady_clock;
             constexpr auto MAX_INTERVAL = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::duration::max());
             if (m_max_idle_time >= MAX_INTERVAL) {

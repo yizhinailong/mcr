@@ -28,7 +28,11 @@ export namespace mcr {
          * @note Invalid iterator and element types are rejected by constructor static assertions.
          */
         template <typename Iterator>
-        [[nodiscard]] static auto Create(Iterator begin, Iterator end, std::filesystem::path filename_param) -> Result<Buffer> {
+        [[nodiscard]] static auto Create(
+            Iterator begin,
+            Iterator end,
+            std::filesystem::path filename_param
+        ) -> Result<Buffer> {
             static_assert(std::contiguous_iterator<Iterator>, "Buffer requires contiguous iterators");
             static_assert(sizeof(std::iter_value_t<Iterator>) == 1, "Only byte buffers can be used");
             if (begin == end) {
@@ -47,8 +51,11 @@ export namespace mcr {
         /**
          * @brief Store a validated borrowed byte range.
          */
-        Buffer(data_t bytes, std::size_t size, std::filesystem::path name)
-            : data{ bytes }, datalen{ size }, filename{ std::move(name) } {}
+        Buffer(
+            data_t bytes,
+            std::size_t size,
+            std::filesystem::path name
+        ) : data{ bytes }, datalen{ size }, filename{ std::move(name) } {}
 
     public:
         data_t data;                          ///< Borrowed byte address, null for an empty range at construction.

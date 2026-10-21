@@ -188,7 +188,9 @@ export namespace mcr {
             struct FinalAwaiter {
                 bool await_ready() const noexcept { return false; }
 
-                auto await_suspend(std::coroutine_handle<promise_type> handle) const noexcept -> std::coroutine_handle<> {
+                auto await_suspend(
+                    std::coroutine_handle<promise_type> handle
+                ) const noexcept -> std::coroutine_handle<> {
                     auto state = handle.promise().state;
                     handle.destroy();
                     return state->Complete();
@@ -303,7 +305,9 @@ export namespace mcr {
             }
 
             template <typename Promise>
-            auto await_suspend(std::coroutine_handle<Promise> continuation) -> std::coroutine_handle<> {
+            auto await_suspend(
+                std::coroutine_handle<Promise> continuation
+            ) -> std::coroutine_handle<> {
                 if constexpr (requires(Promise& promise) { promise.GetStopToken(); }) {
                     m_parent_stop = std::make_unique<std::stop_callback<detail::ForwardTaskStop>>(
                         continuation.promise().GetStopToken(),

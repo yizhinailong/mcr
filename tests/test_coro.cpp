@@ -26,7 +26,11 @@ namespace {
     }
 
     template <typename... Options>
-    auto get(HttpServer const& server, std::string_view path, Options... options) -> mcr::Task<mcr::Result<mcr::Response>> {
+    auto get(
+        HttpServer const& server,
+        std::string_view path,
+        Options... options
+    ) -> mcr::Task<mcr::Result<mcr::Response>> {
         return mcr::GetCoro(server.Url(path), proxies(), mcr::options::Timeout{ 3s }, std::move(options)...);
     }
 
@@ -67,7 +71,10 @@ namespace {
     /**
      * @brief Record the task's initial thread and return an owned result.
      */
-    auto spawned_value(std::thread::id& thread, std::shared_ptr<int> value) -> mcr::Task<std::unique_ptr<int>> {
+    auto spawned_value(
+        std::thread::id& thread,
+        std::shared_ptr<int> value
+    ) -> mcr::Task<std::unique_ptr<int>> {
         thread = std::this_thread::get_id();
         co_return std::make_unique<int>(*value);
     }
@@ -113,7 +120,10 @@ namespace {
     /**
      * @brief Hold the continuation thread to observe accepted work before it starts.
      */
-    auto hold_scheduler(std::promise<void>& entered, std::shared_future<void> release) -> mcr::Task<void> {
+    auto hold_scheduler(
+        std::promise<void>& entered,
+        std::shared_future<void> release
+    ) -> mcr::Task<void> {
         entered.set_value();
         require(release.wait_for(3s) == std::future_status::ready, "scheduler test must release its continuation");
         co_return;
@@ -255,7 +265,10 @@ namespace {
         require(mcr::sync_wait(get(server, "/hello")).value().status_code == 200, "one failed transfer must not stop the runtime");
     }
 
-    auto parent_request(HttpServer const& server, mcr::HeaderCallback callback) -> mcr::Task<mcr::Result<mcr::Response>> {
+    auto parent_request(
+        HttpServer const& server,
+        mcr::HeaderCallback callback
+    ) -> mcr::Task<mcr::Result<mcr::Response>> {
         co_return co_await get(server, "/stream", std::move(callback));
     }
 
@@ -281,7 +294,10 @@ namespace {
         require(mcr::sync_wait(std::move(parent)).value().error.code == mcr::ErrorCode::ABORTED_BY_CALLBACK, "parent cancellation must wake polling and remove the active child transfer");
     }
 
-    auto continuation_checks(HttpServer const& server, std::thread::id& resumed) -> mcr::Task<void> {
+    auto continuation_checks(
+        HttpServer const& server,
+        std::thread::id& resumed
+    ) -> mcr::Task<void> {
         (void)co_await get(server, "/hello");
         resumed = std::this_thread::get_id();
         bool wait_rejected{}, cleanup_rejected{};
@@ -297,7 +313,11 @@ namespace {
     /**
      * @brief Deliberately occupy the continuation thread while I/O must remain responsive.
      */
-    auto held_continuation(HttpServer const& server, std::promise<void>& entered, std::shared_future<void> release) -> mcr::Task<void> {
+    auto held_continuation(
+        HttpServer const& server,
+        std::promise<void>& entered,
+        std::shared_future<void> release
+    ) -> mcr::Task<void> {
         (void)co_await get(server, "/hello");
         entered.set_value();
         require(release.wait_for(3s) == std::future_status::ready, "continuation test must be released");

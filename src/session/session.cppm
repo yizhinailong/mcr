@@ -89,7 +89,11 @@ export namespace mcr {
          * @param file Borrowed stream.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Result<Response>;
+        static auto Proceed(
+            Session& session,
+            ProceedHttpMethod method,
+            std::ofstream& file
+        ) -> Result<Response>;
         /**
          * @brief Continue with a callback download.
          * @param session Current session.
@@ -97,7 +101,11 @@ export namespace mcr {
          * @param write Consumer to copy.
          * @return Downstream response.
          */
-        static auto Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Result<Response>;
+        static auto Proceed(
+            Session& session,
+            ProceedHttpMethod method,
+            WriteCallback const& write
+        ) -> Result<Response>;
     };
 
     /**
@@ -128,7 +136,11 @@ export namespace mcr {
          * @param write Consumer to copy.
          * @return Success or the first operation error.
          */
-        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> Result<void>;
+        static auto PrepareDownloadSession(
+            MultiPerform& multi,
+            std::size_t index,
+            WriteCallback const& write
+        ) -> Result<void>;
         /**
          * @brief Select a file download destination.
          * @param multi Current batch.
@@ -136,7 +148,11 @@ export namespace mcr {
          * @param file Borrowed stream.
          * @return Success or the first operation error.
          */
-        static auto PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> Result<void>;
+        static auto PrepareDownloadSession(
+            MultiPerform& multi,
+            std::size_t index,
+            std::ofstream& file
+        ) -> Result<void>;
     };
 
     /**
@@ -1901,7 +1917,9 @@ export namespace mcr {
         /**
          * @brief Retain an initialized curl holder before applying defaults.
          */
-        explicit Session(std::shared_ptr<curl::CurlHolder> holder) noexcept : m_curl{ std::move(holder) } {}
+        explicit Session(
+            std::shared_ptr<curl::CurlHolder> holder
+        ) noexcept : m_curl{ std::move(holder) } {}
 
         /**
          * @brief Apply session defaults, returning the first curl configuration failure.
@@ -2334,7 +2352,12 @@ export namespace mcr {
         /**
          * @brief Receive body bytes without allowing C++ exceptions through curl.
          */
-        static auto writeCallback(char* data, std::size_t size, std::size_t count, void* context) noexcept -> std::size_t {
+        static auto writeCallback(
+            char* data,
+            std::size_t size,
+            std::size_t count,
+            void* context
+        ) noexcept -> std::size_t {
             auto& self{ *static_cast<Session*>(context) };
             if (self.m_callback_error) {
                 return 0;
@@ -2365,7 +2388,12 @@ export namespace mcr {
         /**
          * @brief Collect headers and notify the observer while containing exceptions.
          */
-        static auto headerCallback(char* data, std::size_t size, std::size_t count, void* context) noexcept -> std::size_t {
+        static auto headerCallback(
+            char* data,
+            std::size_t size,
+            std::size_t count,
+            void* context
+        ) noexcept -> std::size_t {
             auto& self{ *static_cast<Session*>(context) };
             if (self.m_callback_error) {
                 return 0;
@@ -2384,7 +2412,12 @@ export namespace mcr {
         /**
          * @brief Fill upload bytes while validating the producer's reported size.
          */
-        static auto readCallback(char* data, std::size_t size, std::size_t count, void* context) noexcept -> std::size_t {
+        static auto readCallback(
+            char* data,
+            std::size_t size,
+            std::size_t count,
+            void* context
+        ) noexcept -> std::size_t {
             auto& self{ *static_cast<Session*>(context) };
             if (self.m_callback_error) {
                 return CURL_READFUNC_ABORT;
@@ -2407,7 +2440,13 @@ export namespace mcr {
         /**
          * @brief Combine explicit cancellation and progress observer decisions.
          */
-        static auto progressCallback(void* context, curl_off_t total_down, curl_off_t now_down, curl_off_t total_up, curl_off_t now_up) noexcept -> int {
+        static auto progressCallback(
+            void* context,
+            curl_off_t total_down,
+            curl_off_t now_down,
+            curl_off_t total_up,
+            curl_off_t now_up
+        ) noexcept -> int {
             auto& self{ *static_cast<Session*>(context) };
             if (self.m_callback_error || (self.m_cancellation && self.m_cancellation->load())) {
                 return 1;
@@ -2423,7 +2462,13 @@ export namespace mcr {
         /**
          * @brief Deliver curl diagnostics while containing observer exceptions.
          */
-        static auto debugCallback(CURL*, curl_infotype type, char* data, std::size_t size, void* context) noexcept -> int {
+        static auto debugCallback(
+            CURL*,
+            curl_infotype type,
+            char* data,
+            std::size_t size,
+            void* context
+        ) noexcept -> int {
             auto& self{ *static_cast<Session*>(context) };
             if (!self.m_callback_error) {
                 try {
@@ -2504,7 +2549,10 @@ export namespace mcr {
          * @param method Initial method.
          * @return Success or the first operation error.
          */
-        auto AddSession(std::shared_ptr<Session> const& session, HttpMethod method = HttpMethod::UNDEFINED) -> Result<void>;
+        auto AddSession(
+            std::shared_ptr<Session> const& session,
+            HttpMethod method = HttpMethod::UNDEFINED
+        ) -> Result<void>;
         /**
          * @brief Remove an existing registration and release its claim.
          * @param session Registered session.
@@ -2668,7 +2716,10 @@ export namespace mcr {
          * @param file Output stream reference.
          * @return Success or the first operation error.
          */
-        auto setDownloadTarget(std::size_t index, std::reference_wrapper<std::ofstream> file) -> Result<void> {
+        auto setDownloadTarget(
+            std::size_t index,
+            std::reference_wrapper<std::ofstream> file
+        ) -> Result<void> {
             if (auto status = setDownloadTarget(index, file.get()); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
@@ -2925,7 +2976,11 @@ namespace mcr {
         }
     }
 
-    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, std::ofstream& file) -> Result<Response> {
+    auto Interceptor::Proceed(
+        Session& session,
+        ProceedHttpMethod method,
+        std::ofstream& file
+    ) -> Result<Response> {
         if (method != ProceedHttpMethod::DOWNLOAD_FILE_REQUEST) {
             return std::unexpected{
                 Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: a stream requires DOWNLOAD_FILE_REQUEST." }
@@ -2934,7 +2989,11 @@ namespace mcr {
         return session.Download(file);
     }
 
-    auto Interceptor::Proceed(Session& session, ProceedHttpMethod method, WriteCallback const& write) -> Result<Response> {
+    auto Interceptor::Proceed(
+        Session& session,
+        ProceedHttpMethod method,
+        WriteCallback const& write
+    ) -> Result<Response> {
         if (method != ProceedHttpMethod::DOWNLOAD_CALLBACK_REQUEST) {
             return std::unexpected{
                 Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Interceptor: a callback requires DOWNLOAD_CALLBACK_REQUEST." }
@@ -3024,7 +3083,10 @@ namespace mcr {
         return {};
     }
 
-    auto MultiPerform::AddSession(std::shared_ptr<Session> const& session, HttpMethod method) -> Result<void> {
+    auto MultiPerform::AddSession(
+        std::shared_ptr<Session> const& session,
+        HttpMethod method
+    ) -> Result<void> {
         if (auto status = synchronizeSessions(); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
@@ -3079,7 +3141,9 @@ namespace mcr {
         return std::ref(m_sessions);
     }
 
-    auto MultiPerform::AddInterceptor(std::shared_ptr<InterceptorMulti> const& interceptor) -> Result<void> {
+    auto MultiPerform::AddInterceptor(
+        std::shared_ptr<InterceptorMulti> const& interceptor
+    ) -> Result<void> {
         if (auto status = checkIdleTransfer(); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
@@ -3123,7 +3187,10 @@ namespace mcr {
         return {};
     }
 
-    auto MultiPerform::setDownloadTarget(std::size_t index, WriteCallback const& write) -> Result<void> {
+    auto MultiPerform::setDownloadTarget(
+        std::size_t index,
+        WriteCallback const& write
+    ) -> Result<void> {
         if (auto status = checkIdleTransfer(); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
@@ -3412,7 +3479,11 @@ namespace mcr {
         return multi.proceed();
     }
 
-    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, WriteCallback const& write) -> Result<void> {
+    auto InterceptorMulti::PrepareDownloadSession(
+        MultiPerform& multi,
+        std::size_t index,
+        WriteCallback const& write
+    ) -> Result<void> {
         if (auto status = multi.setDownloadTarget(index, write); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
@@ -3420,7 +3491,11 @@ namespace mcr {
         return {};
     }
 
-    auto InterceptorMulti::PrepareDownloadSession(MultiPerform& multi, std::size_t index, std::ofstream& file) -> Result<void> {
+    auto InterceptorMulti::PrepareDownloadSession(
+        MultiPerform& multi,
+        std::size_t index,
+        std::ofstream& file
+    ) -> Result<void> {
         if (auto status = multi.setDownloadTarget(index, file); !status) {
             return std::unexpected{ std::move(status.error()) };
         }
