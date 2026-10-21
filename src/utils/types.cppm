@@ -340,25 +340,27 @@ export namespace mcr {
     };
 
     /**
-     * @brief Order header names lexicographically, ignoring case as in cpr.
-     * @note Uses std::tolower in the current C locale, which must remain stable
-     * while a Header contains keys.
+     * @brief Order HTTP header names lexicographically with locale-independent ASCII folding.
      */
     struct CaseInsensitiveCompare {
+        using is_transparent = void; ///< Permit lookup with borrowed string views and literals.
+
         /**
          * @brief Compare two names after case folding each unsigned byte.
          * @param a Left header name.
          * @param b Right header name.
          * @return True if a precedes b; false for equivalent names.
          */
-        [[nodiscard]] bool operator()(std::string const& a, std::string const& b) const noexcept {
+        [[nodiscard]] bool operator()(std::string_view a, std::string_view b) const noexcept {
             return std::lexicographical_compare(
                 a.begin(),
                 a.end(),
                 b.begin(),
                 b.end(),
                 [](unsigned char ac, unsigned char bc) {
-                    return std::tolower(ac) < std::tolower(bc);
+                    auto const left = ac >= 'A' && ac <= 'Z' ? ac + ('a' - 'A') : ac;
+                    auto const right = bc >= 'A' && bc <= 'Z' ? bc + ('a' - 'A') : bc;
+                    return left < right;
                 }
             );
         }

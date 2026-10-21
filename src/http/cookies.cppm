@@ -62,6 +62,15 @@ export namespace mcr {
         }
 
         /**
+         * @brief Recognize libcurl's HttpOnly marker in the stored Netscape domain text.
+         * @return Whether GetDomain() starts with the case-sensitive #HttpOnly_ marker.
+         * @note GetDomain() preserves that marker for compatibility; it is not part of the hostname.
+         */
+        [[nodiscard]] auto IsHttpOnly() const noexcept -> bool {
+            return m_domain.starts_with("#HttpOnly_");
+        }
+
+        /**
          * @brief Check subdomain scope.
          * @return Whether the cookie applies to subdomains.
          */

@@ -47,6 +47,8 @@ namespace {
             &reason
         );
         passed &= check(header.size() == 2 && header.at("X-Value") == "second: value" && header.at("Trailer") == "final" && header.find("X-Value")->first == "X-Value" && status == "HTTP/2 204" && reason.empty(), "only final headers survive redirects and interim responses; absent reasons clear stale output");
+        header = utils::parse_header(" orphan: ignored\r\nHTTP/1.1 200 OK\r\nX-Fold: first\r\n\tsecond: value\r\n  third \t\r\nX-Next: last\r\n\r\n detached: ignored\r\nTrailer: done\r\n");
+        passed &= check(header.size() == 3 && header.at("X-Fold") == "first second: value third" && header.at("X-Next") == "last" && header.at("Trailer") == "done", "obs-fold must unfold into one value while orphan and detached continuations stay ignored");
 
         struct StatusCase {
             std::string_view input;
@@ -142,6 +144,7 @@ namespace {
         passed &= check(cookies[0].GetName() == "status" && cookies[0].GetValue() == "on" && cookies[0].GetDomain() == "127.0.0.1" && !cookies[0].IsIncludingSubdomains() && cookies[0].GetPath() == "/" && !cookies[0].IsHttpsOnly() && cookies[0].GetExpires() == std::chrono::system_clock::from_time_t(1656908640), "all seven curl cookie fields must map correctly");
         passed &= check(cookies[1].GetName() == "status" && cookies[1].GetValue() == "debug" && cookies[1].GetDomain() == ".example.test" && cookies[1].IsIncludingSubdomains() && cookies[1].GetPath() == "/account" && cookies[1].IsHttpsOnly() && cookies[1].GetExpires() == std::chrono::system_clock::from_time_t(0), "duplicate names, true flags, paths, and session expiration must be retained in order");
         passed &= check(cookies[2].GetDomain() == "#HttpOnly_.example.test" && cookies[2].GetName() == "empty" && cookies[2].GetValue().empty() && cookies[3].GetName().empty() && cookies[3].GetValue().empty() && cookies[3].GetPath().empty() && cookies[4].GetValue() == "value", "HttpOnly text, missing fields, empty values, and extra columns must follow cpr");
+        passed &= check(cookies[2].IsHttpOnly() && !cookies[0].IsHttpOnly(), "HttpOnly detection must distinguish curl's marker from ordinary domains");
         for (std::string record : { "example.test", "example.test\tFALSE\t/\tFALSE\tbad\tname\tvalue" }) {
             curl_slist raw{ record.data(), nullptr };
             passed &= check(!utils::parse_cookies(&raw), "missing and invalid expirations must return an error");

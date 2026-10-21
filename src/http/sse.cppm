@@ -147,7 +147,9 @@ export namespace mcr {
             }
 
             if (field == "event") {
-                m_current_event.event = value;
+                if (!value.contains('\0')) {
+                    m_current_event.event = value;
+                }
             } else if (field == "data") {
                 m_current_event.data += value;
                 m_current_event.data += '\n';

@@ -25,8 +25,8 @@ std::println("{}: {}", url.Str(), headers.at("content-type"));
 - Str、CStr、Data、显式 std::string 转换、流输出、复制移动、比较及返回 void 的 +=
   保留 cpr 行为，派生类可访问受保护的 m_str。
 - Header 是使用 CaseInsensitiveCompare 的映射，字段名称忽略大小写，
-  值和首次插入键的拼写不变。比较与 cpr 一样在当前 C locale 下使用 std::tolower，
-  输入先转为无符号字节；映射包含键期间必须保持该 locale 稳定。
+  值和首次插入键的拼写不变。比较只折叠 ASCII 大写字母，高位字节按无符号值比较，
+  不受全局 C locale 变化影响。支持使用 `std::string_view` 和字符串字面量进行透明查找。
 
 ## 命名迁移与差异
 

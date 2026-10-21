@@ -74,6 +74,8 @@ namespace {
             { "Data: ignored\n data: ignored\ndata:  leading:colon\ndata:\ttab\ndata:trailing \n\n", { make_event(" leading:colon\n\ttab\ntrailing ") } },
             { "id: good\nid: bad\0id\ndata: a\0b\n\n"sv, { make_event(std::string{ "a\0b", 3 }, "message", "good") } },
             { "id: bad\0id\ndata: x\n\n"sv, { make_event("x") } },
+            { "event: good\nevent: bad\0event\ndata: x\n\n"sv, { make_event("x", "good") } },
+            { "event: bad\0event\ndata: x\n\n"sv, { make_event("x") } },
             { "id: 42\nretry: 10\nevent: update\ndata: first\n\ndata: second\n\n", { make_event("first", "update", "42", 10), make_event("second") } },
             { "data: x\n", {} },
             { "data: x", {} },

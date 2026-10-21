@@ -233,6 +233,9 @@ namespace {
         );
         headers["Accept"] = "";
         passed &= check(headers.at("ACCEPT").empty(), "headers must support empty values");
+        std::string_view const bounded{ "!cOnTeNt-TyPe!" };
+        passed &= check(headers.find(bounded.substr(1, bounded.size() - 2))->second == "text/plain" && headers.contains(std::string_view{ "ACCEPT" }), "transparent lookup must accept bounded string views without constructing a key");
+        passed &= check(compare("A", "B") && !compare("A", "a") && !compare("a", "A") && compare("z", "\xC0") && compare("\xC0", "\xE0"), "ASCII folding must preserve unsigned high bytes independently of the C locale");
         passed &= check(
             headers.erase("x-TRACE") == 1 && !headers.contains("X-Trace"),
             "header erasure must ignore name case"

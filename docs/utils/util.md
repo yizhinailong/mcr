@@ -49,9 +49,13 @@ API 使用 C++23 模块、`mcr::utils` 命名空间、snake_case 自由函数名
 与 cpr 不同，新状态没有原因短语时会清除旧原因，
 状态词间的空格和制表符一致处理，原因中的冒号不会被误认为头字段。
 没有冒号的畸形行被忽略；该函数不是完整 HTTP 语法验证器。
+以空格或制表符开头的 obs-fold 续行用一个空格连接到前一个字段，续行中的冒号保留为值。
+没有前置字段或位于空行之后的续行被忽略，不会被解析为新字段。
 
 `parse_cookies` 借用 `curl_slist const*`，空指针返回空集合。
 按顺序复制 Netscape 格式记录，保留重名和域文本（含 `#HttpOnly_`），默认 encode 为 true。
+可通过 `Cookie::IsHttpOnly()` 识别该标记。`GetDomain()` 返回的标记不属于主机名，
+不能直接用于 DNS 查询或域名匹配；需要先移除前缀。
 缺失列补空，超过第七列的内容忽略。
 缺失、无效或超出 time_t 范围的过期时间返回 `BAD_FUNCTION_ARGUMENT`；
 时间还必须能由 `std::chrono::system_clock::time_point` 表示。

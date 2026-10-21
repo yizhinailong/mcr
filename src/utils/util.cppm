@@ -48,6 +48,7 @@ export namespace mcr::utils {
      * @return Owned header names and trimmed values from the last response block, including trailers.
      * @note Outputs remain unchanged when no status line occurs. Status lines are never header fields,
      * and a response without a reason clears a previous reason, correcting cpr's stale output.
+     * Obsolete folded continuation lines append to the preceding field with one separating space.
      */
     [[nodiscard]] auto parse_header(
         std::string_view headers,
@@ -55,6 +56,7 @@ export namespace mcr::utils {
         std::string* reason = nullptr
     ) -> Header {
         Header result;
+        auto previous = result.end();
         std::string parsed_status;
         std::string parsed_reason;
         bool found_status{ false };
@@ -80,16 +82,27 @@ export namespace mcr::utils {
                     }
                 }
                 result.clear();
+                previous = result.end();
+                continue;
+            }
+            if (line.starts_with(' ') || line.starts_with('\t')) {
+                auto const first = line.find_first_not_of("\t ");
+                auto const continuation = detail::trim_header_end(first == std::string_view::npos ? std::string_view{} : line.substr(first));
+                if (previous != result.end() && !continuation.empty()) {
+                    previous->second += ' ';
+                    previous->second += continuation;
+                }
                 continue;
             }
             auto const colon{ line.find(':') };
             if (colon == std::string_view::npos) {
+                previous = result.end();
                 continue;
             }
             auto value{ line.substr(colon + 1) };
             auto const first{ value.find_first_not_of("\t ") };
             value.remove_prefix(first == std::string_view::npos ? value.size() : first);
-            result[std::string{ line.substr(0, colon) }] = detail::trim_header_end(value);
+            previous = result.insert_or_assign(std::string{ line.substr(0, colon) }, detail::trim_header_end(value)).first;
         }
         // Delay output writes so either output may reuse the string backing the input view.
         if (found_status) {
