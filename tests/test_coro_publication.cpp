@@ -88,7 +88,9 @@ namespace {
         auto session = mcr::Session::Create().value();
         session->SetUrl(server.Url("/stream")).value();
         session->SetProxies({ { "http", "" }, { "no_proxy", "*" } }).value();
-        session->SetTimeout(mcr::options::Timeout{ 5s }).value();
+        // Windows can round each of the fixture's 300 short sleeps up to a timer tick.
+        // Leave enough time for that bounded stream while the rest of the suite runs in parallel.
+        session->SetTimeout(mcr::options::Timeout{ 15s }).value();
         std::promise<void> headers;
         auto arrived = headers.get_future();
         bool signalled{};
@@ -107,7 +109,7 @@ namespace {
         auto second = mcr::sync_wait(transfer(session, preparations));
         require(!second && second.error().code == mcr::ErrorCode::FAILED_INIT, "the duplicate submission must return a multi setup error");
         auto response = mcr::sync_wait(std::move(first)).value();
-        require(!response.error && response.status_code == 200 && response.text == std::string(307200, 'x'), "the first submission must keep its handle, body, and continuation");
+        require(!response.error && response.status_code == 200 && response.text == std::string(307200, 'x'), std::format("the first submission must keep its handle, body, and continuation: {} ({} bytes): {}", mcr::to_string(response.error.code), response.text.size(), response.error.message));
         require(preparations == 1, "a duplicate must be rejected before preparing the active session");
     }
 } // namespace
