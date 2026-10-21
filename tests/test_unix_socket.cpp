@@ -136,18 +136,28 @@ auto main() -> int {
     }
     bool passed{ true };
     try {
+        auto session = mcr::Session::Create().value();
+        session->SetProxies(mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } }).value();
+        session->SetTimeout(mcr::options::Timeout{ 5000 }).value();
         if (!(curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_UNIX_SOCKETS)) {
-            auto session = mcr::Session::Create().value();
             auto status = session->SetUnixSocket(mcr::options::UnixSocket{ "unavailable.sock" });
             require(!status && status.error().code == mcr::ErrorCode::NOT_BUILT_IN, "curl without Unix socket support must report that capability error");
             std::println("test_unix_socket: unavailable backend rejects Unix socket configuration");
         } else {
             UnixServer server;
-            auto response = mcr::Get(mcr::Url{ "http://unix.test/unix" }, mcr::options::UnixSocket{ server.Path() }, mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } }, mcr::options::Timeout{ 5000 }).value();
+            session->SetUrl(mcr::Url{ "http://unix.test/unix" }).value();
+            session->SetUnixSocket(mcr::options::UnixSocket{ server.Path() }).value();
+            auto response = session->Get().value();
             server.Check();
             require(!response.error && response.status_code == 200 && response.text == "unix-body", std::format("Unix HTTP transport failed: {}", response.error.message));
             std::println("test_unix_socket: verified HTTP over a real Unix domain socket");
         }
+        session->SetUnixSocket(mcr::options::UnixSocket{ "" }).value();
+        mcr::test::HttpServer tcp_server;
+        session->SetUrl(tcp_server.Url("/hello")).value();
+        auto restored{ session->Get().value() };
+        require(!restored.error && restored.status_code == 200 && restored.text == "Hello session!", "clearing a Unix socket path must restore real TCP requests on every backend");
+        tcp_server.Check();
     } catch (std::exception const& error) {
         std::println("test_unix_socket: {}", error.what());
         passed = false;

@@ -44,6 +44,9 @@ session.SetSslOptions(mcr::options::Ssl(
 | 连接选择 | `LocalPort`、`LocalPortRange`、`UnixSocket`、`Resolve` |
 | 诊断与容量 | `Verbose`、`ReserveSize` |
 
+`UnixSocket` 受 curl 构建能力限制，未编译该功能的后端通过 `NOT_BUILT_IN` 报告能力缺失。
+传入空路径可清除 Unix socket 配置并恢复 TCP；不支持该功能的后端也接受清除操作。
+
 这些类型原有的独立模块已合并到 `mcr:transfer_options` 分区。原先单独导入
 `mcr.unix_socket`、`mcr.verbose`、`mcr.timeout`、`mcr.connect_timeout`、
 `mcr.low_speed`、`mcr.limit_rate`、`mcr.local_port`、`mcr.local_port_range`、

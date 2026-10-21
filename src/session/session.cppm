@@ -630,14 +630,21 @@ export namespace mcr {
 
         /**
          * @brief Configure a Unix socket.
-         * @param unix_socket Socket path copied into curl.
-         * @return Success or the first operation error.
+         * @param unix_socket Socket path copied into curl; empty text restores TCP transport.
+         * @return Success, NOT_BUILT_IN for an unavailable transport, or a curl option error.
          */
         auto SetUnixSocket(options::UnixSocket const& unix_socket) -> Result<void> {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            if (auto status = setOption(CURLOPT_UNIX_SOCKET_PATH, unix_socket.GetUnixSocketString()); !status) {
+            auto const* path{ unix_socket.GetUnixSocketString() };
+            if (!(curl_version_info(CURLVERSION_NOW)->features & CURL_VERSION_UNIX_SOCKETS)) {
+                if (*path) {
+                    return std::unexpected{ Error{ ErrorCode::NOT_BUILT_IN, "mcr::Session: this curl build does not support Unix domain sockets." } };
+                }
+                return {};
+            }
+            if (auto status = setOption(CURLOPT_UNIX_SOCKET_PATH, *path ? path : nullptr); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
             return {};
