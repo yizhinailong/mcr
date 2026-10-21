@@ -43,6 +43,8 @@ auto credentials = auth.GetAuthString(); // 借用指向 "user:password" 的指�
 
 `mcr:auth` 分区只直接依赖 `mcr:secure_string`，构造和查询不调用 curl。
 安全分配器会擦除释放的堆存储；短字符串内联存储、来源和外部副本的限制见 [SecureString](../utils/secure_string.md)。
+例如 `"user:password"` 这类短凭据通常使用 SSO，析构时不会经过安全分配器的擦除路径，
+因此 `Authentication` 不保证此类凭据的内联存储被清零；curl 及调用方持有的副本也不受其保护。
 
 与 cpr 的区别是模块、`mcr::options` 命名空间、私有字段 `m_auth_string` / `m_auth_mode`，
 以及使用有检查的字符串操作，避免上游为 `reserve` 计算组合长度时的未检查算术；公开签名和凭据格式保留。

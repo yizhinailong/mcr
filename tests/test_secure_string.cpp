@@ -203,6 +203,28 @@ namespace {
         require(assigned.size() == sizeof(bytes) && binary.size() == 80, "string swap must support equal allocators");
     }
 
+    /**
+     * @brief Verify that inline short credentials never pass through the allocator's wipe hook.
+     * @note Inspect storage addresses only while the string is alive; never read a destroyed object.
+     */
+    auto check_short_string_storage() -> void {
+        bool inline_storage{};
+        {
+            SecureString credentials{ "user:password" };
+            auto const object = reinterpret_cast<std::uintptr_t>(&credentials);
+            auto const data = reinterpret_cast<std::uintptr_t>(credentials.data());
+            inline_storage = data >= object && data < object + sizeof(credentials);
+            watch_release(credentials.data(), credentials.capacity() + 1);
+            require(credentials.size() == 13 && credentials == "user:password", "short credentials must retain their ordinary string behavior");
+        }
+        if (inline_storage) {
+            require(!g_release_observed, "SSO destruction cannot trigger allocator-based erasure");
+        } else {
+            require_wiped();
+        }
+        g_watched_storage = nullptr;
+    }
+
     auto check_string_wipe() -> void {
         {
             SecureString secret(96, 's');
@@ -241,6 +263,7 @@ int main() {
         check_raw_wipe<std::uint32_t>();
         check_destroyed_objects();
         check_string_operations();
+        check_short_string_storage();
         check_string_wipe();
     } catch (std::exception const& error) {
         std::println("test_secure_string: {}", error.what());
