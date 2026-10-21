@@ -32,6 +32,8 @@ if (!response) {
   `Prepare*`、`*Async` 和 `*Callback` 方法。
 - 向 `WriteCallback` 或 `std::ofstream` 下载，同步/异步下载，
   `GetDownloadFileLength` 和供外部 curl 驱动使用的 `Complete` / `CompleteDownload`。
+  长度探测读取本次 HEAD 响应的 `Content-Length`；缺失、非法或非成功响应返回 `-1`，
+  拦截器返回的合成响应也遵循此规则，不读取上一请求的 curl 长度缓存。
 - 现有选项模块的 setter 和 `SetOption` 重载：URL、参数、请求头、认证、Cookie、
   Body / BodyView / Payload / Multipart、超时、重定向、压缩、限速、网络绑定、
   DNS 映射、代理地址、连接池、读写/进度/调试/SSE 回调。

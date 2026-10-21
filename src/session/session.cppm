@@ -975,7 +975,14 @@ export namespace mcr {
             }
             CprOffT length{ -1 };
             if (!response->error && response->status_code == 200) {
-                (void)curl_easy_getinfo(m_curl->handle, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length);
+                auto const header = response->header.find("Content-Length");
+                if (header != response->header.end()) {
+                    auto const& value = header->second;
+                    auto const parsed = std::from_chars(value.data(), value.data() + value.size(), length);
+                    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || length < 0) {
+                        length = -1;
+                    }
+                }
             }
             return length;
         }

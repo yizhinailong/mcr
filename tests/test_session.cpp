@@ -495,6 +495,32 @@ namespace {
         synthetic.AddInterceptor(std::make_shared<I>([](auto&) { mcr::Response result; result.status_code = 204; return result; })).value();
         passed &= check(synthetic.Get().value().status_code == 204, "a synthetic response must short circuit before curl performs the request");
 
+        auto length_probe = mcr::Session::Create().value();
+        configure(*length_probe, server);
+        passed &= check(length_probe->GetDownloadFileLength().value() == 14, "real HEAD must advertise the current response length");
+        std::optional<std::string> advertised_length;
+        auto length_response = [&](auto&) {
+            mcr::Response result;
+            result.status_code = 200;
+            if (advertised_length) {
+                result.header["Content-Length"] = *advertised_length;
+            }
+            return result;
+        };
+        length_probe->AddInterceptor(std::make_shared<I>(length_response)).value();
+        passed &= check(length_probe->GetDownloadFileLength().value() == -1, "a synthetic HEAD without length must not reuse curl metadata from an earlier request");
+        auto fresh_probe = mcr::Session::Create().value();
+        fresh_probe->AddInterceptor(std::make_shared<I>(length_response)).value();
+        passed &= check(fresh_probe->GetDownloadFileLength().value() == -1, "an unperformed synthetic HEAD must not report a new curl handle's default zero length");
+        for (std::string_view invalid : { "", "-1", "+7", "7bytes", "7, 7", "99999999999999999999999999999" }) {
+            advertised_length = invalid;
+            passed &= check(length_probe->GetDownloadFileLength().value() == -1, "malformed or overflowing Content-Length must remain unknown");
+        }
+        advertised_length = "0";
+        passed &= check(length_probe->GetDownloadFileLength().value() == 0, "an explicit zero Content-Length must be known");
+        advertised_length = "123";
+        passed &= check(length_probe->GetDownloadFileLength().value() == 123, "length probing must use the current interceptor response's Content-Length");
+
         auto throwing_owner = mcr::Session::Create().value();
         auto& throwing = *throwing_owner;
         configure(throwing, server);
