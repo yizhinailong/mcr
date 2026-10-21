@@ -20,9 +20,9 @@ export namespace mcr::utils {
     private:
         friend T;
 
-        inline static T* s_instance{ nullptr };   ///< Owned until explicit ExitInstance.
-        inline static std::once_flag s_get_flag;  ///< Allows one successful construction per T.
-        inline static std::once_flag s_exit_flag; ///< Allows one successful destruction per T.
+        inline static std::atomic<T*> s_instance{ nullptr }; ///< Published ownership; raw pointer users still coordinate shutdown.
+        inline static std::once_flag s_get_flag;             ///< Allows one successful construction per T.
+        inline static std::once_flag s_exit_flag;            ///< Allows one successful destruction per T.
 
         /**
          * @brief Allow only T to construct its singleton base.
@@ -48,8 +48,8 @@ export namespace mcr::utils {
          */
         [[nodiscard]] static auto GetInstance() -> T* {
             // Allocate here so T may keep its constructor private; lifetime is explicit as in cpr.
-            std::call_once(s_get_flag, [] { s_instance = new T; });
-            return s_instance;
+            std::call_once(s_get_flag, [] { s_instance.store(new T, std::memory_order_release); });
+            return s_instance.load(std::memory_order_acquire);
         }
 
         /**
@@ -60,11 +60,10 @@ export namespace mcr::utils {
          */
         static auto ExitInstance() -> void {
             std::call_once(s_exit_flag, [] {
-                if (s_instance == nullptr) {
+                if (s_instance.load(std::memory_order_acquire) == nullptr) {
                     throw std::logic_error{ "mcr::utils::Singleton: ExitInstance requires successful initialization" };
                 }
-                delete s_instance;
-                s_instance = nullptr;
+                delete s_instance.exchange(nullptr, std::memory_order_acq_rel);
             });
         }
     };
