@@ -104,12 +104,12 @@ export namespace mcr::curl {
          * Curl's temporary allocation is freed even if constructing the result throws.
          */
         [[nodiscard]] auto UrlEncode(std::string_view input) const -> Result<utils::SecureString> {
+            if (input.empty()) {
+                return {};
+            }
             auto const length{ checkedLength(input) };
             if (!length) {
                 return std::unexpected{ length.error() };
-            }
-            if (input.empty()) {
-                return {};
             }
             std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_escape(handle, input.data(), *length), &curl_free };
             if (!output) {
@@ -128,12 +128,12 @@ export namespace mcr::curl {
          * Curl's temporary allocation is freed even if constructing the result throws.
          */
         [[nodiscard]] auto UrlDecode(std::string_view input) const -> Result<utils::SecureString> {
+            if (input.empty()) {
+                return {};
+            }
             auto const length{ checkedLength(input) };
             if (!length) {
                 return std::unexpected{ length.error() };
-            }
-            if (input.empty()) {
-                return {};
             }
             int output_length{ 0 };
             std::unique_ptr<char, decltype(&curl_free)> output{ curl_easy_unescape(handle, input.data(), *length, &output_length), &curl_free };

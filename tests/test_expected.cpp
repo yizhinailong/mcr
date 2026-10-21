@@ -69,6 +69,10 @@ namespace {
 
         auto snapshot = mcr::Response::FromCurl(nullptr, {}, {});
         require(!snapshot && snapshot.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "response factories must reject invalid curl holders");
+        auto emptied = mcr::curl::CurlHolder::Create().value();
+        auto retained = std::move(emptied);
+        snapshot = mcr::Response::FromCurl(emptied, {}, {});
+        require(!snapshot && snapshot.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT, "borrowed response factories must reject a moved-from holder");
         server.Check();
     }
 } // namespace

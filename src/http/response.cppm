@@ -57,27 +57,27 @@ export namespace mcr {
          * @param headers Received raw header blocks.
          * @param received_cookies Cookies extracted from the handle.
          * @param transfer_error Transport outcome.
-         * @return A response snapshot, or BAD_FUNCTION_ARGUMENT when the holder or easy handle is null.
+         * @return A response snapshot, or BAD_FUNCTION_ARGUMENT when the easy handle is null.
          */
         [[nodiscard]] static auto FromCurl(
-            std::shared_ptr<curl::CurlHolder> curl,
+            curl::CurlHolder const& curl,
             std::string body,
             std::string headers,
             Cookies received_cookies = {},
             Error transfer_error = {}
         ) -> Result<Response> {
+            if (!curl.handle) {
+                return std::unexpected{
+                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Response requires an active curl holder." }
+                };
+            }
             Response result;
             result.text = std::move(body);
             result.cookies = std::move(received_cookies);
             result.error = std::move(transfer_error);
             result.raw_header = std::move(headers);
-            if (!curl || !curl->handle) {
-                return std::unexpected{
-                    Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Response requires an active curl holder." }
-                };
-            }
             result.header = utils::parse_header(result.raw_header, &result.status_line, &result.reason);
-            auto* handle{ curl->handle };
+            auto* handle{ curl.handle };
             (void)curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &result.status_code);
             (void)curl_easy_getinfo(handle, CURLINFO_TOTAL_TIME, &result.elapsed);
             char* address{ nullptr };
@@ -109,8 +109,31 @@ export namespace mcr {
         }
 
         /**
+         * @brief Snapshot a nullable shared holder without retaining or copying its ownership.
+         * @param curl Holder used for the transfer; a null pointer returns BAD_FUNCTION_ARGUMENT.
+         * @param body Received body bytes.
+         * @param headers Received raw header blocks.
+         * @param received_cookies Cookies extracted from the handle.
+         * @param transfer_error Transport outcome.
+         * @return An independent response snapshot or an invalid-holder error.
+         */
+        [[nodiscard]] static auto FromCurl(
+            std::shared_ptr<curl::CurlHolder> const& curl,
+            std::string body,
+            std::string headers,
+            Cookies received_cookies = {},
+            Error transfer_error = {}
+        ) -> Result<Response> {
+            if (!curl) {
+                return std::unexpected{ Error{ ErrorCode::BAD_FUNCTION_ARGUMENT, "mcr::Response requires an active curl holder." } };
+            }
+            return FromCurl(*curl, std::move(body), std::move(headers), std::move(received_cookies), std::move(transfer_error));
+        }
+
+        /**
          * @brief Return certificate details captured for this response.
          * @return An independent copy, empty for plain HTTP.
+         * @note Retain cpr's value-returning signature; modifying the copy does not change the snapshot.
          */
         [[nodiscard]] auto GetCertInfos() const -> std::vector<CertInfo> { return m_cert_infos; }
     };

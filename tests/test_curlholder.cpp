@@ -170,6 +170,7 @@ namespace {
             source.error.front() = 'x';
             auto const old_error{ source.error };
             mcr::curl::CurlHolder moved{ std::move(source) };
+            passed &= check(source.UrlEncode({}).value().empty() && source.UrlDecode({}).value().empty() && !source.UrlEncode("x") && !source.UrlDecode("x"), "moved-from holders must accept empty conversions while rejecting nonempty input");
             passed &= check(has_no_resources(source) && moved.handle == handle && moved.chunk == chunk && moved.resolve_curl_list == resolve && moved.multipart == multipart && moved.error == old_error && source_frees == 0, "move construction must transfer every resource and preserve error text without freeing the source resources");
             passed &= check_error_buffer(moved);
             passed &= check(source.error == old_error, "moved handles must not write to the source object's error buffer");

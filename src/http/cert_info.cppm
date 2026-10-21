@@ -61,6 +61,15 @@ export namespace mcr {
         }
 
         /**
+         * @brief Read an entry by its insertion position.
+         * @param pos Zero-based entry index, less than the entry count.
+         * @return A read-only reference to the stored text.
+         */
+        [[nodiscard]] auto operator[](std::size_t pos) const -> std::string const& {
+            return m_cert_info[pos];
+        }
+
+        /**
          * @brief Begin mutable iteration.
          * @return An iterator to the first entry.
          */

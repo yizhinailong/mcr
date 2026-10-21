@@ -1129,7 +1129,7 @@ export namespace mcr {
                 error_message = curl_easy_strerror(curl_error);
             }
             return Response::FromCurl(
-                m_curl,
+                *m_curl,
                 std::move(m_response_string),
                 std::move(m_header_string),
                 std::move(*cookies),

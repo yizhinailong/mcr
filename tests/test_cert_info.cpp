@@ -13,6 +13,7 @@ static_assert(!std::is_move_assignable_v<mcr::CertInfo>);
 static_assert(std::is_same_v<mcr::CertInfo::iterator, std::vector<std::string>::iterator>);
 static_assert(std::is_same_v<mcr::CertInfo::const_iterator, std::vector<std::string>::const_iterator>);
 static_assert(std::is_same_v<decltype(std::declval<mcr::CertInfo&>()[0]), std::string&>);
+static_assert(std::is_same_v<decltype(std::declval<mcr::CertInfo const&>()[0]), std::string const&>);
 static_assert(std::ranges::random_access_range<mcr::CertInfo>);
 static_assert(std::ranges::random_access_range<mcr::CertInfo const>);
 
