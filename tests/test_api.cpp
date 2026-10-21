@@ -22,12 +22,25 @@ namespace {
         { mcr::request<M>(std::forward<Ts>(values)...) } -> std::same_as<mcr::Result<mcr::Response>>;
     };
 
+    /**
+     * @brief Check the asynchronous template's public result and method constraints.
+     * @tparam M HTTP method, including deliberately invalid enum values.
+     * @tparam Ts Option types.
+     */
+    template <mcr::Method M, typename... Ts>
+    concept AsyncRequestAvailable = requires(Ts... values) {
+        { mcr::request_async<M>(std::move(values)...) } -> std::same_as<mcr::Result<mcr::AsyncResponse>>;
+    };
+
     static_assert(std::is_scoped_enum_v<mcr::Method>);
     static_assert(std::same_as<decltype(mcr::method::Get), mcr::Method const>);
     static_assert(mcr::method::Get == mcr::Method::Get && mcr::method::Post == mcr::Method::Post && mcr::method::Put == mcr::Method::Put && mcr::method::Head == mcr::Method::Head && mcr::method::Delete == mcr::Method::Delete && mcr::method::Options == mcr::Method::Options && mcr::method::Patch == mcr::Method::Patch);
     static_assert(!RequestAvailable<static_cast<mcr::Method>(-1)>);
     static_assert(!RequestAvailable<static_cast<mcr::Method>(7), mcr::Url>);
     static_assert(!RequestAvailable<static_cast<mcr::Method>(255), mcr::Url, mcr::Body>);
+    static_assert(!AsyncRequestAvailable<static_cast<mcr::Method>(-1)>);
+    static_assert(!AsyncRequestAvailable<static_cast<mcr::Method>(7), mcr::Url>);
+    static_assert(!AsyncRequestAvailable<static_cast<mcr::Method>(255), mcr::Url, mcr::Body>);
 
     auto check(bool condition, std::string_view message) -> bool {
         if (!condition) {
@@ -50,7 +63,7 @@ namespace {
     }
 
     /**
-     * @brief Exercise named request families and the equivalent compile-time synchronous entry.
+     * @brief Exercise named request families and equivalent synchronous and asynchronous templates.
      * @tparam M Public method constant selecting request<M>.
      * @tparam Sync Named synchronous entry.
      * @tparam Async Named asynchronous entry.
@@ -77,22 +90,47 @@ namespace {
         MultiAsync multi_async
     ) -> bool {
         static_assert(RequestAvailable<M> && RequestAvailable<M, mcr::Url, mcr::Body>);
+        static_assert(AsyncRequestAvailable<M> && AsyncRequestAvailable<M, mcr::Url, mcr::Body>);
         auto const args{ options(server) };
         bool passed{ check_response(std::apply(sync, args), method) };
         auto request = [](auto&&... values) {
             return mcr::request<M>(std::forward<decltype(values)>(values)...).value();
         };
+        auto request_async = [](auto&&... values) {
+            return mcr::request_async<M>(std::forward<decltype(values)>(values)...).value().Get().value();
+        };
         auto response{ std::apply(request, args) };
         passed &= check_response(response, method);
         passed &= check_response(std::apply(request, options(server)), method);
+        auto async_response{ std::apply(request_async, args) };
+        passed &= check_response(async_response, method);
+        passed &= check_response(std::apply(request_async, options(server)), method);
         if constexpr (M == mcr::method::Head) {
-            passed &= check(response.header.at("Content-Length") == "0", "HEAD must omit the configured request body as well as the response body");
+            passed &= check(response.header.at("Content-Length") == "0" && async_response.header.at("Content-Length") == "0", "HEAD must omit the configured request body as well as the response body");
         }
         response = mcr::request<M>(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args)).value();
         passed &= check(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text.empty(), std::format("{} must also work without a body option", method));
+        async_response = request_async(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args));
+        passed &= check(!async_response.error && async_response.status_code == 200 && async_response.header.at("X-Method") == method && async_response.text.empty(), "asynchronous templates must preserve methods without a body option");
         auto empty{ mcr::request<M>() };
         auto const named_empty{ sync() };
         passed &= check(empty && bool(empty->error) && empty->status_code == 0 && empty->error.code == named_empty.error.code, "zero options must retain the named entry's missing URL transfer error");
+        auto async_empty{ mcr::request_async<M>().value().Get() };
+        auto const named_async_empty{ asynchronous().Get().value() };
+        passed &= check(async_empty && bool(async_empty->error) && async_empty->status_code == 0 && async_empty->error.code == named_async_empty.error.code, "zero-option asynchronous templates must retain missing URL transfer errors");
+        for (mcr::CprOffT const size : { mcr::CprOffT{ 7 }, mcr::CprOffT{ -1 } }) {
+            auto upload = [&] {
+                return mcr::ReadCallback{ size, [offset = std::size_t{}](char* buffer, std::size_t& length, auto) mutable {
+                                             std::string_view const source{ "payload" };
+                                             length = (std::min)(length, source.size() - offset);
+                                             std::memcpy(buffer, source.data() + offset, length);
+                                             offset += length;
+                                             return true;
+                                         } };
+            };
+            passed &= check_response(request(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method);
+            passed &= check_response(request_async(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method);
+        }
         passed &= check_response(std::apply(asynchronous, args).Get().value(), method);
         auto continuation{ [&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  return check_response(response, method); } };
         passed &= std::apply([&](auto const&... values) { return callback(continuation, values...); }, args).Get();
@@ -126,6 +164,11 @@ namespace {
         return passed;
     }
 
+    /**
+     * @brief Check header merging and owned or explicitly borrowed queued request options.
+     * @param server Local HTTP fixture.
+     * @return Whether named and template entries preserve ownership and merge rules.
+     */
     auto check_headers_and_ownership(HttpServer const& server) -> bool {
         mcr::Header first{
             { "X-Custom", "first" },
@@ -154,17 +197,39 @@ namespace {
         pool->Wait();
         (void)pool->Pause();
         mcr::AsyncResponse copied;
+        mcr::AsyncResponse template_copied;
+        mcr::AsyncResponse template_borrowed;
+        mcr::Body borrowed{ "before" };
+        std::string bytes{ "view" };
+        auto view{ mcr::request_async<mcr::method::Post>(server.Url("/echo"), mcr::options::Proxies{ { "http", "" } }, mcr::BodyView{ std::string_view{ bytes } }).value() };
         std::vector<mcr::utils::AsyncWrapper<mcr::Result<mcr::Response>, true>> batch;
         {
             auto args{ options(server) };
             copied = std::apply([&](auto&... values) { return mcr::PostAsync(values..., first).value(); }, args);
+            template_copied = std::apply([&](auto&... values) {
+                return mcr::request_async<mcr::method::Post>(values..., first, second, mcr::Header{ { "X-Custom", "last" } }, mcr::Header{}).value();
+            },
+                                         args);
+            template_borrowed = std::apply([&](auto&... values) {
+                return mcr::request_async<mcr::method::Post>(values..., std::ref(borrowed), std::ref(first), std::cref(second), mcr::Header{}).value();
+            },
+                                           args);
             batch = mcr::MultiPostAsync(args).value();
             std::get<mcr::Body>(args) = mcr::Body{ "changed" };
+            std::get<mcr::Url>(args) = server.Url("/error");
             first["X-Custom"] = "changed";
+            first["X-Empty"] = "borrowed";
         }
+        borrowed = mcr::Body{ "borrowed after submission" };
+        bytes[0] = 'V';
         (void)pool->Resume();
         response = copied.Get().value();
         passed &= check(response.text == "payload" && response.header["X-Request-X-Custom"] == "first" && batch[0].Get().value().text == "payload", "queued async calls must own copies of ordinary lvalue options and tuples");
+        response = template_copied.Get().value();
+        passed &= check(!response.error && response.status_code == 200 && response.text == "payload" && response.header["X-Request-X-Custom"] == "last" && response.header["X-Request-X-Empty"] == "preserved", "request_async must own lvalue options at submission and merge copied headers in order");
+        response = template_borrowed.Get().value();
+        passed &= check(response.text == borrowed.Str() && response.header["X-Request-X-Custom"] == "second" && response.header["X-Request-X-Empty"] == "borrowed", "request_async must retain explicit reference wrappers and apply the last body option");
+        passed &= check(view.Get().value().text == "View", "request_async must preserve BodyView's borrowed bytes");
         return passed;
     }
 
@@ -200,13 +265,18 @@ namespace {
         passed &= check(!response.error && response.text == "last" && movable.Str() == url.Str() && body.Str() == "last", "request<M> must forward noncopyable lvalue options without taking ownership");
         response = mcr::request<mcr::method::Post>(MoveOnlyUrl{ url }, proxies, timeout, mcr::Body{ "discarded" }, mcr::Body{ "last" }).value();
         passed &= check(!response.error && response.text == "last", "request<M> must forward noncopyable rvalues and preserve content option order");
+        response = mcr::request_async<mcr::method::Post>(MoveOnlyUrl{ url }, proxies, timeout, mcr::Body{ "discarded" }, mcr::Body{ "last" }).value().Get().value();
+        passed &= check(!response.error && response.text == "last", "request_async must own noncopyable rvalues and preserve content option order");
+        std::string const bytes{ "view\0bytes", 10 };
+        response = mcr::request<mcr::method::Post>(url, proxies, timeout, mcr::BodyView{ std::string_view{ bytes } }).value();
+        passed &= check(!response.error && response.text == bytes, "request must preserve binary borrowed body views");
         return passed;
     }
 
     /**
      * @brief Keep configuration errors, transfer errors and HTTP failures distinct.
      * @param server Local HTTP fixture.
-     * @return Whether request<M> retains the named entries' error semantics.
+     * @return Whether template entries retain the named entries' error semantics.
      */
     auto check_request_errors(HttpServer const& server) -> bool {
         auto const invalid{ mcr::options::HttpVersion{ static_cast<mcr::options::HttpVersionCode>(255) } };
@@ -214,16 +284,24 @@ namespace {
         auto rejected{ mcr::request<mcr::method::Get>(server.Url(), invalid) };
         auto named_rejected{ mcr::Get(server.Url(), invalid) };
         bool passed{ check(!rejected && !named_rejected && rejected.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT && rejected.error().code == named_rejected.error().code && server.Connections() == connections, "request<M> must return configuration errors through Result without sending a request") };
+        auto pending{ mcr::request_async<mcr::method::Get>(server.Url(), invalid) };
+        passed &= check(pending.has_value(), "request_async must report successful submission separately from configuration");
+        auto async_rejected{ pending.value().Get() };
+        passed &= check(!async_rejected && async_rejected.error().code == rejected.error().code && server.Connections() == connections, "asynchronous configuration errors must appear in the future's Result without sending a request");
 
         mcr::Url const unsupported{ "invalid-scheme://localhost/" };
         auto transfer{ mcr::request<mcr::method::Get>(unsupported) };
         auto named_transfer{ mcr::Get(unsupported) };
         passed &= check(transfer && named_transfer && transfer->error.code == mcr::ErrorCode::UNSUPPORTED_PROTOCOL && transfer->error.code == named_transfer->error.code && transfer->status_code == 0, "request<M> must retain transfer errors in Response::error");
+        auto async_transfer{ mcr::request_async<mcr::method::Get>(unsupported).value().Get() };
+        passed &= check(async_transfer && async_transfer->error.code == transfer->error.code && async_transfer->status_code == 0, "request_async must retain transfer errors in Response::error");
 
         auto const args{ options(server, "/error") };
         auto response{ std::apply([](auto const&... values) { return mcr::request<mcr::method::Get>(values...).value(); }, args) };
         auto const named_response{ std::apply([](auto const&... values) { return mcr::Get(values...).value(); }, args) };
         passed &= check(!response.error && response.status_code == 404 && response.status_code == named_response.status_code && response.text == named_response.text, "request<M> must return HTTP failures as responses with their status codes");
+        auto async_response{ std::apply([](auto const&... values) { return mcr::request_async<mcr::method::Get>(values...).value().Get().value(); }, args) };
+        passed &= check(!async_response.error && async_response.status_code == response.status_code && async_response.text == response.text, "request_async must return HTTP failures as ordinary responses");
         response = std::apply([](auto const&... values) { return mcr::request<mcr::method::Head>(values...).value(); }, args);
         passed &= check(!response.error && response.status_code == 404 && response.header.at("X-Method") == "HEAD" && response.text.empty(), "HEAD must preserve HTTP failures without reading a response body");
         return passed;
@@ -403,6 +481,8 @@ auto main() -> int {
         passed = check(false, error.what());
     }
     mcr::Async::Cleanup();
+    auto rejected{ mcr::request_async<mcr::method::Get>() };
+    passed &= check(!rejected && rejected.error().code == mcr::ErrorCode::FAILED_INIT, "request_async submission failures must be returned by the outer Result");
     curl_global_cleanup();
     return passed ? 0 : 1;
 }

@@ -10,7 +10,7 @@ import std;
 
 export namespace mcr {
     /**
-     * @brief HTTP methods supported by synchronous one-shot requests.
+     * @brief HTTP methods supported by one-shot requests.
      */
     enum class Method {
         Get,     ///< GET request.
@@ -49,27 +49,35 @@ namespace mcr::detail {
         M == Method::Patch;
 
     /**
-     * @brief Select the existing synchronous Session method at compile time.
+     * @brief Pair a Session execution method with its nonblocking preparation method.
+     */
+    struct RequestMethods {
+        Result<Response> (Session::*action)(); ///< Synchronous execution shared with thread-pool requests.
+        Result<void> (Session::*prepare)();    ///< Preparation for curl multi coroutine transfers.
+    };
+
+    /**
+     * @brief Select the existing Session execution and preparation methods at compile time.
      * @tparam M Supported HTTP method.
-     * @return Session member function implementing the method's complete behavior.
+     * @return Session methods implementing the method's complete behavior.
      */
     template <Method M>
     requires SupportedMethod<M>
-    constexpr auto request_action() {
+    constexpr auto request_methods() -> RequestMethods {
         if constexpr (M == Method::Get) {
-            return &Session::Get;
+            return { &Session::Get, &Session::PrepareGet };
         } else if constexpr (M == Method::Post) {
-            return &Session::Post;
+            return { &Session::Post, &Session::PreparePost };
         } else if constexpr (M == Method::Put) {
-            return &Session::Put;
+            return { &Session::Put, &Session::PreparePut };
         } else if constexpr (M == Method::Head) {
-            return &Session::Head;
+            return { &Session::Head, &Session::PrepareHead };
         } else if constexpr (M == Method::Delete) {
-            return &Session::Delete;
+            return { &Session::Delete, &Session::PrepareDelete };
         } else if constexpr (M == Method::Options) {
-            return &Session::Options;
+            return { &Session::Options, &Session::PrepareOptions };
         } else if constexpr (M == Method::Patch) {
-            return &Session::Patch;
+            return { &Session::Patch, &Session::PreparePatch };
         }
     }
 
@@ -346,7 +354,35 @@ export namespace mcr {
     template <Method M, typename... Ts>
     requires detail::SupportedMethod<M>
     [[nodiscard]] auto request(Ts&&... options) -> Result<Response> {
-        return detail::request<detail::request_action<M>()>(std::forward<Ts>(options)...);
+        return detail::request<detail::request_methods<M>().action>(std::forward<Ts>(options)...);
+    }
+
+    /**
+     * @brief Submit one request with a compile-time HTTP method to the global thread pool.
+     * @tparam M Supported HTTP method; other enum values are rejected by constraints.
+     * @tparam Ts Option types.
+     * @param options Options copied or moved into the task at this call.
+     * @return Submission result containing a future of Result<Response>.
+     * @note Views and explicit reference wrappers remain borrowed; AsyncResponse is not cancellable.
+     */
+    template <Method M, typename... Ts>
+    requires detail::SupportedMethod<M>
+    [[nodiscard]] auto request_async(Ts... options) -> Result<AsyncResponse> {
+        return detail::request_async<detail::request_methods<M>().action>(std::move(options)...);
+    }
+
+    /**
+     * @brief Create a lazy request with a compile-time HTTP method, driven by curl multi.
+     * @tparam M Supported HTTP method; other enum values are rejected by constraints.
+     * @tparam Ts Option types.
+     * @param options Options copied or moved now; borrowed data must outlive the transfer.
+     * @return Single-consumer task yielding Result<Response>; cancellation uses ABORTED_BY_CALLBACK.
+     * @note The ordinary wrapper owns options before suspension; configuration starts with the task.
+     */
+    template <Method M, typename... Ts>
+    requires detail::SupportedMethod<M>
+    [[nodiscard]] auto request_coro(Ts... options) -> Task<Result<Response>> {
+        return detail::request_coro<detail::request_methods<M>().prepare>(std::tuple{ std::move(options)... });
     }
 
     /**

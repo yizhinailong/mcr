@@ -12,6 +12,41 @@ namespace {
     using namespace std::chrono_literals;
     using mcr::test::HttpServer;
 
+    /**
+     * @brief Check coroutine template constraints and its public result through import mcr.
+     * @tparam M HTTP method, including deliberately invalid enum values.
+     * @tparam Ts Option types.
+     */
+    template <mcr::Method M, typename... Ts>
+    concept CoroRequestAvailable = requires(Ts... values) {
+        { mcr::request_coro<M>(std::move(values)...) } -> std::same_as<mcr::Task<mcr::Result<mcr::Response>>>;
+    };
+
+    static_assert(!CoroRequestAvailable<static_cast<mcr::Method>(-1)>);
+    static_assert(!CoroRequestAvailable<static_cast<mcr::Method>(7), mcr::Url>);
+    static_assert(!CoroRequestAvailable<static_cast<mcr::Method>(255), mcr::Url, mcr::Body>);
+
+    /**
+     * @brief Require coroutine wrappers to move an ordinary option into their owned tuple.
+     */
+    struct MoveOnlyUrl : mcr::Url {
+        /**
+         * @brief Own URL bytes before moving the option into a task.
+         * @param url URL to move into the option.
+         */
+        explicit MoveOnlyUrl(mcr::Url url) : mcr::Url{ std::move(url) } {}
+
+        /**
+         * @brief Prevent copying this option.
+         */
+        MoveOnlyUrl(MoveOnlyUrl const&) = delete;
+
+        /**
+         * @brief Transfer the owned URL to the coroutine frame.
+         */
+        MoveOnlyUrl(MoveOnlyUrl&&) = default;
+    };
+
     auto require(bool value, std::string_view message) -> void {
         if (!value) {
             throw std::runtime_error{ std::string{ message } };
@@ -25,41 +60,137 @@ namespace {
         };
     }
 
+    /**
+     * @brief Exercise the template entry throughout existing runtime and cancellation tests.
+     * @tparam Options Additional request option types.
+     * @param server Local HTTP fixture.
+     * @param path Fixture endpoint.
+     * @param options Additional owned options.
+     * @return Lazy GET task.
+     */
     template <typename... Options>
     auto get(
         HttpServer const& server,
         std::string_view path,
         Options... options
     ) -> mcr::Task<mcr::Result<mcr::Response>> {
-        return mcr::GetCoro(server.Url(path), proxies(), mcr::options::Timeout{ 3s }, std::move(options)...);
+        return mcr::request_coro<mcr::method::Get>(server.Url(path), proxies(), mcr::options::Timeout{ 3s }, std::move(options)...);
     }
 
-    auto methods(HttpServer const& server) -> void {
-        auto args = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
-        auto check = [](mcr::Task<mcr::Result<mcr::Response>> task, std::string_view method) {
+    /**
+     * @brief Compare a coroutine template with its named entry, including empty and upload options.
+     * @tparam M Supported HTTP method.
+     * @param server Local HTTP fixture.
+     * @param method Expected HTTP method.
+     * @param named Named coroutine request with a payload body.
+     */
+    template <mcr::Method M>
+    auto check_method(
+        HttpServer const& server,
+        std::string_view method,
+        mcr::Task<mcr::Result<mcr::Response>> named
+    ) -> void {
+        static_assert(CoroRequestAvailable<M> && CoroRequestAvailable<M, mcr::Url, mcr::Body>);
+        auto check = [method](mcr::Task<mcr::Result<mcr::Response>> task) {
             auto response = mcr::sync_wait(std::move(task)).value();
             require(!response.error && response.status_code == 200 && response.header.at("X-Method") == method, "coroutine requests must preserve their HTTP method");
             require(response.text == (method == "HEAD" ? "" : "payload"), "coroutine requests must preserve body semantics");
+            if constexpr (M == mcr::method::Head) {
+                require(response.header.at("Content-Length") == "0", "HEAD coroutine requests must also omit the configured request body");
+            }
         };
-        check(std::apply([](auto... values) { return mcr::GetCoro(std::move(values)...); }, args), "GET");
-        check(std::apply([](auto... values) { return mcr::PostCoro(std::move(values)...); }, args), "POST");
-        check(std::apply([](auto... values) { return mcr::PutCoro(std::move(values)...); }, args), "PUT");
-        check(std::apply([](auto... values) { return mcr::HeadCoro(std::move(values)...); }, args), "HEAD");
-        check(std::apply([](auto... values) { return mcr::DeleteCoro(std::move(values)...); }, args), "DELETE");
-        check(std::apply([](auto... values) { return mcr::OptionsCoro(std::move(values)...); }, args), "OPTIONS");
-        check(std::apply([](auto... values) { return mcr::PatchCoro(std::move(values)...); }, args), "PATCH");
+        check(std::move(named));
+        auto args = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
+        auto request = [](auto&&... values) {
+            return mcr::request_coro<M>(std::forward<decltype(values)>(values)...);
+        };
+        check(std::apply(request, args));
+        check(std::apply(request, std::move(args)));
+        auto empty = mcr::sync_wait(mcr::request_coro<M>());
+        require(empty && bool(empty->error) && empty->status_code == 0, "zero coroutine options must report a missing URL as a transfer error");
+        auto response = mcr::sync_wait(request(server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s })).value();
+        require(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text.empty(), "coroutine templates must also work without a body option");
+        for (mcr::CprOffT const size : { mcr::CprOffT{ 7 }, mcr::CprOffT{ -1 } }) {
+            mcr::ReadCallback upload{ size, [offset = std::size_t{}](char* buffer, std::size_t& length, auto) mutable {
+                                         std::string_view const source{ "payload" };
+                                         length = (std::min)(length, source.size() - offset);
+                                         std::memcpy(buffer, source.data() + offset, length);
+                                         offset += length;
+                                         return true;
+                                     } };
+            check(request(server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, std::move(upload)));
+        }
     }
 
+    /**
+     * @brief Exercise all seven named and template coroutine method families.
+     * @param server Local HTTP fixture.
+     */
+    auto methods(HttpServer const& server) -> void {
+        auto args = std::tuple{ server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "payload" } };
+        check_method<mcr::method::Get>(server, "GET", std::apply([](auto... values) { return mcr::GetCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Post>(server, "POST", std::apply([](auto... values) { return mcr::PostCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Put>(server, "PUT", std::apply([](auto... values) { return mcr::PutCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Head>(server, "HEAD", std::apply([](auto... values) { return mcr::HeadCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Delete>(server, "DELETE", std::apply([](auto... values) { return mcr::DeleteCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Options>(server, "OPTIONS", std::apply([](auto... values) { return mcr::OptionsCoro(std::move(values)...); }, args));
+        check_method<mcr::method::Patch>(server, "PATCH", std::apply([](auto... values) { return mcr::PatchCoro(std::move(values)...); }, args));
+    }
+
+    /**
+     * @brief Check named and template coroutine ownership before initial suspension.
+     * @param server Local HTTP fixture.
+     */
     auto ownership(HttpServer const& server) -> void {
         mcr::Task<mcr::Result<mcr::Response>> task;
+        mcr::Task<mcr::Result<mcr::Response>> template_task;
+        auto const before = server.Connections();
         {
+            auto url = server.Url("/echo");
             mcr::Body body{ "owned before suspension" };
+            mcr::Header header{ { "X-Custom", "one" }, { "X-Empty", "preserved" } };
+            mcr::Header const second{ { "x-custom", "two" } };
             task = mcr::PostCoro(server.Url("/echo"), proxies(), body, mcr::Header{ { "X-Custom", "one" } }, mcr::Header{ { "X-Empty", "two" } });
+            template_task = mcr::request_coro<mcr::method::Post>(url, proxies(), mcr::options::Timeout{ 3s }, mcr::Body{ "discarded" }, body, header, second, mcr::Header{ { "X-Custom", "last" } }, mcr::Header{});
+            require(server.Connections() == before, "creating a coroutine template must not submit network I/O");
+            url = server.Url("/error");
             body = mcr::Body{ "changed" };
+            header["X-Empty"] = "changed";
         }
         auto response = mcr::sync_wait(std::move(task)).value();
         require(response.text == "owned before suspension", "request options must be owned before initial suspension");
         require(response.header.at("X-Request-X-Custom") == "one" && response.header.at("X-Request-X-Empty") == "two", "header arguments must be merged");
+        response = mcr::sync_wait(std::move(template_task)).value();
+        require(!response.error && response.status_code == 200 && response.text == "owned before suspension", "coroutine templates must copy lvalues into the cold frame before their sources change or expire");
+        require(response.header.at("X-Request-X-Custom") == "last" && response.header.at("X-Request-X-Empty") == "preserved", "coroutine templates must merge all copied header arguments in order");
+
+        auto const url = server.Url("/echo");
+        auto const proxy = proxies();
+        mcr::Body body{ "before" };
+        mcr::Header first{ { "X-Custom", "first" }, { "X-Empty", "preserved" } };
+        mcr::Header const second{ { "x-custom", "second" } };
+        auto borrowed = mcr::request_coro<mcr::method::Post>(std::cref(url), std::cref(proxy), mcr::Body{ "discarded" }, std::ref(body), std::ref(first), std::cref(second), mcr::Header{});
+        body = mcr::Body{ "borrowed after creation" };
+        first["X-Empty"] = "changed";
+        response = mcr::sync_wait(std::move(borrowed)).value();
+        require(response.text == body.Str() && response.header.at("X-Request-X-Custom") == "second" && response.header.at("X-Request-X-Empty") == "changed", "coroutine reference wrappers must borrow options until first startup and retain header merging");
+
+        std::string bytes{ "view\0bytes", 10 };
+        auto view = mcr::request_coro<mcr::method::Post>(url, proxy, mcr::BodyView{ std::string_view{ bytes } });
+        bytes[0] = 'V';
+        response = mcr::sync_wait(std::move(view)).value();
+        require(response.text == bytes, "coroutine BodyView must borrow the original binary bytes through the transfer");
+        auto moved = mcr::request_coro<mcr::method::Post>(MoveOnlyUrl{ url }, proxy, mcr::Body{ "moved" });
+        require(mcr::sync_wait(std::move(moved)).value().text == "moved", "coroutine templates must accept and own noncopyable rvalue options");
+
+        auto retained = std::make_shared<std::atomic_int>(0);
+        std::weak_ptr<std::atomic_int> released = retained;
+        auto const idle_connections = server.Connections();
+        {
+            auto cold = mcr::request_coro<mcr::method::Get>(server.Url(), proxy, mcr::HeaderCallback{ [owned = std::move(retained)](std::string_view, std::intptr_t) { ++*owned; return true; } });
+            require(!released.expired() && released.lock()->load() == 0 && server.Connections() == idle_connections, "a cold template task must own options without invoking callbacks");
+        }
+        require(released.expired() && server.Connections() == idle_connections, "discarding a cold coroutine template must release options without sending a request");
     }
 
     auto sequential(HttpServer const& server) -> mcr::Task<int> {
@@ -246,7 +377,19 @@ namespace {
         }
     }
 
+    /**
+     * @brief Preserve configuration, preparation, transfer and HTTP error layers.
+     * @param server Local HTTP fixture.
+     */
     auto errors(HttpServer const& server) -> void {
+        auto const before = server.Connections();
+        auto invalid = mcr::request_coro<mcr::method::Get>(server.Url(), mcr::options::HttpVersion{ static_cast<mcr::options::HttpVersionCode>(255) });
+        require(server.Connections() == before, "cold tasks with invalid options must defer configuration until startup");
+        auto rejected = mcr::sync_wait(std::move(invalid));
+        require(!rejected && rejected.error().code == mcr::ErrorCode::BAD_FUNCTION_ARGUMENT && server.Connections() == before, "coroutine template configuration errors must use Result without contacting the server");
+        auto missing_url = mcr::sync_wait(mcr::request_coro<mcr::method::Get>());
+        auto named_missing_url = mcr::sync_wait(mcr::GetCoro());
+        require(missing_url && named_missing_url && missing_url->error.code == named_missing_url->error.code, "zero-option coroutine templates must match the named entry's error");
         require(mcr::sync_wait(get(server, "/slow", mcr::options::Timeout{ 20ms })).value().error.code == mcr::ErrorCode::OPERATION_TIMEDOUT, "timeouts must remain response transport errors");
         auto http_error = mcr::sync_wait(get(server, "/error")).value();
         require(http_error.status_code == 404 && !http_error.error, "HTTP errors must remain ordinary responses");
@@ -262,6 +405,8 @@ namespace {
         }
         auto preparation = mcr::sync_wait(mcr::PostCoro(server.Url("/echo"), proxies(), mcr::Multipart{ { "missing", mcr::File{ "mcr_nonexistent_coro_upload_812905" } } }));
         require(!preparation && preparation.error().code == mcr::ErrorCode::READ_ERROR, "preparation failures must complete the task with an error");
+        auto template_preparation = mcr::sync_wait(mcr::request_coro<mcr::method::Post>(server.Url("/echo"), proxies(), mcr::Multipart{ { "missing", mcr::File{ "mcr_nonexistent_coro_upload_812905" } } }));
+        require(!template_preparation && template_preparation.error().code == preparation.error().code, "coroutine templates must propagate Prepare method failures through Result");
         require(mcr::sync_wait(get(server, "/hello")).value().status_code == 200, "one failed transfer must not stop the runtime");
     }
 

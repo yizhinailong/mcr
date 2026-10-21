@@ -3,7 +3,7 @@
 [文档索引](../README.md) · [项目首页](../../README.md)
 
 `import mcr;` 提供 `mcr::Task<T>`、`mcr::sync_wait`、`mcr::Coro`、
-`mcr::this_coro::stop_token`，以及
+`mcr::this_coro::stop_token`、`mcr::request_coro<M>`，以及
 `GetCoro` / `PostCoro` / `PutCoro` / `HeadCoro` / `DeleteCoro` /
 `OptionsCoro` / `PatchCoro` / `DownloadCoro`。
 
@@ -13,12 +13,27 @@
 
 ## 基本用法
 
+统一模板入口使用强类型 `mcr::Method` 在编译期选择方法。
+`mcr::method::Get`、`Post`、`Put`、`Head`、`Delete`、`Options`、`Patch`
+是该命名空间内的七个 `inline constexpr Method` 标签；也可直接使用 `Method::Get` 等枚举值。
+`request_coro<method::Post>(...)` 对应 `PostCoro(...)`，其余方法同样对应各自的 `*Coro`
+入口。三个模板入口均通过约束拒绝其他枚举值，包括 `static_cast<Method>(255)`。
+
+| 模板入口 | 返回值 | 执行时机 |
+| --- | --- | --- |
+| `request<M>(Ts&&...)` | `Result<Response>` | 同步转发选项，在返回前完成请求 |
+| `request_async<M>(Ts...)` | `Result<AsyncResponse>` | 调用时持有选项并提交至全局线程池 |
+| `request_coro<M>(Ts...)` | `Task<Result<Response>>` | 调用时持有选项，启动任务时配置并提交至 curl multi |
+
+完整方法对应关系和同步、异步错误检查见[请求 API](../api.md#编译期方法请求)。
+这些模板入口是 mcr 的扩展，现有命名入口的签名和行为保持一致。
+
 ```cpp
 import std;
 import mcr;
 
 auto fetch_text(mcr::Url url) -> mcr::Task<mcr::Result<std::string>> {
-    auto response = co_await mcr::GetCoro(
+    auto response = co_await mcr::request_coro<mcr::method::Get>(
         std::move(url), mcr::options::Timeout{ std::chrono::seconds{ 5 } }
     );
     if (!response) {
@@ -42,10 +57,27 @@ HTTP 方法和选项沿用同步 API，包括 Header 合并、Body / Payload、
 代理、TLS、重定向、回调和响应解析。每次调用拥有自己的 Session。
 这批 API 提供一次性请求；Session 的同步拦截器不能直接作为协程调度器使用。
 
-`GetCoro` 等调用时立即复制普通左值选项、移动右值选项，首次启动时才配置并提交请求。
+`request_coro<M>` 和 `GetCoro` 等调用时立即复制普通左值选项、移动右值选项，
+因此普通原对象随后修改或离开作用域不影响请求。公共入口是普通包装函数，先构造持有
+选项的 tuple，再交给内部惰性协程帧；首次启动时才配置并提交请求。
+它复用对应的 `Session::Prepare*`，直接通过 curl multi 传输。
 `BodyView`、Multipart 中的 Buffer、`std::ref` / `std::cref`、回调捕获对象和
 ConnectionPool 仍有借用语义，必须存活到请求结束。对用户自行编写的协程，建议像
 示例一样按值接收需拥有的数据；协程的引用参数不会自动延长被引用对象的生命周期。
+
+以方法作为参数的泛型封装也可以直接使用普通包装函数，确保调用时取得选项所有权：
+
+```cpp
+template <mcr::Method M, typename... Ts>
+[[nodiscard]] auto send_coro(Ts... options) -> mcr::Task<mcr::Result<mcr::Response>> {
+    return mcr::request_coro<M>(std::move(options)...);
+}
+
+// 在函数内创建惰性任务；之后可 co_await 或交给 sync_wait。
+auto task = send_coro<mcr::method::Patch>(
+    mcr::Url{ "http://127.0.0.1:8080/echo" }, mcr::Body{ "updated" }
+);
+```
 
 ## Task 的启动、等待与所有权
 
@@ -70,8 +102,8 @@ ConnectionPool 仍有借用语义，必须存活到请求结束。对用户自�
 可以先启动多个任务，再依次取结果；仅创建惰性任务不会开始并发请求：
 
 ```cpp
-auto first = mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/first" });
-auto second = mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/second" });
+auto first = mcr::request_coro<mcr::method::Get>(mcr::Url{ "http://127.0.0.1:8080/first" });
+auto second = mcr::request_coro<mcr::method::Get>(mcr::Url{ "http://127.0.0.1:8080/second" });
 first.Start();
 second.Start();
 
@@ -130,11 +162,13 @@ I/O 和后续处理线程中调用 `sync_wait` 仍抛出 `std::logic_error`；
 ## 取消与错误
 
 `Task::Cancel()` 发出协作取消信号，第一次返回 `true`，重复请求返回 `false`。
+`request_coro<M>` 返回的 Task 沿用全部单消费者和取消约定；`request_async<M>` 返回的
+普通 `AsyncResponse` 不可取消，其生命周期由[线程池异步约定](../session/async.md)说明。
 `GetStopSource()` 返回可复制的 `std::stop_source`，可以在 Task 移动给消费者之后、
 从其他线程请求取消。mcr Task 等待子 Task 时自动传播父任务的取消信号：
 
 ```cpp
-auto request = mcr::GetCoro(mcr::Url{ "http://127.0.0.1:8080/stream" });
+auto request = mcr::request_coro<mcr::method::Get>(mcr::Url{ "http://127.0.0.1:8080/stream" });
 auto cancellation = request.GetStopSource();
 request.Start();
 cancellation.request_stop();
@@ -181,7 +215,8 @@ HTTP 协程返回 `Task<Result<Response>>`。选项配置、请求准备及 curl
 HTTP API、选项和错误语义参考
 [cpr api.h](https://github.com/libcpr/cpr/blob/master/include/cpr/api.h) 和
 [cpr 异步测试](https://github.com/libcpr/cpr/blob/master/test/async_tests.cpp)。
-`Task`、`*Coro`、停止令牌传播和独立的 multi 运行时是 mcr 的扩展，
+`request<M>` / `request_async<M>` / `request_coro<M>`、`Task`、`*Coro`、
+停止令牌传播和独立的 multi 运行时是 mcr 的扩展，
 与 cpr 的线程池 / future 异步封装不同。底层遵循
 [libcurl multi](https://curl.se/libcurl/c/libcurl-multi.html)、
 [poll](https://curl.se/libcurl/c/curl_multi_poll.html) 和
@@ -195,6 +230,7 @@ mcr 使用 `Coro::Spawn` 返回可消费的 Task，通过 `Schedule` 显式调�
 这些接口不依赖 Asio 的完成令牌、executor 或 `awaitable_thread` 帧栈。
 
 `tests/test_task.cpp` 覆盖惰性执行、所有权、异常、父子取消和完成竞争；
-`tests/test_coro.cpp` 使用本地 HTTP 测试服务 验证各方法、并发传输、线程分工、
+`tests/test_coro.cpp` 使用本地 HTTP 测试服务验证七种模板和命名方法、公开返回类型、
+无效方法约束、零选项、正文与上传、选项所有权及借用、惰性执行、并发传输、线程分工、
 排队启动、协作调度、取消、下载，以及关闭时的活动请求、排队请求和已接受的恢复工作。
 运行 `mcpp test` 验证整个库。
