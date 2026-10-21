@@ -244,6 +244,40 @@ namespace {
         return condition;
     }
 
+    /**
+     * @brief Preserve cookie state and completed HTTP data when curl metadata allocation fails.
+     */
+    auto check_cookie_failures() -> bool {
+        HttpServer server;
+        bool passed{ true };
+        {
+            auto session{ mcr::Session::Create().value() };
+            session->SetUrl(mcr::Url{ server.Url() }).value();
+            session->SetProxies(mcr::options::Proxies{ { "http", "" }, { "no_proxy", "*" } }).value();
+            session->SetTimeout(mcr::options::Timeout{ 3000 }).value();
+            auto* handle{ session->GetCurlHolder()->handle };
+            passed &= check(curl_easy_setopt(handle, CURLOPT_COOKIELIST, "127.0.0.1\tFALSE\t/\tFALSE\t0\tstored\tyes") == CURLE_OK, "the cookie fixture must populate curl's engine");
+            {
+                FailAfterAllocations fail{ 0 };
+                auto result{ session->SetCookies(mcr::Cookies{ { "replacement", "value" } }) };
+                passed &= check(!result && result.error().code == mcr::ErrorCode::OUT_OF_MEMORY, "failed cookie encoding must report allocation failure");
+            }
+            curl_slist* raw{};
+            passed &= check(curl_easy_getinfo(handle, CURLINFO_COOKIELIST, &raw) == CURLE_OK && raw && std::string_view{ raw->data }.ends_with("\tstored\tyes"), "failed replacement must preserve the existing cookie engine");
+            curl_slist_free_all(raw);
+            session->PrepareGet().value();
+            auto const result{ curl_easy_perform(handle) };
+            {
+                FailAfterAllocations fail{ 0 };
+                auto response{ session->Complete(result).value() };
+                passed &= check(!response.error && response.status_code == 200 && response.text == "Hello pool!" && response.cookies.begin() == response.cookies.end(), "failed cookie snapshot allocation must preserve status and body");
+            }
+            passed &= check(session->Get().value().cookies["stored"].GetValue() == "yes", "metadata failure must leave the engine usable for the next response");
+        }
+        server.Stop();
+        return passed;
+    }
+
     auto check_failures() -> bool {
         auto const before{ g_live_allocations.load() };
         g_allocation_attempts.store(0);
@@ -415,6 +449,7 @@ int main() {
     bool passed{ true };
     try {
         passed &= check_failures();
+        passed &= check_cookie_failures();
         passed &= check_attached_lifetime();
         passed &= check_session_lifetime();
         passed &= check_deferred_cleanup();

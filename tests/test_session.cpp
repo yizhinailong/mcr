@@ -273,6 +273,38 @@ namespace {
     }
 
     /**
+     * @brief Observe curl diagnostics without relying on stderr or private session state.
+     */
+    auto check_verbose(HttpServer const& server) -> bool {
+        auto session{ mcr::Session::Create().value() };
+        configure(*session, server);
+        auto verbose = [&] {
+            session->PrepareGet().value();
+            int count{};
+            auto* handle{ session->GetCurlHolder()->handle };
+            curl_debug_callback observer{ +[](CURL*, curl_infotype, char*, std::size_t, void* user) noexcept -> int {
+                ++*static_cast<int*>(user);
+                return 0;
+            } };
+            bool const configured{ curl_easy_setopt(handle, CURLOPT_DEBUGFUNCTION, observer) == CURLE_OK && curl_easy_setopt(handle, CURLOPT_DEBUGDATA, &count) == CURLE_OK };
+            auto response{ session->Complete(curl_easy_perform(handle)).value() };
+            return configured && !response.error && count > 0;
+        };
+        bool passed{ check(!verbose(), "diagnostics must be disabled initially") };
+        session->SetVerbose(mcr::options::Verbose{ true }).value();
+        session->SetDebugCallback({}).value();
+        passed &= check(verbose(), "clearing an observer must preserve explicit verbose output");
+        session->SetVerbose(mcr::options::Verbose{ false }).value();
+        passed &= check(!verbose(), "disabling explicit verbosity without an observer must stop diagnostics");
+        session->SetDebugCallback(mcr::DebugCallback{ [](auto, auto, auto) {} }).value();
+        session->SetVerbose(mcr::options::Verbose{ false }).value();
+        passed &= check(verbose(), "an installed observer must continue to receive diagnostics");
+        session->SetDebugCallback({}).value();
+        passed &= check(!verbose(), "clearing the sole diagnostic observer must stop diagnostics");
+        return passed;
+    }
+
+    /**
      * @brief Remove only this test's temporary file.
      */
     struct TempFile {
@@ -691,6 +723,7 @@ auto main() -> int {
         passed &= check_options(server);
         passed &= check_redirects_and_failures(server);
         passed &= check_callbacks(server);
+        passed &= check_verbose(server);
         passed &= check_multipart_files(server);
         passed &= check_pool_and_resolve(server);
         passed &= check_downloads_and_async(server);

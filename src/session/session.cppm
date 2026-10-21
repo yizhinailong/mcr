@@ -188,6 +188,7 @@ export namespace mcr {
         WriteCallback m_write;                                    ///< Optional response consumer.
         ProgressCallback m_progress;                              ///< Optional progress observer.
         DebugCallback m_debug;                                    ///< Optional diagnostics observer.
+        bool m_verbose{};                                         ///< Explicit diagnostics preference independent of the observer.
         ServerSentEventCallback m_sse;                            ///< Optional event consumer.
         ServerSentEventParser m_sse_parser;                       ///< Parser reset before every transfer.
         std::shared_ptr<std::atomic_bool> m_cancellation;         ///< Shared cancellation flag.
@@ -561,12 +562,12 @@ export namespace mcr {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            if (auto status = setOption(CURLOPT_COOKIELIST, "ALL"); !status) {
-                return std::unexpected{ std::move(status.error()) };
-            }
             auto encoded = cookies.GetEncoded(*m_curl);
             if (!encoded) {
                 return std::unexpected{ std::move(encoded.error()) };
+            }
+            if (auto status = setOption(CURLOPT_COOKIELIST, "ALL"); !status) {
+                return std::unexpected{ std::move(status.error()) };
             }
             if (auto status = setOption(CURLOPT_COOKIE, encoded->c_str()); !status) {
                 return std::unexpected{ std::move(status.error()) };
@@ -693,10 +694,11 @@ export namespace mcr {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            m_debug = debug;
-            if (auto status = SetVerbose(options::Verbose{ bool(m_debug.callback) }); !status) {
+            auto pending{ debug };
+            if (auto status = setOption(CURLOPT_VERBOSE, m_verbose || pending.callback ? 1L : 0L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
+            m_debug = std::move(pending);
 
             return {};
         }
@@ -722,9 +724,10 @@ export namespace mcr {
             if (auto status = checkMutable(); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
-            if (auto status = setOption(CURLOPT_VERBOSE, verbose.verbose ? 1L : 0L); !status) {
+            if (auto status = setOption(CURLOPT_VERBOSE, verbose.verbose || m_debug.callback ? 1L : 0L); !status) {
                 return std::unexpected{ std::move(status.error()) };
             }
+            m_verbose = verbose.verbose;
             return {};
         }
 
@@ -1115,17 +1118,20 @@ export namespace mcr {
         auto Complete(CURLcode curl_error) -> Result<Response> {
             m_download_file = nullptr;
             m_download_write = {};
+            m_downloading = false;
             if (m_callback_error) {
                 std::rethrow_exception(std::exchange(m_callback_error, {}));
             }
             CurlList owned_cookies{ nullptr, &curl_slist_free_all };
             // The variadic curl API requires an explicit pointer conversion.
-            if (auto status = checkCurl(curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, static_cast<curl_slist**>(std::out_ptr(owned_cookies)))); !status) {
-                return std::unexpected{ std::move(status.error()) };
-            }
-            auto cookies{ utils::parse_cookies(owned_cookies.get()) };
-            if (!cookies) {
-                return std::unexpected{ std::move(cookies.error()) };
+            Cookies cookies;
+            if (curl_easy_getinfo(m_curl->handle, CURLINFO_COOKIELIST, static_cast<curl_slist**>(std::out_ptr(owned_cookies))) == CURLE_OK) {
+                for (auto const* node{ owned_cookies.get() }; node; node = node->next) {
+                    curl_slist const record{ node->data, nullptr };
+                    if (auto parsed{ utils::parse_cookies(&record) }; parsed) {
+                        cookies.push_back((*parsed)[0]);
+                    }
+                }
             }
             std::string error_message{ m_curl->error.data() };
             if (curl_error != CURLE_OK && error_message.empty()) {
@@ -1135,7 +1141,7 @@ export namespace mcr {
                 *m_curl,
                 std::move(m_response_string),
                 std::move(m_header_string),
-                std::move(*cookies),
+                std::move(cookies),
                 Error{ static_cast<std::int32_t>(curl_error), std::move(error_message) }
             );
         }
@@ -3426,6 +3432,7 @@ namespace mcr {
                     if (auto session{ weak.lock() }) {
                         session->m_download_write = {};
                         session->m_download_file = nullptr;
+                        session->m_downloading = false;
                     }
                 }
             }
@@ -3504,17 +3511,19 @@ namespace mcr {
             auto const position{ positions.at(message->easy_handle) };
             auto response = m_sessions[position].first->Complete(message->data.result);
             if (!response) {
-                return std::unexpected{ std::move(response.error()) };
+                Response failed;
+                failed.error = std::move(response.error());
+                completed[position] = std::move(failed);
+            } else {
+                completed[position] = std::move(*response);
             }
-            completed[position] = std::move(*response);
         }
         std::vector<Response> responses;
         responses.reserve(completed.size());
         for (auto& response : completed) {
             if (!response) {
-                return std::unexpected{
-                    Error{ ErrorCode::FAILED_INIT, "mcr::MultiPerform: curl did not report every transfer's completion." }
-                };
+                response.emplace();
+                response->error = Error{ ErrorCode::FAILED_INIT, "mcr::MultiPerform: curl did not report this transfer's completion." };
             }
             responses.push_back(std::move(*response));
         }
