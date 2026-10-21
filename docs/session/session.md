@@ -144,7 +144,8 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
 - Body 和 Payload 拥有数据；BodyView 和 Multipart 的 Buffer 借用数据。
   借用的数据、回调捕获对象、下载流和 ConnectionPool 必须覆盖使用它们的生命周期。
 - Content 会跨请求保留，调用 `RemoveContent()` 清除。
-- ReadCallback 独立保留，可通过 `SetReadCallback({})` 清除。
+- ReadCallback 独立保留，仅在 POST、PUT、PATCH 未设置 Content 时提供上传正文，
+  可通过 `SetReadCallback({})` 清除。GET、DELETE、OPTIONS、HEAD 和 Download 不调用它。
 - `SetCancellationParam()` 使用共享原子标志，设置为 true 会终止传输。
   `AsyncResponse` 本身沿用不可取消的默认 AsyncWrapper 类型。
 - curl 配置失败通过 `Result` 返回；传输失败写入 `Response::error`，HTTP 4xx/5xx 保留为普通响应。
@@ -176,6 +177,10 @@ multi.RemoveSession(first).value();  // 释放归属后，可以再次直接调�
 - 每次准备请求都清除上一请求的方法和 curl 内容配置，避免复用时残留；
   保留 Multipart 的 GET 仍使用 GET。HEAD 与 Download 忽略存储的 Content，
   之后仍可再次发送它。
+- 与 [cpr 的请求准备实现](https://github.com/libcpr/cpr/blob/master/cpr/session.cpp) 一样，
+  GET 不因独立 ReadCallback 发送正文；mcr 为 POST、PUT、PATCH 显式启用回调上传，
+  DELETE、OPTIONS 始终忽略独立回调，避免行为受上一请求的 curl 上传状态影响。
+  显式设置的 Body、BodyView、Payload、Multipart 仍按 Content 规则发送。
 - HeaderCallback 同时保留 Response 中的原始及解析后响应头。
 - Download 的消费者仅作用于本次下载，后续请求恢复既有 WriteCallback / SSE / 正文缓冲。
   SetWriteCallback 与 SetServerSentEventCallback 相互替换；空回调恢复正文缓冲。

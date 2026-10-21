@@ -58,8 +58,12 @@ namespace {
         };
     }
 
-    auto check_response(mcr::Response const& response, std::string_view method) -> bool {
-        return check(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text == (method == "HEAD" ? "" : "payload"), std::format("{} must preserve method and body semantics", method));
+    auto check_response(
+        mcr::Response const& response,
+        std::string_view method,
+        std::string_view body = "payload"
+    ) -> bool {
+        return check(!response.error && response.status_code == 200 && response.header.at("X-Method") == method && response.text == (method == "HEAD" ? "" : body), std::format("{} must preserve method and body semantics", method));
     }
 
     /**
@@ -128,8 +132,9 @@ namespace {
                                              return true;
                                          } };
             };
-            passed &= check_response(request(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method);
-            passed &= check_response(request_async(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method);
+            constexpr bool UPLOAD{ M == mcr::method::Post || M == mcr::method::Put || M == mcr::method::Patch };
+            passed &= check_response(request(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method, UPLOAD ? "payload" : "");
+            passed &= check_response(request_async(server.Url("/echo"), std::get<mcr::options::Proxies>(args), std::get<mcr::options::Timeout>(args), upload()), method, UPLOAD ? "payload" : "");
         }
         passed &= check_response(std::apply(asynchronous, args).Get().value(), method);
         auto continuation{ [&](mcr::Result<mcr::Response> response_result) { auto response = std::move(response_result).value();  return check_response(response, method); } };

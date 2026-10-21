@@ -91,10 +91,10 @@ namespace {
         mcr::Task<mcr::Result<mcr::Response>> named
     ) -> void {
         static_assert(CoroRequestAvailable<M> && CoroRequestAvailable<M, mcr::Url, mcr::Body>);
-        auto check = [method](mcr::Task<mcr::Result<mcr::Response>> task) {
+        auto check = [method](mcr::Task<mcr::Result<mcr::Response>> task, std::string_view body = "payload") {
             auto response = mcr::sync_wait(std::move(task)).value();
             require(!response.error && response.status_code == 200 && response.header.at("X-Method") == method, "coroutine requests must preserve their HTTP method");
-            require(response.text == (method == "HEAD" ? "" : "payload"), "coroutine requests must preserve body semantics");
+            require(response.text == (method == "HEAD" ? "" : body), "coroutine requests must preserve body semantics");
             if constexpr (M == mcr::method::Head) {
                 require(response.header.at("Content-Length") == "0", "HEAD coroutine requests must also omit the configured request body");
             }
@@ -118,7 +118,8 @@ namespace {
                                          offset += length;
                                          return true;
                                      } };
-            check(request(server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, std::move(upload)));
+            constexpr bool UPLOAD{ M == mcr::method::Post || M == mcr::method::Put || M == mcr::method::Patch };
+            check(request(server.Url("/echo"), proxies(), mcr::options::Timeout{ 3s }, std::move(upload)), UPLOAD ? "payload" : "");
         }
     }
 

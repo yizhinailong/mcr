@@ -242,7 +242,10 @@ namespace {
             auto upload{ session.Post().value() };
             passed &= check(!upload.error && upload.text == source, "fixed-length and chunked read uploads must retain binary bytes");
             offset = 0;
+            passed &= check(session.Get().value().text.empty() && session.Delete().value().text.empty() && session.Options().value().text.empty() && session.Head().value().text.empty() && offset == 0, "GET, DELETE, OPTIONS, and HEAD must not consume a retained upload callback after POST");
             passed &= check(session.Put().value().text == source, "read uploads must work when switching POST to PUT");
+            offset = 0;
+            passed &= check(session.Patch().value().text == source, "PATCH must explicitly enable retained read uploads");
         }
         session.SetReadCallback({}).value();
         passed &= check(session.Post().value().text.empty(), "cleared read callbacks must not read old upload state");

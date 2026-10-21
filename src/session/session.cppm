@@ -2312,7 +2312,8 @@ export namespace mcr {
             }
             m_sse_parser.Reset();
             bool const has_content{ !std::holds_alternative<std::monostate>(m_content) };
-            bool const read_upload{ !download && method != "HEAD" && !has_content && bool(m_read.callback) };
+            bool const upload_method{ method == "POST" || method == "PUT" || method == "PATCH" };
+            bool const read_upload{ !download && upload_method && !has_content && bool(m_read.callback) };
             if (!download && method != "HEAD") {
                 if (auto const* payload{ std::get_if<Payload>(&m_content) }) {
                     auto encoded = payload->GetContent(*m_curl);
